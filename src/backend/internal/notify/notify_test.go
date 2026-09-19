@@ -1,0 +1,154 @@
+package notify_test
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/kasa320/ai-hackathon/src/backend/internal/clock"
+	"github.com/kasa320/ai-hackathon/src/backend/internal/fault"
+	"github.com/kasa320/ai-hackathon/src/backend/internal/notify"
+	"github.com/kasa320/ai-hackathon/src/backend/internal/store"
+)
+
+var (
+	ctx = context.Background()
+	t0  = time.Date(2026, 9, 19, 9, 0, 0, 0, time.UTC)
+	log = slog.New(slog.NewTextHandler(io.Discard, nil))
+)
+
+func setup(t *testing.T, n int) *store.Store {
+	t.Helper()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	err = st.Tx(ctx, func(tx *store.Tx) error {
+		u, _ := tx.UpsertUser(ctx, "111111111111111111", "A", t0)
+		_ = tx.CreateGroup(ctx, store.Group{ID: "g", Name: "g", OwnerUserID: u.ID, CreatedAt: t0})
+		_ = tx.CreateSession(ctx, store.Session{ID: "s", GroupID: "g", PlaybookID: "reading", Title: "t", StartsAt: t0.Add(48 * time.Hour), DurationMinutes: 60, Revision: 1, Status: "draft", Data: []byte(`{}`), CreatedAt: t0, UpdatedAt: t0}, nil)
+		for i := 0; i < n; i++ {
+			if err := tx.EnqueueNotification(ctx, store.Notification{ID: store.NewID("ntf"), SessionID: "s", CaseID: "c", Kind: "k", DedupeKey: store.NewID("d"), Content: "hello", Mentions: []string{"222222222222222222"}, CreatedAt: t0}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return st
+}
+
+func statuses(t *testing.T, st *store.Store) map[string]int {
+	out := map[string]int{}
+	_ = st.Tx(ctx, func(tx *store.Tx) error {
+		list, err := tx.NotificationsByCase(ctx, "c")
+		for _, n := range list {
+			out[n.Status]++
+		}
+		return err
+	})
+	return out
+}
+
+func TestDiscordSenderStatusMapping(t *testing.T) {
+	var got map[string]any
+	var auth string
+	code := http.StatusOK
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth = r.Header.Get("Authorization")
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		w.WriteHeader(code)
+	}))
+	defer srv.Close()
+	s := notify.NewDiscordSender("bot-token", "chan")
+	s.BaseURL = srv.URL
+
+	if err := s.Send(ctx, notify.Message{Content: "hi", MentionUserIDs: []string{"1"}}); err != nil {
+		t.Fatal(err)
+	}
+	if auth != "Bot bot-token" || got["content"] != "hi" {
+		t.Fatalf("auth=%q body=%v", auth, got)
+	}
+	// 全員へのメンション（@everyone 等）は許可しない。
+	am := got["allowed_mentions"].(map[string]any)
+	if len(am["parse"].([]any)) != 0 || am["users"].([]any)[0] != "1" {
+		t.Fatalf("allowed_mentions = %v", am)
+	}
+	for c, want := range map[int]error{403: notify.ErrDeliveryFailed, 500: notify.ErrDeliveryUnknown, 429: notify.ErrRetryLater} {
+		code = c
+		if err := s.Send(ctx, notify.Message{Content: "x"}); !errors.Is(err, want) {
+			t.Fatalf("status %d: %v", c, err)
+		}
+	}
+	s.BaseURL = "http://127.0.0.1:1"
+	if err := s.Send(ctx, notify.Message{Content: "x"}); !errors.Is(err, notify.ErrDeliveryFailed) {
+		t.Fatalf("接続できなければ送信失敗: %v", err)
+	}
+}
+
+// E11：通知の失敗・成否不明を区別し、成否不明は再送しない。
+func TestDispatcherRecordsFailureAndUnknown(t *testing.T) {
+	st := setup(t, 1)
+	faults := fault.New()
+	faults.Define("notify", "fail", "unknown")
+	v := "unknown"
+	_ = faults.Replace(map[string]*string{"notify": &v})
+	d := notify.NewDispatcher(st, clock.Fixed{T: t0}, notify.WithFaults(notify.LogSender{Log: log}, faults), log)
+	if _, err := d.DispatchPending(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if s := statuses(t, st); s["unknown"] != 1 {
+		t.Fatalf("statuses = %v", s)
+	}
+	// 障害を解除しても成否不明の通知は自動で再送しない。
+	_ = faults.Replace(map[string]*string{})
+	if n, _ := d.DispatchPending(ctx); n != 0 {
+		t.Fatalf("成否不明の通知を再送した: %d", n)
+	}
+
+	st = setup(t, 1)
+	v = "fail"
+	_ = faults.Replace(map[string]*string{"notify": &v})
+	d = notify.NewDispatcher(st, clock.Fixed{T: t0}, notify.WithFaults(notify.LogSender{Log: log}, faults), log)
+	_, _ = d.DispatchPending(ctx)
+	if s := statuses(t, st); s["failed"] != 1 {
+		t.Fatalf("statuses = %v", s)
+	}
+}
+
+type blockingSender struct{}
+
+func (blockingSender) Send(ctx context.Context, _ notify.Message) error { panic("送信中に停止") }
+
+// E12：送信中にプロセスが停止した通知は、再起動時に成否不明にして二重送信しない。
+func TestRecoverMarksInterruptedAsUnknown(t *testing.T) {
+	st := setup(t, 2)
+	d := notify.NewDispatcher(st, clock.Fixed{T: t0}, blockingSender{}, log)
+	func() {
+		defer func() { _ = recover() }()
+		_, _ = d.DispatchPending(ctx)
+	}()
+	if s := statuses(t, st); s["sending"] != 1 || s["pending"] != 1 {
+		t.Fatalf("停止直前の状態: %v", s)
+	}
+	d = notify.NewDispatcher(st, clock.Fixed{T: t0}, notify.LogSender{Log: log}, log)
+	if err := d.Recover(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := d.DispatchPending(ctx); err != nil || n != 1 {
+		t.Fatalf("残りの1件だけ送る: %d %v", n, err)
+	}
+	if s := statuses(t, st); s["unknown"] != 1 || s["sent"] != 1 {
+		t.Fatalf("statuses = %v", s)
+	}
+}
