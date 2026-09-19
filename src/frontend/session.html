@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>開催回 — 輪読運営エージェント</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@700;900&family=Roboto+Mono:wght@500;700&display=swap">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/components.css">
+</head>
+<body>
+
+<!-- 背景の書棚。js/components/bookshelf.js が描く -->
+<canvas id="backdrop" aria-hidden="true"></canvas>
+<div class="backdrop-veil" aria-hidden="true"></div>
+
+<!-- デモ用。本番ビルドでは丸ごと消す -->
+<div class="demobar">
+  <span class="demobar__tag" id="demo-mode">…</span>
+  <span id="demo-controls"></span>
+  <span class="demobar__spacer">サーバー：<span id="health">確認中…</span></span>
+</div>
+
+<header class="topbar"><div class="topbar__inner" id="topbar"></div></header>
+
+<div class="shell">
+  <main class="main" id="main">
+    <section id="hero"></section>
+    <p class="notice" id="notice" hidden></p>
+
+    <div class="cols" style="margin-top:22px">
+      <div class="stack" id="left"></div>
+      <aside class="stack" id="right"></aside>
+    </div>
+
+    <!-- 管理者だけ。permissions.can_view_activity で出し分ける -->
+    <section id="activity-section" hidden>
+      <p class="section-title">実行の記録（管理者のみ）</p>
+      <div class="stack" id="activity"></div>
+    </section>
+  </main>
+</div>
+
+<!-- 参加条件の入力・管理者の代案。画面を増やさずドロワーで出す -->
+<div class="drawer" id="drawer">
+  <button type="button" class="drawer__scrim" data-close-drawer aria-label="閉じる"></button>
+  <div class="drawer__body" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+    <div class="drawer__head">
+      <h2 class="drawer__title" id="drawer-title">参加条件の回答</h2>
+      <button type="button" class="drawer__close" data-close-drawer aria-label="閉じる">×</button>
+    </div>
+    <div id="drawer-form"></div>
+    <div class="drawer__foot">
+      <button type="button" class="btn btn--primary btn--block" id="drawer-submit">回答を送る</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="/js/session.js"></script>
+</body>
+</html>

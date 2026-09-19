@@ -1,15 +1,287 @@
+/* デザイントークンと、全ページ共通のシェル（背景・ヘッダー）。
+   見立て：夜の書斎。電球の下の机に、書類が広げてある。
+   背後の書棚は js/components/bookshelf.js が Canvas で描く。画像は使わない。
+
+   読みやすさの決め方：
+   - 文字が多い本体は「紙」（明るい不透明な面）に置く
+   - 書棚が見えるのは余白とヘッダーだけ。その上の文字はクリーム色
+   - 色は意味を持たせる。朱＝あなた待ち、琥珀＝調整中、深緑＝確定、藍＝構造 */
+
 :root {
-  color-scheme: light dark;
-  font-family: system-ui, sans-serif;
-  line-height: 1.6;
+  color-scheme: light;
+
+  /* 書斎 */
+  --night: #150f0c;
+  --lamp: #f2b950;
+  --cream: #f7f0e2;
+  --cream-70: rgba(247, 240, 226, .74);
+  --cream-45: rgba(247, 240, 226, .48);
+  --hair-dark: rgba(242, 185, 80, .22);
+
+  /* 紙と墨 */
+  --paper: #f7f0e2;
+  --paper-2: #fffaf0;
+  --ink: #241a13;
+  --ink-70: rgba(36, 26, 19, .72);
+  --ink-45: rgba(36, 26, 19, .50);
+  --ink-20: rgba(36, 26, 19, .22);
+  --ink-10: rgba(36, 26, 19, .10);
+
+  /* 古書の装丁から採った意味の色 */
+  --vermilion: #bf4430;      /* あなたが操作する場所 */
+  --amber: #c08318;          /* 調整中・保留 */
+  --forest: #2e6a4e;         /* 確定・合意済み */
+  --indigo: #2c4a79;         /* 構造・見出し */
+
+  --vermilion-pale: #f6e0da;
+  --amber-pale: #f8ebd2;
+  --forest-pale: #dcebe3;
+  --indigo-pale: #dee5f0;
+
+  --on-vermilion: #fff8f2;
+  --on-amber: var(--ink);
+  --on-forest: #f2faf5;
+  --on-indigo: #f2f5fb;
+
+  /* 形。紙は角ばらせ、話しかける面（ヒーロー）だけ大きく丸める */
+  --r: 4px;
+  --r-lg: 10px;
+  --r-hero: 34px;
+  --pill: 999px;
+  --rule: 1.5px solid var(--ink);
+  --hair: 1px solid var(--ink-20);
+
+  --shell: 1100px;
+
+  font-family: "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", system-ui, sans-serif;
+  line-height: 1.75;
 }
+
+* { box-sizing: border-box; }
+
+/* 部品側で display を指定しているため、UA の [hidden] では隠れない。
+   JS で出し分けるので、著者スタイルで打ち消しておく。 */
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
+  min-height: 100vh;
+  background: var(--night);
+  color: var(--cream);
+  -webkit-font-smoothing: antialiased;
 }
 
-main {
-  max-width: 960px;
+h1, h2, h3 {
+  font-family: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", sans-serif;
+  font-weight: 900;
+  line-height: 1.32;
+  margin: 0;
+}
+
+p { margin: 0; }
+a { color: inherit; }
+
+:focus-visible {
+  outline: 2.5px solid var(--lamp);
+  outline-offset: 2px;
+}
+
+.num {
+  font-family: "Roboto Mono", ui-monospace, SFMono-Regular, monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+/* ---- 背景の書棚 ------------------------------------------------------
+   Canvas は固定。その上に暗い幕と、上からの電球の光を重ねる。 */
+
+#backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.backdrop-veil {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 70% at 50% -10%, rgba(242, 185, 80, .20), transparent 60%),
+    linear-gradient(to bottom, rgba(21, 15, 12, .40), rgba(21, 15, 12, .80) 55%, rgba(21, 15, 12, .92));
+}
+
+/* ---- デモ用の帯（本番ビルドでは丸ごと消す） --------------------------- */
+
+.demobar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 6px 18px;
+  background: rgba(10, 7, 5, .82);
+  border-bottom: 1px solid var(--hair-dark);
+  color: var(--cream-70);
+  font-size: 12px;
+  backdrop-filter: blur(6px);
+}
+
+.demobar__tag {
+  padding: 1px 9px;
+  border-radius: var(--pill);
+  background: var(--lamp);
+  color: var(--night);
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+.demobar select,
+.demobar button {
+  font: inherit;
+  color: var(--cream);
+  padding: 2px 9px;
+  border: 1px solid var(--hair-dark);
+  border-radius: var(--pill);
+  background: rgba(247, 240, 226, .06);
+  cursor: pointer;
+}
+
+.demobar select:hover,
+.demobar button:hover { background: rgba(247, 240, 226, .14); }
+.demobar__spacer { margin-left: auto; }
+.demobar__link { color: var(--lamp); }
+
+/* ---- ヘッダー -------------------------------------------------------- */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: rgba(21, 15, 12, .74);
+  border-bottom: 1px solid var(--hair-dark);
+  backdrop-filter: blur(10px);
+}
+
+.topbar__inner {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  max-width: var(--shell);
   margin: 0 auto;
-  padding: 24px 16px;
+  padding: 13px 22px;
+}
+
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  font-family: "Zen Kaku Gothic New", sans-serif;
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: .02em;
+  color: var(--cream);
+  text-decoration: none;
+  flex: none;
+}
+
+/* 棚に並んだ背表紙。この製品が扱うのは本なので、記号もそこから取る */
+.logo__spines {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 21px;
+}
+
+.logo__spines i { display: block; width: 4px; border-radius: 2px 2px 0 0; }
+.logo__spines i:nth-child(1) { height: 17px; background: var(--vermilion); }
+.logo__spines i:nth-child(2) { height: 21px; background: var(--lamp); }
+.logo__spines i:nth-child(3) { height: 14px; background: var(--forest); }
+.logo__spines i:nth-child(4) { height: 19px; background: var(--indigo); }
+
+/* いまどこを見ているか。契約の用語ではなく利用者の言葉で書く */
+.crumbs {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--cream-45);
+}
+
+.crumbs__sep { opacity: .5; }
+.crumbs__now { color: var(--cream); font-weight: 700; }
+.crumbs > * { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.topbar__right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+
+.whoami {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--cream-70);
+}
+
+.whoami__avatar {
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: "Zen Kaku Gothic New", sans-serif;
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--night);
+  background: var(--lamp);
+}
+
+/* ---- 本体 ------------------------------------------------------------ */
+
+.shell {
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: 26px 22px 96px;
+}
+
+.main { display: grid; gap: 0; min-width: 0; }
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: "Zen Kaku Gothic New", sans-serif;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  color: var(--lamp);
+  margin: 34px 0 14px;
+}
+
+.section-title::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--hair-dark);
+}
+
+.cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.stack { display: grid; gap: 16px; }
+
+@media (max-width: 900px) {
+  .cols { grid-template-columns: 1fr; }
+  .shell { padding: 18px 16px 72px; }
+}
+
+@media (max-width: 620px) {
+  .topbar__inner { padding: 11px 16px; gap: 12px; }
+  .crumbs { display: none; }
 }
