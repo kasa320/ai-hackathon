@@ -30,7 +30,16 @@
 
 ## 起動方法
 
-準備中です。
+必要なもの：Go 1.25 以上、make
+
+```sh
+cp .env.example .env   # 必要に応じて値を設定する
+make dev               # http://localhost:8080 で起動
+```
+
+`AGENT_MODE=fake`（既定）では LLM を呼びません。OrcaRouter を使うときは `AGENT_MODE=llm` と `ORCAROUTER_API_KEY` を設定します。
+
+その他のコマンド：`make test`（テスト）、`make fmt`（整形）、`make vet`（静的検査）、`make db-reset`（ローカル DB の削除）
 
 ## 提出物
 
