@@ -31,6 +31,10 @@ type Config struct {
 	OrcaRouterAPIKey string
 	OrcaRouterURL    string
 	OrcaRouterModel  string
+	// OrcaRouterSearchModel は目次の Web 検索に使うモデル（空なら Web 検索をせず画像の提出を依頼する）。
+	OrcaRouterSearchModel string
+	// OrcaRouterVisionModel は目次画像の書き写しに使うモデル（空なら OrcaRouterModel）。
+	OrcaRouterVisionModel string
 
 	DiscordClientID     string
 	DiscordClientSecret string
@@ -54,6 +58,9 @@ func Load() (Config, error) {
 		OrcaRouterAPIKey: os.Getenv("ORCAROUTER_API_KEY"),
 		OrcaRouterURL:    env("ORCAROUTER_BASE_URL", "https://api.orcarouter.ai/v1"),
 		OrcaRouterModel:  env("ORCAROUTER_MODEL", "orcarouter/auto"),
+
+		OrcaRouterSearchModel: os.Getenv("ORCAROUTER_SEARCH_MODEL"),
+		OrcaRouterVisionModel: os.Getenv("ORCAROUTER_VISION_MODEL"),
 
 		DiscordClientID:     os.Getenv("DISCORD_CLIENT_ID"),
 		DiscordClientSecret: os.Getenv("DISCORD_CLIENT_SECRET"),
