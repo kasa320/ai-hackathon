@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"math/rand/v2"
+	"sync"
 	"time"
 
 	"github.com/kasa320/ai-hackathon/src/backend/internal/apperr"
@@ -46,6 +47,8 @@ type Options struct {
 	// Rand は再試行のゆらぎに使う [0,1) の乱数。nil なら math/rand。
 	Rand func() float64
 	Log  *slog.Logger
+	// RunLock はイベント処理を他の処理（開発用の初期データ投入）と排他にするためのロック。nil なら使わない。
+	RunLock *sync.Mutex
 }
 
 // Coordinator は用途共通の調整処理。状態遷移・本人と版の検証・同意管理・イベント処理を担う。

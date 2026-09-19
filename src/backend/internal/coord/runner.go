@@ -28,6 +28,10 @@ func (c *Coordinator) Run(ctx context.Context, interval time.Duration) {
 
 // ProcessDue は実行時刻を過ぎたイベントをすべて処理し、処理した件数を返す。
 func (c *Coordinator) ProcessDue(ctx context.Context) (int, error) {
+	if c.opts.RunLock != nil {
+		c.opts.RunLock.Lock()
+		defer c.opts.RunLock.Unlock()
+	}
 	n := 0
 	for {
 		var due []store.Event
