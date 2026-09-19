@@ -58,10 +58,15 @@ Playbookは判断材料と条件を返し、同意記録の作成やDB確定・�
 | メソッド | 役割 |
 | --- | --- |
 | `Descriptor` | 用途IDと表示名 |
+| `ValidateSessionData` | 開催回登録時の用途固有データ（`SessionData`）を検証（未実装・追加予定） |
+| `ValidatePreparation` | 参加条件の用途固有データ（`PreparationData`）を検証（未実装・追加予定） |
+| `ApplyWithdrawal` | 辞退時に参加条件データを「担当できない」状態へ変換する純粋関数（未実装・追加予定） |
 | `BuildContext` | 確認済みの共有可能な状態からAIの判断材料を構築 |
 | `Instructions` | 用途ごとの判断指示 |
 | `ValidatePlan` | 提案された計画の用途固有の制約を検証 |
 | `ApprovalRequirements` | その案に必要な投票・承認・本人の引き受け条件を返す |
+
+公開APIとの対応：[api.md](api.md) の第1部（汎用API）が `coord`・`api` 側、第2部（輪読Playbook）が上記メソッドの輪読実装に当たる。
 
 `Snapshot.Data` と `Proposal.Data` の具体的な型は用途側が持つ。共通側は節ID等の輪読固有項目を解釈しない。これらは内部契約の雛形であり、DB設計の確定版ではない。公開APIは [api.md](api.md) を正とし、内部型との変換をAPI層で行う。開催日時・参加者・持ち時間・履歴等の内部入力は業務実装前に補う。
 
