@@ -21,8 +21,10 @@ import (
 	"github.com/kasa320/ai-hackathon/src/backend/internal/coord"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/devapi"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/fault"
+	"github.com/kasa320/ai-hackathon/src/backend/internal/httpx"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/notify"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/playbook/reading"
+	"github.com/kasa320/ai-hackathon/src/backend/internal/playbook/reading/toc"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/store"
 )
 
@@ -53,6 +55,7 @@ func run(log *slog.Logger) error {
 	faults := fault.New()
 	faults.Define("llm", "error", "invalid_output")
 	faults.Define("notify", "fail", "unknown")
+	toc.DefineFaults(faults)
 
 	// 用途別実装を共通側へ渡すのは起動処理だけ。追加用途もここに登録する。
 	registry, err := coord.NewService(reading.New())
@@ -61,8 +64,22 @@ func run(log *slog.Logger) error {
 	}
 
 	var planner coord.Planner = coord.DraftOnlyPlanner{}
+	tocDeps := toc.Deps{Store: st, Clock: clk, Faults: faults, Bib: toc.Chain{toc.NewOpenBD(), toc.NewNDLSearch()}, Fetcher: toc.NewSafeFetcher(), Log: log}
 	if cfg.AgentMode == config.AgentModeLLM {
-		planner = &agent.LLMPlanner{Client: agent.NewClient(cfg.OrcaRouterURL, cfg.OrcaRouterAPIKey), Model: cfg.OrcaRouterModel}
+		client := agent.NewClient(cfg.OrcaRouterURL, cfg.OrcaRouterAPIKey)
+		planner = &agent.LLMPlanner{Client: client, Model: cfg.OrcaRouterModel}
+		if cfg.OrcaRouterSearchModel != "" {
+			tocDeps.Searcher = &toc.LLMSearcher{Client: client, Model: cfg.OrcaRouterSearchModel}
+		}
+		vision := cfg.OrcaRouterVisionModel
+		if vision == "" {
+			vision = cfg.OrcaRouterModel
+		}
+		tocDeps.Reader = &toc.LLMImageReader{Client: client, Model: vision}
+	}
+	tocService := toc.NewService(tocDeps)
+	if err := tocService.Recover(ctx); err != nil {
+		return err
 	}
 	var sender notify.Sender = notify.LogSender{Log: log}
 	if cfg.DiscordNotifyConfigured() {
@@ -94,6 +111,7 @@ func run(log *slog.Logger) error {
 	server := api.New(api.Deps{
 		DB: st, Clock: clk, Log: log, Coord: coordinator, Auth: authManager,
 		AllowedOrigins: []string{cfg.PublicBaseURL}, DevMode: cfg.DevMode,
+		Extensions: []httpx.Extension{toc.NewExtension(tocService)},
 	})
 	var mounts []func(*http.ServeMux)
 	if cfg.DevMode {
@@ -111,6 +129,7 @@ func run(log *slog.Logger) error {
 
 	go coordinator.Run(ctx, time.Second)
 	go dispatcher.Run(ctx, 2*time.Second)
+	go tocService.Run(ctx, 2*time.Second)
 	go purgeIdempotency(ctx, st, clk, log)
 
 	errCh := make(chan error, 1)

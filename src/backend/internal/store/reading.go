@@ -105,3 +105,10 @@ func (t *Tx) DueTocLookups(ctx context.Context, now time.Time, limit int) ([]Toc
 func (t *Tx) FailInterruptedImageReads(ctx context.Context) error {
 	return t.exec(ctx, "UPDATE reading_toc_lookups SET status = 'failed', reason_code = 'model_error' WHERE status = 'reading_image'")
 }
+
+// CountLLMCallsByLookup は目次の取得1件で使った LLM 呼び出しの数を返す。
+func (t *Tx) CountLLMCallsByLookup(ctx context.Context, lookupID string) (int, error) {
+	var n int
+	err := t.row(ctx, "SELECT COUNT(*) FROM llm_calls WHERE lookup_id = ?", lookupID).Scan(&n)
+	return n, err
+}
