@@ -4,7 +4,7 @@
 
 ## 現在地
 
-既存のサーバー・SQLite接続・時計に加え、Playbook契約、輪読用の型と未実装メソッド、起動時登録、一覧APIを `feat/backend-playbook-scaffold` に分けてコミット済み。公開APIの入出力は [api.md](api.md) の `mvp-1` として決定した。
+既存のサーバー・SQLite接続・時計に加え、Playbook契約、輪読用の型と未実装メソッド、起動時登録、一覧APIを `feat/backend-playbook-scaffold` に分けてコミット済み。公開APIの入出力は [api.md](api.md) の `mvp-2` として決定した。
 
 輪読の業務処理、状態遷移、同意・権限、LLM、通知はこれから。フロントはファイル配置のみとし、今回のバックエンド開発範囲には含めない。
 
