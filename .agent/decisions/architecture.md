@@ -19,16 +19,21 @@ src/backend/
     │   ├── playbook.go         # 用途別処理のインターフェース
     │   └── service.go          # 用途の登録・解決、将来の調整処理の入口
     ├── playbook/reading/
+    │   ├── toc/                # 目次の取得（ISBN → 書誌 → Web 検索と照合 → 画像）
     │   ├── model.go            # 本・節・準備状況・輪読計画
     │   ├── playbook.go         # インターフェース実装と判断材料の構築
     │   ├── rules.go            # 輪読固有の計画検証・承認条件
     │   └── prompt.go           # 輪読向けの判断指示
     ├── agent/                  # LLM・ツール実行ループ
     ├── api/                    # HTTP入出力と認証済み操作の受付
-    ├── store/                  # DBアクセス
+    ├── store/                  # DBアクセス（輪読固有の保存は store/reading.go）
     ├── notify/                 # 外部通知
     ├── auth/                   # 本人確認・セッション
+    ├── devapi/                 # 開発モード専用 API（DEV_MODE=1 のときだけ登録）
+    ├── apitypes/ apperr/ httpx/ # 公開 API の型・エラーコード・HTTP の共通規約
+    ├── fault/                  # 開発モードの障害注入
     └── clock/                  # 時刻とデモ用時計
+tests/e2e/                      # HTTP 経由の結合テスト（評価ケース）
 
 src/frontend/js/
 ├── api.js                      # 既存のAPI呼び出し
@@ -58,9 +63,11 @@ Playbookは判断材料と条件を返し、同意記録の作成やDB確定・�
 | メソッド | 役割 |
 | --- | --- |
 | `Descriptor` | 用途IDと表示名 |
-| `ValidateSessionData` | 開催回登録時の用途固有データ（`SessionData`）を検証（未実装・追加予定） |
-| `ValidatePreparation` | 参加条件の用途固有データ（`PreparationData`）を検証（未実装・追加予定） |
-| `ApplyWithdrawal` | 辞退時に参加条件データを「担当できない」状態へ変換する純粋関数（未実装・追加予定） |
+| `ValidateSessionData` | 開催回登録時の用途固有データ（`SessionData`）を検証し、正規化した値を返す |
+| `ValidatePreparation` | 参加条件の用途固有データ（`PreparationData`）を検証し、正規化した値を返す |
+| `ApplyWithdrawal` | 辞退時に参加条件データを「担当できない」状態へ変換する純粋関数 |
+| `Assignees` | 計画のうち本人の引き受けが必要な担当者（辞退できる担当の判定に使う） |
+| `PlanSchema` | `PlanData` の JSON Schema（AI のツール定義に使う） |
 | `BuildContext` | 確認済みの共有可能な状態からAIの判断材料を構築 |
 | `Instructions` | 用途ごとの判断指示 |
 | `ValidatePlan` | 提案された計画の用途固有の制約を検証 |
@@ -74,9 +81,15 @@ Playbookは判断材料と条件を返し、同意記録の作成やDB確定・�
 
 ## 現時点で動く範囲
 
-バックエンドの雛形ブランチでは、輪読の登録、IDによる解決、`GET /api/playbooks` での登録一覧取得を追加している。重複IDと未知のIDは拒否する。一覧取得は公開可能なID・表示名のみであり、案件データを返さない。
+更新：2026-09-19。`backend` ブランチ（各 `feat/backend-*` を統合）で、api.md `mvp-2` の第1部・第2部を実装した。
 
-輪読の文脈構築・計画検証・承認条件の算出は `coord.ErrNotImplemented` を返す。未実装を「検証成功」「承認不要」と扱わない。再計画、DB保存、同意管理、LLM接続、認証、Discord送信は未完成。追加実装は開始指示を待つ。
+- 共通側（`coord`）：開催回・参加条件・辞退・版付きの案・本人の引き受け・投票・確定、期限と催促、AI 処理の再試行・上限、再起動後の再開。確定と通知待ちの登録は同じトランザクション。
+- 輪読（`playbook/reading`）：入力・計画の検証、承認条件（R4）、代役の偏りの制約、LLM を使わない仮の計画（`coord.DraftPlanner`）。目次の取得（R7）は `playbook/reading/toc` に分け、HTTP 拡張として API 層に登録する。
+- `agent`：OpenAI 互換 API（OrcaRouter）で「提案」「確認依頼」「管理者へ戻す」の3つのツールだけを選ばせる。同意を記録するツールは与えない。
+- `api`・`auth`・`notify`・`devapi`：HTTP API、Discord OAuth とサーバーセッション・CSRF、Discord 通知（失敗と成否不明を区別）、開発モード専用 API。
+- 公開用の入出力型は `apitypes`、エラーコードは `apperr`、HTTP の共通規約は `httpx` に置く。
+
+未検証：実モデル（OrcaRouter）での計画の品質・費用、Discord の実チャンネルへの送信、Web 検索での目次の取得率。金額の上限は未設定（呼び出し回数の上限のみ）。
 
 ## 後から用途を追加する手順
 
