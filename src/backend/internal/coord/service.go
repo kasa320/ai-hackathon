@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// Service は共通の調整処理の入口。現段階では起動時の用途登録・解決のみを担う。
-// 状態遷移・同意検証・永続化は今後ここから組み合わせる。
+// Service は起動時に登録された用途（Playbook）の一覧。
+// 状態遷移・同意検証・永続化は Coordinator が担い、用途の解決にこの一覧を使う。
 type Service struct {
 	playbooks   map[string]Playbook
 	descriptors []Descriptor
