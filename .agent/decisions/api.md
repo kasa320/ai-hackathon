@@ -78,6 +78,22 @@ OAuth開始はブラウザー遷移、callbackはバックエンド処理。stat
 
 ブラウザー向けの「AI実行」「強制確定」「他人として同意」「通知送信」APIは設けない。変更案の自動生成・条件成立時の確定・通知はバックエンド内のイベント処理で行う。
 
+### 公開APIのレスポンス
+
+`GET /api/health` の200：
+
+```json
+{ "status": "ok", "now": "2026-09-19T09:00:00Z" }
+```
+
+`GET /api/playbooks` の200（ページングなし）：
+
+```json
+{ "playbooks": [{ "id": "reading", "name": "輪読" }] }
+```
+
+一覧は登録された用途のメタデータ。雛形段階ではここに含まれていても、業務用エンドポイントの実装済みを意味しない。フロント用モックで契約全体を先行実装してよいが、実APIへの切り替え時は業務エンドポイントの完成を別途確認する。
+
 ## 4. 共通データ型
 
 以下の `ID` と `Timestamp` はstring、`Revision` はinteger。返却データには私的理由、プロンプト全文、モデルの生出力、秘密情報を含めない。
@@ -232,7 +248,7 @@ MVPでは管理者が事前に共有してもらったDiscordユーザーIDを�
 }
 ```
 
-作成者は自動でownerになる。inviteesは1〜9人、IDの重複と自分のIDは禁止。Discord IDは17〜20桁の数字文字列として検証し、存在確認は本人のログイン時まで保証しない。作成時のdisplay_nameは仮の表示名で、本人ログイン後は本人の表示名を使う。
+作成者は自動でownerになる。inviteesは1〜9人、IDの重複と自分のIDは禁止。Discord IDは17〜20桁の数字文字列として検証し、存在確認は本人のログイン時まで保証しない。作成時のdisplay_nameは仮の表示名で、本人ログイン後は本人の表示名を使う。既にこのアプリでDiscord認証済みのユーザーが一致する場合は、その所属を作成時点で有効にする。
 
 成功は `201`、本文は `Group`、`Location: /api/groups/{group_id}`。本人がログインしていないメンバーは `joined=false`。開催回を作る前に全員のjoinedを確認し、未参加者がいれば `409 members_not_joined`。所属の追加・削除・管理者変更はMVP外。
 
@@ -273,7 +289,7 @@ groupsのitemsは `{ id, name, current_member_id, role, member_count }`（role�
 }
 ```
 
-`data` は `ReadingData`。MVPで受け付けるplaybook_idはreadingのみ。存在しない用途は `422 unsupported_playbook`。starts_atは現在時刻より1時間以上先で、回答期限を確保できる日時とする。
+`data` は `ReadingData`。MVPで受け付けるplaybook_idはreadingのみ。存在しない用途は `422 unsupported_playbook`。starts_atは現在時刻から1時間より先で、回答期限を確保できる日時とする。
 
 成功は `201`、本文 `{ "session": SessionSummary, "case_id": ID }`、Locationは `/api/sessions/{session_id}`。状態はdraft、revision=1。グループ全員をこの開催回のメンバーとして固定し、初期のPreparationはnullとする。全員へのpreparationタスクと処理イベントを同じトランザクションで登録する。LLM完了や通知完了を待たない。
 
@@ -315,8 +331,56 @@ type SessionDetail = {
 - preparationsは本人が共有を確認して送信した構造化情報のみ。フォームには「準備状況はこの輪読会のメンバーに共有されます」と表示する。
 - my_tasksは現在の案件で自分宛てに作られたタスクのみを、作成順に返す。他人の回答を本人が行えるような入力先を返さない。
 - permissionsはその時点の画面表示用。サーバーは実際の更新時に権限と条件を再検証する。管理者以外のcan_submit_proposal/can_view_activityはfalse。
+- can_submit_proposalは管理者で、全員の準備回答が揃い、draftまたはneeds_owner、かつ新たな回答期限を確保できるときのみtrue。開催時刻以降の更新はMVP外で、準備・辞退・案提出のpermissionもfalseにする。
 - notification_summaryは現在の案件に関連する全通知の状態別件数。送信済みはDiscord APIの成功応答であり、既読ではない。
 - GETではLLMを起動せず、保存済み状態を返す。後続の状態変化でrevisionが同じ場合もあるため、ポーリング結果はrevisionだけで比較せず表示へ反映する。
+
+初期登録直後、Bが取得した詳細レスポンスの例（以下の名前・ID・時刻は架空のモック用）：
+
+```json
+{
+  "session": {
+    "id": "ses_demo", "group_id": "grp_demo", "playbook_id": "reading",
+    "title": "第2回", "starts_at": "2026-09-21T11:00:00Z", "duration_minutes": 60,
+    "revision": 1, "status": "draft", "updated_at": "2026-09-19T09:00:00Z"
+  },
+  "reading": {
+    "book_title": "サンプル技術書",
+    "sections": [
+      { "id": "sec_1", "title": "前回の範囲" },
+      { "id": "sec_2", "title": "今回の前半" },
+      { "id": "sec_3", "title": "今回の後半" }
+    ],
+    "completed_section_ids": ["sec_1"], "target_section_ids": ["sec_2", "sec_3"]
+  },
+  "members": [
+    { "id": "mem_a", "display_name": "A", "role": "owner", "joined": true },
+    { "id": "mem_b", "display_name": "B", "role": "member", "joined": true },
+    { "id": "mem_c", "display_name": "C", "role": "member", "joined": true },
+    { "id": "mem_d", "display_name": "D", "role": "member", "joined": true }
+  ],
+  "preparations": [
+    { "member_id": "mem_a", "value": null },
+    { "member_id": "mem_b", "value": null },
+    { "member_id": "mem_c", "value": null },
+    { "member_id": "mem_d", "value": null }
+  ],
+  "confirmed_plan": null, "current_proposal": null,
+  "active_case": { "id": "case_demo", "status": "collecting", "reason_code": null, "summary": "準備状況を確認しています。" },
+  "my_tasks": [{
+    "id": "task_b", "session_id": "ses_demo", "kind": "preparation", "status": "open",
+    "title": "今回の準備状況を教えてください。", "due_at": "2026-09-20T09:00:00Z",
+    "proposal_id": null, "proposal_version": null, "allowed_decisions": ["submit"]
+  }],
+  "permissions": {
+    "can_update_preparation": true, "can_withdraw_presentation": false,
+    "can_withdraw_attendance": true, "can_submit_proposal": false, "can_view_activity": false
+  },
+  "current_member_id": "mem_b",
+  "notification_summary": { "pending_count": 4, "sent_count": 0, "failed_count": 0, "unknown_count": 0 },
+  "server_now": "2026-09-19T09:00:00Z"
+}
+```
 
 ## 7. 準備回答と辞退
 
@@ -340,6 +404,8 @@ type SessionDetail = {
 本人のPreparationを全置換する。自分宛てのopenなpreparationタスクがあれば回答済みにする。入力が変わった場合はrevisionを増やし、現在のpending案を旧版にして案件をcollectingへ戻す。値が同じ場合は版を変えず、未回答タスクの回答処理のみ行う。確定計画への影響を検証し、実行不能ならneeds_attentionにする。
 
 成功は202とMutationAccepted。本人以外のmember_idを含めた本文は拒否する。準備回答で担当の引き受けや投票を自動作成しない。
+
+準備更新・辞退は開催時刻までは受け付ける。開催1時間前を過ぎて新しい回答期限を確保できない場合は、変更自体を記録した上で案件をneeds_ownerにし、自動確認を再開しない。開催時刻以降は `409 invalid_state`。
 
 ### 担当辞退・欠席
 
@@ -383,7 +449,7 @@ type ApprovalResponse = {
 };
 ```
 
-preparationはPreparationResponse、assignmentはAssignmentResponse、approval/owner_approvalはApprovalResponseに対応する。task内のallowed_decisionsもこの対応に従う。
+preparationはPreparationResponse、assignmentはAssignmentResponse、approval/owner_approvalはApprovalResponseに対応する。openなtaskのallowed_decisionsはこの対応に従い、open以外では空配列とする。
 
 preparationタスクへのsubmitは第7節の準備更新と同じ処理を使う。担当可能と答えても担当承諾にはならない。assignmentのacceptは当該版の本人担当すべてへの引き受けであり、approvalのapproveとは独立に扱う。
 
@@ -396,7 +462,7 @@ preparationタスクへのsubmitは第7節の準備更新と同じ処理を使�
 - 範囲・形式・時間配分の変更：上記に加え、提案時点の参加予定者の過半数のapprovalが必要。参加予定者はPreparation.attendance=attendingの人。初回の準備未回答者を勝手に欠席扱いせず、全員の回答が揃うまで案を確定可能な状態にしない。
 - 分母と対象者は版ごとに固定し、反対・未回答で縮めない。準備条件や参加予定者が変わったら新しい版で取り直す。参加予定者が0人なら案を作らず管理者判断待ち。
 - assignmentのdeclineまたはowner_approvalのrejectで案をrejectedにし、未回答タスクをobsoleteにして再計画へ戻す。多数決で一票rejectが出ても即棄却しない。残り全員が賛成しても成立しない場合は棄却・再計画する。
-- 最後の必要な回答が揃うとバックエンドが自動で検証・確定する。再度最新版と参加条件を確認し、計画保存と通知待ち登録を同一トランザクションで行う。最後のPOSTの202時点で確定済みとは限らない。
+- 最後の必要な回答が揃うとバックエンドが自動で検証・確定する。再度最新版と参加条件を確認し、計画保存と通知待ち登録を同一トランザクションで行う。未回答の残りタスクはobsoleteにし、確定後に追加の投票で結果を変更しない。最後のPOSTの202時点で確定済みとは限らない。
 - 各タスクの期限は作成から24時間と開催1時間前の早い方。サーバー時刻がdue_at以上なら拒否する。必要条件が期限までに揃わなければneeds_ownerへ戻す。
 
 ## 9. 管理者による代案
@@ -421,6 +487,8 @@ preparationタスクへのsubmitは第7節の準備更新と同じ処理を使�
 dataはReadingPlan。全員の準備回答が揃い、輪読の制約を満たすことが必要。初期案か変更案か、誰の承認が必要かはサーバーが決定し、本文で指定しない。案に含める担当者のmember_idは指定できるが、本人の引き受けを代行できない。
 
 成功時に新しい版を発行してrevisionを増やし、以前の案とタスクを無効化する。必要なタスクとイベントを作成し202を返す。管理者の案にもAIと同じ検証・同意条件を適用する。実現不能な場合は422で保存せず、日時変更・中止の自動実行は行わない。
+
+新しい回答期限を確保できない場合は `409 invalid_state`。自動生成・管理者提出のどちらでも、案の保存時に生成元のrevisionを確認する。生成中に準備更新や別案の提出があった場合、古い状態に基づく案で上書きしない。
 
 ## 10. 実行履歴・費用・通知
 
@@ -486,8 +554,10 @@ healthの既存503レスポンス `{ "status": "db_unavailable" }` とOAuthリ�
 | 401 | `unauthenticated` | 個人データを破棄してログインを案内 |
 | 403 | `forbidden`, `csrf_invalid` | 操作不可を表示。CSRFの場合はmeを再取得し、勝手に更新を再送しない |
 | 404 | `not_found` | 対象がない／アクセスできないと表示 |
+| 405 | `method_not_allowed` | 呼び出すHTTPメソッドを修正 |
 | 409 | `revision_conflict`, `proposal_superseded`, `task_closed`, `task_expired`, `invalid_state`, `members_not_joined`, `idempotency_key_reused` | 最新状態を取得し、利用者に再確認を求める |
 | 413 | `payload_too_large` | 入力サイズを減らす |
+| 415 | `unsupported_media_type` | JSON本文のContent-Typeを修正 |
 | 422 | `validation_failed`, `unsupported_playbook` | 対応する入力欄に表示 |
 | 429 | `rate_limited` | Retry-Afterの秒数まで待つ。入力は保持 |
 | 500 | `internal_error` | 失敗を表示しrequest_idを記録 |
@@ -540,4 +610,4 @@ detailsは常にobject。revision_conflictではcurrent_revision必須。validat
 - バックエンド担当はAPI DTOを本書に合わせ、Playbook内の型と変換する。既存雛形の `presenter_id` など内部のフィールド名で公開契約を変更しない。
 - 共通の登録・同意・通知を扱うルートと、ReadingData/ReadingPlanの検証を分離する。新用途を追加する際はplaybook_idに対応するdataの型を増やす。
 - フィールド・enum・必須条件の変更は本書とモック、生成OpenAPIを同時に更新し、フロント・バック双方へ共有する。各担当が独自にURLやレスポンスを変えない。
-- 今回は本書の契約確定のみ。DB設計、API実装、モック実装、コミット・pushは別作業とする。金額上限とモデル選定は未確定でも、この公開APIの形には影響しない。
+- 今回は本書の契約確定のみ。DB設計、API実装、モック実装は別作業とする。金額上限とモデル選定は未確定でも、この公開APIの形には影響しない。

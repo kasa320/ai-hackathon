@@ -24,7 +24,7 @@ MVPは、既存の輪読会の「辞退→再計画→本人の引き受け・�
 | overview | 前提・目的・利用の流れ（準備中） |
 | rules | AIに任せること・委任ルール（準備中） |
 | [architecture](.agent/decisions/architecture.md) | 共通処理と用途別Playbookの境界・ディレクトリ構成 |
-| api | フロントエンドとバックエンドの間の API（準備中） |
+| [api](.agent/decisions/api.md) | MVPのAPI契約・JSON型・認証・同意・エラー・画面別の対応（契約確定、実装はこれから） |
 | data-model | テーブル定義（準備中） |
 | agent | 状態遷移・ツール・モデル構成（準備中） |
 | development | セットアップ・環境変数・開発ルール（準備中） |
