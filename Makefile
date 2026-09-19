@@ -4,7 +4,7 @@ export
 
 BACKEND := src/backend
 
-.PHONY: dev build test fmt vet db-reset
+.PHONY: dev build test test-e2e fmt vet db-reset
 
 ## dev: サーバーをビルドして起動する（http://localhost:8080）
 dev: build
@@ -15,9 +15,13 @@ build:
 	go -C $(BACKEND) build -o ../../bin/server ./cmd/server
 	go -C $(BACKEND) build -o ../../bin/eval ./cmd/eval
 
-## test: バックエンドのテストを実行する
+## test: バックエンドのテスト（単体・結合）をすべて実行する
 test:
 	go -C $(BACKEND) test ./...
+
+## test-e2e: HTTP 経由の結合テスト（評価ケース E01〜E12・目次の取得）だけを実行する
+test-e2e:
+	go -C $(BACKEND) test ./tests/e2e/ -v -count=1
 
 ## fmt: Go のコードを整形する
 fmt:
