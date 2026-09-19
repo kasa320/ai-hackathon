@@ -1,0 +1,5 @@
+.agent/kasa/refs/
+# ローカル環境
+.env
+bin/
+data/
