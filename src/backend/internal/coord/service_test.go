@@ -16,10 +16,23 @@ type examplePlaybook struct{ id string }
 func (p examplePlaybook) Descriptor() coord.Descriptor {
 	return coord.Descriptor{ID: p.id, Name: "検証用"}
 }
+func (examplePlaybook) ValidateSessionData(context.Context, coord.SessionParams, json.RawMessage) (json.RawMessage, error) {
+	return nil, coord.ErrNotImplemented
+}
+func (examplePlaybook) ValidatePreparation(context.Context, coord.Snapshot, string, json.RawMessage) (json.RawMessage, error) {
+	return nil, coord.ErrNotImplemented
+}
+func (examplePlaybook) ApplyWithdrawal(context.Context, coord.Snapshot, string, json.RawMessage) (json.RawMessage, error) {
+	return nil, coord.ErrNotImplemented
+}
+func (examplePlaybook) Assignees(json.RawMessage) ([]string, error) {
+	return nil, coord.ErrNotImplemented
+}
 func (examplePlaybook) BuildContext(context.Context, coord.Snapshot) (json.RawMessage, error) {
 	return nil, coord.ErrNotImplemented
 }
-func (examplePlaybook) Instructions() string { return "検証用の指示" }
+func (examplePlaybook) Instructions() string        { return "検証用の指示" }
+func (examplePlaybook) PlanSchema() json.RawMessage { return json.RawMessage(`{}`) }
 func (examplePlaybook) ValidatePlan(context.Context, coord.Snapshot, coord.Proposal) error {
 	return coord.ErrNotImplemented
 }
