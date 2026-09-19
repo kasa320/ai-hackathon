@@ -296,3 +296,8 @@ func (t *Tx) LLMCallsByCase(ctx context.Context, caseID string) ([]LLMCall, erro
 	}
 	return out, rows.Err()
 }
+
+// DeleteNotifications はすべての通知待ちを削除する（開発用の初期データ投入で、投入時の依頼を送らないために使う）。
+func (t *Tx) DeleteNotifications(ctx context.Context) error {
+	return t.exec(ctx, "DELETE FROM notifications")
+}

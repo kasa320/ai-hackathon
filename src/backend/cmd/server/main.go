@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/kasa320/ai-hackathon/src/backend/internal/clock"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/config"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/coord"
+	"github.com/kasa320/ai-hackathon/src/backend/internal/devapi"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/fault"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/notify"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/playbook/reading"
@@ -71,7 +73,8 @@ func run(log *slog.Logger) error {
 		sender = notify.WithFaults(sender, faults)
 	}
 
-	coordinator := coord.NewCoordinator(registry, st, clk, planner, coord.Options{PublicBaseURL: cfg.PublicBaseURL, Log: log})
+	runLock := &sync.Mutex{}
+	coordinator := coord.NewCoordinator(registry, st, clk, planner, coord.Options{PublicBaseURL: cfg.PublicBaseURL, Log: log, RunLock: runLock})
 	dispatcher := notify.NewDispatcher(st, clk, sender, log)
 	if err := dispatcher.Recover(ctx); err != nil {
 		return err
@@ -92,9 +95,17 @@ func run(log *slog.Logger) error {
 		DB: st, Clock: clk, Log: log, Coord: coordinator, Auth: authManager,
 		AllowedOrigins: []string{cfg.PublicBaseURL}, DevMode: cfg.DevMode,
 	})
+	var mounts []func(*http.ServeMux)
+	if cfg.DevMode {
+		// 開発モードでだけ /api/dev/* を登録する。無効時は存在しない扱い（404）。
+		mounts = append(mounts, devapi.Mount(devapi.Deps{
+			Store: st, Clock: clk, Auth: authManager, Faults: faults, AllowedOrigins: []string{cfg.PublicBaseURL}, Log: log,
+			Seeder: devapi.NewSeeder(registry, st, clk, cfg.PublicBaseURL, runLock), Wake: coordinator.Wake,
+		}))
+	}
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           server.Handler(cfg.FrontendDir),
+		Handler:           server.Handler(cfg.FrontendDir, mounts...),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
