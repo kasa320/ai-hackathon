@@ -43,6 +43,13 @@ func (o *Offset) Advance(d time.Duration) {
 	o.offset += d
 }
 
+// Offset は現在のずれを返す。
+func (o *Offset) Offset() time.Duration {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	return o.offset
+}
+
 // Fixed はテスト用に固定した時刻を返す。
 type Fixed struct {
 	T time.Time
