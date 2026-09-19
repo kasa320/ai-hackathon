@@ -9,28 +9,39 @@ import (
 	"time"
 
 	"github.com/kasa320/ai-hackathon/src/backend/internal/clock"
+	"github.com/kasa320/ai-hackathon/src/backend/internal/coord"
 )
 
 type Pinger interface {
 	Ping(ctx context.Context) error
 }
 
-type Server struct {
-	db    Pinger
-	clock clock.Clock
-	log   *slog.Logger
+type PlaybookCatalog interface {
+	Playbooks() []coord.Descriptor
 }
 
-func New(db Pinger, clk clock.Clock, log *slog.Logger) *Server {
-	return &Server{db: db, clock: clk, log: log}
+type Server struct {
+	db        Pinger
+	clock     clock.Clock
+	log       *slog.Logger
+	playbooks PlaybookCatalog
+}
+
+func New(db Pinger, clk clock.Clock, log *slog.Logger, playbooks PlaybookCatalog) *Server {
+	return &Server{db: db, clock: clk, log: log, playbooks: playbooks}
 }
 
 // Handler は API と静的ファイル配信をまとめたハンドラを返す。
 func (s *Server) Handler(frontendDir string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", s.health)
+	mux.HandleFunc("GET /api/playbooks", s.listPlaybooks)
 	mux.Handle("/", http.FileServer(http.Dir(frontendDir)))
 	return s.logRequests(mux)
+}
+
+func (s *Server) listPlaybooks(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"playbooks": s.playbooks.Playbooks()})
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {

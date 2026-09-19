@@ -14,6 +14,8 @@ import (
 	"github.com/kasa320/ai-hackathon/src/backend/internal/api"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/clock"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/config"
+	"github.com/kasa320/ai-hackathon/src/backend/internal/coord"
+	"github.com/kasa320/ai-hackathon/src/backend/internal/playbook/reading"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/store"
 )
 
@@ -41,9 +43,14 @@ func run(log *slog.Logger) error {
 	defer st.Close()
 
 	clk := clock.NewOffset(clock.Real{})
+	// 用途別実装を共通側へ渡すのは起動処理だけ。追加用途もここに登録する。
+	coordinator, err := coord.NewService(reading.New())
+	if err != nil {
+		return err
+	}
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           api.New(st, clk, log).Handler(cfg.FrontendDir),
+		Handler:           api.New(st, clk, log, coordinator).Handler(cfg.FrontendDir),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
