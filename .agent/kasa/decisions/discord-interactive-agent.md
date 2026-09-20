@@ -50,7 +50,9 @@ Webからの入力・修正はこれまで通り使える。DMはWebの代わり
 | `needs_followup` | bool | — |
 | `out_of_scope` | `null` \| `schedule_change` \| `partial_attendance` \| `other_member` | 列挙値のみ。**何も解除しない** |
 
-上5つは既存の `reading.PreparationSchema()` と同一。対話用のスキーマは作らない。
+上5つのうち `attendance` 以外は `data` の中身で、既存の `reading.PreparationSchema()` と同一。
+`unclear` / `needs_followup` / `out_of_scope` は**トップレベル**（`data` の外）に置く。
+`data` の中へ足すと、保存時の `decodeStrict`（`DisallowUnknownFields`）に拒否される。
 
 ### B. プログラムだけが決める変数（LLM に見せない・書かせない）
 
@@ -61,6 +63,8 @@ Webからの入力・修正はこれまで通り使える。DMはWebの代わり
 | `expected_revision` | 会話開始時に読んだ `session.revision` |
 | `proposal_id` / `proposal_version` / `task_id` | タスクの値 |
 | `decision` | ボタンの `custom_id` |
+| `pending_question` | いま聞いている項目名。プログラムが `unclear` から選ぶ |
+| `draft_id` | 下書きの識別子。スロットが動くたびに振り直す |
 
 「Cさんの分も登録して」と書かれても `member_id` は発言者から機械的に決まるため影響しない。
 
@@ -68,7 +72,9 @@ Webからの入力・修正はこれまで通り使える。DMはWebの代わり
 
 `slots`（Aの現在値）、`unclear`、`misses`（空振り回数）、`cooldown_until`、`expires_at`（TTL 30分）。
 
-LLM が毎ターン見るのは **Aのスキーマ・Aの現在値・今回の1発言** の3つだけ。
+LLM が毎ターン見るのは **Aのスキーマ・Aの現在値・`pending_question`・今回の1発言** の4つだけ。
+`pending_question` はプログラムが選んだ項目名なので、「はい」のような短い返答がどの項目への答えかを
+履歴なしで決められる。発言の履歴は渡さない。
 
 ---
 
@@ -79,18 +85,46 @@ DM 受信
  ├ message.id で重複排除（Gateway は再送しうる）
  ├ 送信者 → member を解決（本人以外は触れない）
  ├ クールダウン中／LLM予算超過 → 定型文で Web へ誘導（LLMを呼ばない）
- ├ LLM に渡すのは A のスキーマ・A の現在値・今回の1発言だけ
+ ├ LLM に渡すのは A のスキーマ・A の現在値・pending_question・今回の1発言だけ
  ├ 返るのは record_preparation の引数だけ（文章は返させない）
- ├ ValidatePreparation で再検証（既存）
- ├ out_of_scope が返った → 扱えない旨を定型文で答える（空振りに数える）
- ├ スロットが動かなかった → 空振り +1。3回でクールダウン10分
- └ 動いた → 残った unclear から次の質問を選ぶ（定型文）
-          → 全部埋まった → 確認メッセージ＋ボタン
+ ├ 項目単位で検証（会話中はここまで。全体の整合は見ない）
+ ├ out_of_scope が返った → 扱えない旨を定型文で答える（進捗なしに数える）
+ ├ 進捗なし（スロットが変わらず unclear も減らない）→ 空振り +1。3回でクールダウン10分
+ └ 進捗あり → draft_id を振り直し、残った unclear から次の質問を選ぶ（定型文）
+            → 全部埋まった → ValidatePreparation を全体に適用
+            → 通れば確認メッセージ＋ボタン（draft_id を custom_id に埋める）
 ```
 
 **Bot の発話はすべてプログラムが作る定型文。**LLM に文章を書かせないので、Bot を経由して他人へ文字列を送り込む経路がない。
 
 読み取り（「いまの予定を教えて」）は LLM を使わず、保存済みの計画を定型文で返す。
+
+## 検証は二段階
+
+保存用の検証をそのまま毎ターン当てると、段階的な聞き取りが成立しない。
+`ValidatePreparation` は担当できるなら説明できる節1件以上と1分以上を必須にするため、
+「説明できます」とだけ答えた段階で拒否される。
+
+| いつ | 何を見るか |
+| --- | --- |
+| 会話中（毎ターン） | 項目単位だけ。節IDが登録済みか、`explainable ⊆ prepared`、`0 ≦ minutes ≦ 持ち時間`。**未確定を許す** |
+| 保存の直前 | 既存の `ValidatePreparation` を全体に適用。通らなければ確認ボタンを出さない |
+
+用途側に部分検証のメソッドを1つ足す（`PreparationInterpreter` に追加）。
+
+## 確認ボタンは「表示した下書き」に束縛する
+
+`expected_revision` は保存済みの版しか見ないので、**未保存の下書きの変化を検出できない**。
+「15分」の確認を出したあと追加の発言で「30分」に変わり、古いボタンを押すと、
+表示と違う値を承認した扱いになる。二段構えで防ぐ。
+
+| 守る対象 | 手段 |
+| --- | --- |
+| 未保存の下書きが変わった | `custom_id` の `draft_id` と会話状態の現在の `draft_id` の一致を確認 |
+| 保存済みの状態が変わった | `expected_revision`（既存の仕組み） |
+| 会話状態が消えた（TTL・再起動） | 最初から確認し直す |
+
+スロットが1つでも動いたら `draft_id` を振り直す。古いボタンは必ず無効になる。
 
 ## 受け渡しは DB 経由
 
@@ -120,17 +154,34 @@ DM が使えない人は Web だけで完結できる。「DMを必須にしな�
 
 ## DM には対象の会の文脈がない
 
-未回答の依頼が1件ならその会。複数ならボタンで選ばせる（LLM不要）。0件なら「答えることはありません」と現在の計画を返す。
+未回答の依頼が1件ならその会。複数ならボタンで選ばせる（LLM不要）。
+
+0件でも自発的な変更はできる必要がある（回答済み・計画確定後の「欠席に変更したい」など）。
+0件のときは**本人が所属する変更可能な開催回**をボタンで選ばせる。
+`permissions.can_update_preparation` が true の回が対象。
 
 ## 予算とクールダウンの置き場所
 
 | | 置き場所 | 理由 |
 | --- | --- | --- |
-| LLM 呼び出しの上限 | `llm_calls` テーブル（既存・スキーマ変更なし） | 費用は実損。再起動で消えては困る |
+| LLM 呼び出しの上限 | `llm_calls` テーブル（既存・スキーマ変更なし）。**呼び出し前に枠を確保する** | 費用は実損。再起動で消えては困る |
 | 空振りカウンタ・クールダウン | メモリ | 再起動で消えてよい |
 | 会話のスロット | メモリ・TTL 30分 | 私的な内容を残さないため |
 
 会話の途中で停止したら、次の発言で最初から確認し直す。
+
+### 予算の確保（既存コードの修正を含む）
+
+いまの `coord.InterpretPreparation` は「件数を数える → トランザクション外で呼ぶ → 事後に記録」で、
+同時受信ですり抜け、呼び出し後・記録前の停止で費用が記録されない。次の順序に変える。
+
+1. トランザクション内で件数を数え、上限内なら `llm_calls` に行を先に作る（`succeeded=0`、トークンと金額は NULL）
+2. トランザクションの外で LLM を呼ぶ
+3. 結果でその行を更新する
+
+SQLite への書き込みは1接続に直列化されているため、数えるのと確保が同じトランザクションに入れば競合が消える。
+呼び出し後に停止しても行は残り、費用は不明（NULL）のままになる（「費用不明を0円にしない」に合う）。
+`store` に行の更新を1つ足す。スキーマ変更はない。**Webの自由文解釈にも同じ修正を当てる。**
 
 ## 記録するもの
 
@@ -159,12 +210,18 @@ Discord 側には本人の発言が残るが、そこは管理外である旨を
 | 新規 | `internal/discord/reply.go` | Bot の発話（すべて定型文） |
 | 追加 | `internal/store` | 開催回をまたいだ未回答タスクの取得 |
 | 追加 | `internal/notify` | DM 送信の経路と、失敗時のチャンネルへの退避 |
-| 追加 | `internal/playbook/reading` | `out_of_scope` をスキーマと判断指示に追加 |
+| 追加 | `internal/playbook/reading` | 部分検証のメソッド、判断指示に `out_of_scope` と `pending_question` |
+| **変更** | `coord.InterpretRequest` | 現在のスロットと `pending_question` を渡せるようにする |
+| **変更** | `coord.Interpretation` | `out_of_scope` をトップレベルに追加 |
+| **変更** | `coord.PreparationInterpreter` | 部分検証のメソッドを追加 |
+| **変更** | `agent.LLMInterpreter` | ツール引数に `out_of_scope`、入力に現在のスロットと質問中の項目 |
+| **変更** | `coord.InterpretPreparation` | 予算を呼び出し前に確保する（Webの経路にも効く） |
+| **変更** | `internal/store` | `llm_calls` の行を更新する口を追加 |
 | 追加 | `cmd/server/main.go` | Bot トークンがあるときだけ起動時に配線 |
 | 追加 | 依存 | `discordgo`（現在の依存は SQLite ドライバのみ） |
 | 追加 | 設定 | Bot の DIRECT_MESSAGES インテント。`DISCORD_BOT_TOKEN` は既存 |
-| **変更なし** | `coord.Interpreter` / `agent.LLMInterpreter` | 対話も Web も同じ解釈層を使う |
-| **変更なし** | `ValidatePreparation` / `PutPreparation` / `RespondTask` | 保存経路は共通 |
+| **変更なし** | `ValidatePreparation` | 保存直前の全体検証としてそのまま使う |
+| **変更なし** | `PutPreparation` / `RespondTask` | 保存経路は共通 |
 | **変更なし** | `agent.LLMPlanner` | スケジューリング側は対話を知らない |
 | **変更なし** | フロントエンド | Web の入力・修正はそのまま |
 | **変更なし** | DBスキーマ | 追加テーブル・追加カラムなし |
