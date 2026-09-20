@@ -23,6 +23,7 @@ MVPは、既存の輪読会の「辞退→再計画→本人の引き受け・�
 | --- | --- |
 | overview | 前提・目的・利用の流れ（準備中） |
 | rules | AIに任せること・委任ルール（準備中） |
+| [run](docs/run.md) | 起動方法・デモモード・よく使うコマンド |
 | [architecture](.agent/decisions/architecture.md) | 共通処理と用途別Playbookの境界・ディレクトリ構成 |
 | [api-endpoint](docs/api-endpoint.md) | エンドポイント一覧・共通の呼び出し規約・エラー・画面URL |
 | [data-structure](docs/data-structure.md) | APIがやりとりする型と状態値 |
