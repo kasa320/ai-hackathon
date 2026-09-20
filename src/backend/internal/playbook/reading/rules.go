@@ -173,6 +173,62 @@ func (Playbook) ValidatePreparation(_ context.Context, s coord.Snapshot, attenda
 	return mustJSON(d), nil
 }
 
+// ValidatePartialPreparation は対話の途中の値を検証する。未確定の項目を許し、
+// 確定した値から導ける従属値だけを正規化する。保存直前には ValidatePreparation を別に通す。
+//
+// ValidatePreparation は「担当できるなら説明できる節1件以上と1分以上」を求めるため、
+// 「説明できます」とだけ答えた段階には当てられない。ここで見るのは型・登録済みの節ID・分数の範囲だけ。
+func (Playbook) ValidatePartialPreparation(_ context.Context, s coord.Snapshot, attendance string, raw json.RawMessage, unclear []string) (json.RawMessage, []string, error) {
+	sd, err := sessionData(s)
+	if err != nil {
+		return nil, nil, err
+	}
+	var d PreparationData
+	if err := decodeStrict(raw, &d); err != nil {
+		return nil, nil, decodeError(err)
+	}
+	d.PreparedSectionIDs = nonNil(d.PreparedSectionIDs)
+	d.ExplainableSectionIDs = nonNil(d.ExplainableSectionIDs)
+
+	v := &coord.ValidationError{}
+	known := sd.sectionSet()
+	checkIDList(v, "prepared_section_ids", d.PreparedSectionIDs, known)
+	checkIDList(v, "explainable_section_ids", d.ExplainableSectionIDs, known)
+	if d.MaxPresentationMinutes < 0 || d.MaxPresentationMinutes > s.DurationMinutes {
+		v.Add("max_presentation_minutes", "0分以上、持ち時間（%d分）以内で指定してください", s.DurationMinutes)
+	}
+	open := newIDSet(unclear)
+	// 部分集合の関係は、両方が確定してから確かめる（勝手に「読んできた節」を増やさない）。
+	if !open.has(SlotPrepared) && !open.has(SlotExplainable) {
+		prepared := newIDSet(d.PreparedSectionIDs)
+		for i, id := range d.ExplainableSectionIDs {
+			if !prepared.has(id) {
+				v.Add(fmt.Sprintf("explainable_section_ids[%d]", i), "説明できる節は読んできた節から選んでください")
+			}
+		}
+	}
+	if err := v.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	// 確定した値から決まる従属値の正規化。結果は確認画面にそのまま出す。
+	if (attendance == coord.AttendanceAbsent && !open.has(coord.SlotAttendance)) ||
+		(!d.WillingToPresent && !open.has(SlotWilling)) {
+		d.WillingToPresent = false
+		d.ExplainableSectionIDs = []string{}
+		d.MaxPresentationMinutes = 0
+		delete(open, SlotWilling)
+		delete(open, SlotExplainable)
+		delete(open, SlotMinutes)
+	}
+	if !open.has(SlotExplainable) && !open.has(SlotMinutes) && !open.has(coord.SlotAttendance) {
+		// 説明できる節と分数が確定すれば、担当できるかも決まる。
+		d.WillingToPresent = attendance == coord.AttendanceAttending && len(d.ExplainableSectionIDs) > 0 && d.MaxPresentationMinutes > 0
+		delete(open, SlotWilling)
+	}
+	return mustJSON(d), orderedSlots(open), nil
+}
+
 // ApplyWithdrawal は辞退時の変換（docs/data-structure.md）。準備済みの節は維持する。
 func (Playbook) ApplyWithdrawal(_ context.Context, _ coord.Snapshot, _ string, current json.RawMessage) (json.RawMessage, error) {
 	d := PreparationData{PreparedSectionIDs: []string{}}
@@ -429,4 +485,75 @@ func onlyPresentersChanged(a, b PlanData) bool {
 		}
 	}
 	return true
+}
+
+var _ coord.PreparationDiffer = Playbook{}
+
+// DiffPreparation は参加条件の変更点を1行ずつ返す（活動記録用）。理由や原文は含めない。
+func (Playbook) DiffPreparation(s coord.Snapshot, before *coord.Preparation, after coord.Preparation) []string {
+	titles := map[string]string{}
+	if sd, err := sessionData(s); err == nil {
+		for _, sec := range sd.Sections {
+			titles[sec.ID] = sec.Title
+		}
+	}
+	var old PreparationData
+	oldAttendance := ""
+	if before != nil {
+		oldAttendance = before.Attendance
+		_ = json.Unmarshal(before.Data, &old)
+	}
+	var now PreparationData
+	if err := json.Unmarshal(after.Data, &now); err != nil {
+		return nil
+	}
+
+	lines := []string{}
+	add := func(label, from, to string) {
+		if before == nil {
+			lines = append(lines, label+"："+to)
+			return
+		}
+		if from != to {
+			lines = append(lines, label+"："+from+" → "+to)
+		}
+	}
+	add("参加", attendanceLabel(oldAttendance), attendanceLabel(after.Attendance))
+	add("説明の担当", willingLabel(old.WillingToPresent), willingLabel(now.WillingToPresent))
+	add("読んできた範囲", sectionsLabel(titles, old.PreparedSectionIDs), sectionsLabel(titles, now.PreparedSectionIDs))
+	add("説明できる範囲", sectionsLabel(titles, old.ExplainableSectionIDs), sectionsLabel(titles, now.ExplainableSectionIDs))
+	add("説明できる時間", minutesLabel(old.MaxPresentationMinutes), minutesLabel(now.MaxPresentationMinutes))
+	return lines
+}
+
+func attendanceLabel(a string) string {
+	if a == coord.AttendanceAbsent {
+		return "欠席"
+	}
+	return "参加"
+}
+
+func willingLabel(v bool) string {
+	if v {
+		return "できる"
+	}
+	return "できない"
+}
+
+func minutesLabel(n int) string { return fmt.Sprintf("%d分", n) }
+
+// sectionsLabel は節IDを題名に直して並べる。題名が分からないIDはそのまま出す。
+func sectionsLabel(titles map[string]string, ids []string) string {
+	if len(ids) == 0 {
+		return "なし"
+	}
+	names := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if t, ok := titles[id]; ok && t != "" {
+			names = append(names, t)
+			continue
+		}
+		names = append(names, id)
+	}
+	return strings.Join(names, "、")
 }

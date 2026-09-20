@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/kasa320/ai-hackathon/src/backend/internal/coord"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/playbook/reading"
 )
 
 func interpret(t *testing.T, text string) (string, reading.PreparationData, []string) {
 	t.Helper()
-	got, err := reading.New().DraftInterpret(context.Background(), baseSnapshot(), text)
+	got, err := reading.New().DraftInterpret(context.Background(), coord.InterpretRequest{Snapshot: baseSnapshot(), Text: text})
 	if err != nil {
 		t.Fatal(err)
 	}
