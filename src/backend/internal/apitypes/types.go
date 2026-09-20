@@ -207,6 +207,24 @@ type PutPreparationInput struct {
 	Preparation      *Preparation `json:"preparation"`
 }
 
+// InterpretPreparationInput は自由文からの参加条件の解釈依頼。対象者は常に呼び出した本人で、
+// メンバーIDを入力で指定しない。原文は保存されない。
+type InterpretPreparationInput struct {
+	Text string `json:"text"`
+}
+
+// PreparationInterpretation は自由文の解釈結果の下書き。保存はされない（saved は常に false）。
+// 本人が確認・修正したうえで PUT /api/sessions/{id}/preparations/me を送ると保存される。
+type PreparationInterpretation struct {
+	Preparation Preparation `json:"preparation"`
+	// Unclear は発言から読み取れなかった項目名。値は推測せず、保守的な既定値が入る。
+	Unclear []string `json:"unclear"`
+	// NeedsFollowup は本人に確認すべき項目が残っていること。
+	NeedsFollowup bool `json:"needs_followup"`
+	// Saved は常に false。解釈だけでは何も保存されないことを示す。
+	Saved bool `json:"saved"`
+}
+
 type WithdrawalInput struct {
 	ExpectedRevision *int64 `json:"expected_revision"`
 	Scope            string `json:"scope"`

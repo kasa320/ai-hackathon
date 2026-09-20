@@ -49,18 +49,21 @@ type Options struct {
 	Log  *slog.Logger
 	// RunLock はイベント処理を他の処理（開発用の初期データ投入）と排他にするためのロック。nil なら使わない。
 	RunLock *sync.Mutex
+	// Interpreter は自由文から参加条件を取り出す処理。nil なら自由文の解釈を提供しない。
+	Interpreter Interpreter
 }
 
 // Coordinator は用途共通の調整処理。状態遷移・本人と版の検証・同意管理・イベント処理を担う。
 // 用途固有の判断は Playbook に委ね、playbook_id による分岐を持たない。
 type Coordinator struct {
-	reg     *Service
-	st      *store.Store
-	clock   clock.Clock
-	planner Planner
-	opts    Options
-	log     *slog.Logger
-	wake    chan struct{}
+	reg         *Service
+	st          *store.Store
+	clock       clock.Clock
+	planner     Planner
+	interpreter Interpreter
+	opts        Options
+	log         *slog.Logger
+	wake        chan struct{}
 }
 
 func NewCoordinator(reg *Service, st *store.Store, clk clock.Clock, planner Planner, opts Options) *Coordinator {
@@ -71,7 +74,7 @@ func NewCoordinator(reg *Service, st *store.Store, clk clock.Clock, planner Plan
 	if log == nil {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
-	return &Coordinator{reg: reg, st: st, clock: clk, planner: planner, opts: opts, log: log, wake: make(chan struct{}, 1)}
+	return &Coordinator{reg: reg, st: st, clock: clk, planner: planner, interpreter: opts.Interpreter, opts: opts, log: log, wake: make(chan struct{}, 1)}
 }
 
 // Playbooks は登録済み用途の一覧。

@@ -40,7 +40,9 @@ cp .env.example .env   # 必要に応じて値を設定する
 make dev               # http://localhost:8080 で起動
 ```
 
-`AGENT_MODE=fake`（既定）では LLM を呼ばず、輪読 Playbook の規則だけで案を作ります（仮の判断処理）。OrcaRouter を使うときは `AGENT_MODE=llm` と `ORCAROUTER_API_KEY` を設定します。
+`AGENT_MODE=fake`（既定）では LLM を呼ばず、輪読 Playbook の規則だけで案を作り、自由文も規則だけで解釈します（仮の判断処理）。OrcaRouter を使うときは `AGENT_MODE=llm` と `ORCAROUTER_API_KEY` を設定します。
+
+参加条件は自由文でも入力できます（`POST /api/sessions/{id}/preparations/me/interpretations`）。LLM が決めるのは定義済み項目の値だけで、結果は保存されません。本人が確認・修正して通常の送信をしたときに初めて保存されます。原文は解釈用モデルへの送信にだけ使い、DB とログには残しません。
 
 ### 主な環境変数
 

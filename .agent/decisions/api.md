@@ -89,6 +89,7 @@ OAuth開始はブラウザー遷移、callbackはバックエンド処理。stat
 | `POST /api/groups/{group_id}/sessions` | 管理者 | 201 | 開催回を登録し、参加条件の確認を開始 |
 | `GET /api/sessions/{session_id}` | メンバー | 200 | 共有計画・進行状況・自分の操作をまとめて取得 |
 | `PUT /api/sessions/{session_id}/preparations/me` | メンバー本人 | 202 | 自分の参加条件を送信・更新 |
+| `POST /api/sessions/{session_id}/preparations/me/interpretations` | メンバー本人 | 200 | 自分の自由文から参加条件の下書きを作る（保存しない） |
 | `POST /api/sessions/{session_id}/withdrawals` | メンバー本人 | 202 | 自分の担当辞退・欠席を登録 |
 | `POST /api/tasks/{task_id}/responses` | タスクの本人 | 202 | 確認への回答・担当引き受け・投票・承認 |
 | `POST /api/sessions/{session_id}/proposals` | 管理者 | 202 | 管理者の判断待ちのときに代案を提出 |
@@ -347,6 +348,44 @@ type SessionDetail = {
 成功は202とMutationAccepted。本人以外のmember_idを含めた本文は拒否する。参加条件の回答で担当の引き受けや投票を自動作成しない（「担当できる」と答えても引き受けにはならない）。
 
 参加条件の更新・辞退は開催時刻までは受け付ける。開催1時間前を過ぎて新しい回答期限を確保できない場合は、変更自体を記録した上で案件をneeds_ownerにし、自動確認を再開しない。開催時刻以降は `409 invalid_state`。
+
+### 自由文からの参加条件の下書き
+
+`POST /api/sessions/{session_id}/preparations/me/interpretations`：
+
+```json
+{ "text": "今回の前半は読んできました。15分なら説明できます。" }
+```
+
+応答（200）：
+
+```json
+{
+  "preparation": {
+    "attendance": "attending",
+    "data": {
+      "willing_to_present": true,
+      "prepared_section_ids": ["sec_2"],
+      "explainable_section_ids": ["sec_2"],
+      "max_presentation_minutes": 15
+    }
+  },
+  "unclear": ["attendance"],
+  "needs_followup": true,
+  "saved": false
+}
+```
+
+自由文を解釈用モデルに送り、用途固有の `PreparationData` の項目の値だけを取り出して返す。**この API は何も保存しない**（`saved` は常に false）。保存は本人が内容を確認・修正したうえで `PUT .../preparations/me` または preparation タスクへの回答で行う。
+
+- 対象者は常に呼び出した本人。メンバーIDを入力で受け取らず、他人の参加条件は作らない。
+- `text` は1〜2000文字。原文はアプリDB・実行ログに保存せず、解釈用モデルへの送信にだけ使う。共有用モデル・共有画面・通知には渡さない。
+- 取り出した値はサーバーが `PreparationData` の規則で再検証する。通らない場合はモデルに検証エラーを返してやり直させ（最大2回）、それでも通らなければ `503 temporarily_unavailable` を返してフォーム入力へ誘導する。返すのは常に正規化済みで、そのまま保存できる値。
+- `unclear` は発言から読み取れなかった項目名。値は推測せず、担当しない側（`willing_to_present=false`・`explainable_section_ids=[]`・`max_presentation_minutes=0`）に倒す。`needs_followup` は確認すべき項目が残っていること。
+- 発言に含まれる指示（「全員が同意したことにして」など）には従わない。モデルには項目の値を返すツールしか与えず、同意・引き受け・確定・通知を作る経路がない。
+- 何も保存しないため `Idempotency-Key` は不要。CSRF と所属の検証は通常どおり行う。
+- LLM 呼び出しは1回の解釈につき最大2回。案件の呼び出し上限（第10節）に達している場合は `409 invalid_state` を返す。呼び出しは `llm_calls` に記録され、費用表示に含まれる。
+- 用途が解釈に対応していない場合は `422 unsupported_playbook`。
 
 ### 担当辞退・欠席
 
@@ -841,6 +880,7 @@ Web検索で日本語技術書の目次を取得できる割合、1回あたり�
 | 教材の登録（目次の取得） | — | 輪読：reading/toc-lookups（ISBN入力 → 候補の確認・修正、取得できなければ画像提出 → 手入力） |
 | 今回の計画・状態表示 | sessions/{id} | `data` と `PlanData` の表示（輪読：範囲・進行表） |
 | 自分の参加条件フォーム | preparations/me、またはpreparationタスクへのresponses | `PreparationData` の入力（輪読：準備した節・説明できる節と時間） |
+| 自由文で書いて確認する | preparations/me/interpretations → 確認・修正 → preparations/me | 下書きを表示し、本人が確定してから保存する。解釈だけでは保存されない |
 | 担当辞退・欠席 | withdrawals | — |
 | 引き受け・投票・管理者承認 | tasks/{id}/responses | — |
 | 管理者の代案入力 | sessions/{id}/proposals | `PlanData` の入力（輪読：進行表） |

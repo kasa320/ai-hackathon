@@ -64,6 +64,7 @@ func (s *Server) Handler(frontendDir string, mount ...func(mux *http.ServeMux)) 
 	mux.HandleFunc("POST /api/groups/{group_id}/sessions", s.authed(s.createSession))
 	mux.HandleFunc("GET /api/sessions/{session_id}", s.authed(s.getSession))
 	mux.HandleFunc("PUT /api/sessions/{session_id}/preparations/me", s.authed(s.putPreparation))
+	mux.HandleFunc("POST /api/sessions/{session_id}/preparations/me/interpretations", s.authed(s.interpretPreparation))
 	mux.HandleFunc("POST /api/sessions/{session_id}/withdrawals", s.authed(s.withdraw))
 	mux.HandleFunc("POST /api/tasks/{task_id}/responses", s.authed(s.respondTask))
 	mux.HandleFunc("POST /api/sessions/{session_id}/proposals", s.authed(s.submitProposal))
@@ -312,6 +313,26 @@ func (s *Server) putPreparation(w http.ResponseWriter, r *http.Request, sess aut
 	mutation(s, w, r, sess, s.sessionAccess(r, sess), func(in apitypes.PutPreparationInput, key *store.IdemKey) (store.Response, error) {
 		return s.Coord.PutPreparation(r.Context(), sess.User.ID, r.PathValue("session_id"), in, key)
 	})
+}
+
+// interpretPreparation は本人の自由文から参加条件の下書きを作って返す。何も保存しないため
+// Idempotency-Key は要求しない（再送しても状態は変わらない）。保存は putPreparation で行う。
+func (s *Server) interpretPreparation(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	if err := s.sessionAccess(r, sess)(); err != nil {
+		httpx.WriteError(w, r, s.Log, err)
+		return
+	}
+	var in apitypes.InterpretPreparationInput
+	if _, err := httpx.ReadJSON(w, r, &in); err != nil {
+		httpx.WriteError(w, r, s.Log, err)
+		return
+	}
+	out, err := s.Coord.InterpretPreparation(r.Context(), sess.User.ID, r.PathValue("session_id"), in)
+	if err != nil {
+		httpx.WriteError(w, r, s.Log, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) withdraw(w http.ResponseWriter, r *http.Request, sess auth.Session) {

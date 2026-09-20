@@ -64,10 +64,12 @@ func run(log *slog.Logger) error {
 	}
 
 	var planner coord.Planner = coord.DraftOnlyPlanner{}
+	var interpreter coord.Interpreter = coord.DraftOnlyInterpreter{}
 	tocDeps := toc.Deps{Store: st, Clock: clk, Faults: faults, Bib: toc.Chain{toc.NewOpenBD(), toc.NewNDLSearch()}, Fetcher: toc.NewSafeFetcher(), Log: log}
 	if cfg.AgentMode == config.AgentModeLLM {
 		client := agent.NewClient(cfg.OrcaRouterURL, cfg.OrcaRouterAPIKey)
 		planner = &agent.LLMPlanner{Client: client, Model: cfg.OrcaRouterModel}
+		interpreter = &agent.LLMInterpreter{Client: client, Model: cfg.OrcaRouterModel}
 		if cfg.OrcaRouterSearchModel != "" {
 			tocDeps.Searcher = &toc.LLMSearcher{Client: client, Model: cfg.OrcaRouterSearchModel}
 		}
@@ -87,11 +89,12 @@ func run(log *slog.Logger) error {
 	}
 	if cfg.DevMode {
 		planner = agent.WithFaults(planner, faults)
+		interpreter = agent.WithInterpretFaults(interpreter, faults)
 		sender = notify.WithFaults(sender, faults)
 	}
 
 	runLock := &sync.Mutex{}
-	coordinator := coord.NewCoordinator(registry, st, clk, planner, coord.Options{PublicBaseURL: cfg.PublicBaseURL, Log: log, RunLock: runLock})
+	coordinator := coord.NewCoordinator(registry, st, clk, planner, coord.Options{PublicBaseURL: cfg.PublicBaseURL, Log: log, RunLock: runLock, Interpreter: interpreter})
 	dispatcher := notify.NewDispatcher(st, clk, sender, log)
 	if err := dispatcher.Recover(ctx); err != nil {
 		return err
