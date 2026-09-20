@@ -34,7 +34,7 @@ func ValidISBN13(s string) bool {
 	return false
 }
 
-// ValidateSessionData は開催回データを検証する（api.md R2・R3）。
+// ValidateSessionData は開催回データを検証する（docs/data-structure.md）。
 func (Playbook) ValidateSessionData(_ context.Context, _ coord.SessionParams, raw json.RawMessage) (json.RawMessage, error) {
 	var d SessionData
 	if err := decodeStrict(raw, &d); err != nil {
@@ -126,7 +126,7 @@ func (d SessionData) sectionSet() idSet {
 	return s
 }
 
-// ValidatePreparation は参加条件を検証する（api.md R3）。
+// ValidatePreparation は参加条件を検証する（docs/data-structure.md）。
 func (Playbook) ValidatePreparation(_ context.Context, s coord.Snapshot, attendance string, raw json.RawMessage) (json.RawMessage, error) {
 	sd, err := sessionData(s)
 	if err != nil {
@@ -173,7 +173,7 @@ func (Playbook) ValidatePreparation(_ context.Context, s coord.Snapshot, attenda
 	return mustJSON(d), nil
 }
 
-// ApplyWithdrawal は辞退時の変換（api.md R3）。準備済みの節は維持する。
+// ApplyWithdrawal は辞退時の変換（docs/data-structure.md）。準備済みの節は維持する。
 func (Playbook) ApplyWithdrawal(_ context.Context, _ coord.Snapshot, _ string, current json.RawMessage) (json.RawMessage, error) {
 	d := PreparationData{PreparedSectionIDs: []string{}}
 	if len(current) > 0 {
@@ -212,7 +212,7 @@ func (p PlanData) presenters() []string {
 	return ids
 }
 
-// Assignees は担当者（presenter_member_id が指定された人）を返す（api.md R4）。
+// Assignees は担当者（presenter_member_id が指定された人）を返す（docs/data-structure.md）。
 func (Playbook) Assignees(raw json.RawMessage) ([]string, error) {
 	var p PlanData
 	if err := json.Unmarshal(raw, &p); err != nil {
@@ -230,7 +230,7 @@ func preparationData(s coord.Snapshot, memberID string) (*coord.Preparation, Pre
 	return p, d
 }
 
-// ValidatePlan は計画を検証する（api.md R3）。
+// ValidatePlan は計画を検証する（docs/data-structure.md）。
 func (pb Playbook) ValidatePlan(_ context.Context, s coord.Snapshot, prop coord.Proposal) error {
 	sd, err := sessionData(s)
 	if err != nil {
@@ -383,7 +383,7 @@ func consecutiveSubstituteCount(s coord.Snapshot, memberID string) int {
 	return n
 }
 
-// ApprovalRequirements は案に必要な条件を返す（api.md R4）。
+// ApprovalRequirements は案に必要な条件を返す（docs/data-structure.md）。
 func (Playbook) ApprovalRequirements(_ context.Context, s coord.Snapshot, prop coord.Proposal) (coord.ApprovalRequirements, error) {
 	p, err := decodePlan(prop.Data)
 	if err != nil {

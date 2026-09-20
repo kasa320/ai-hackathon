@@ -1,10 +1,10 @@
 // Package apperr は業務処理が返すエラーコード。HTTP ステータスへの対応は api 層が行う。
-// フロントは message ではなく code で処理を分ける（api.md 第12節）。
+// フロントは message ではなく code で処理を分ける（docs/api-endpoint.md のエラー表）。
 package apperr
 
 import "fmt"
 
-// エラーコード（api.md 第12節）。
+// エラーコード（docs/api-endpoint.md のエラー表）。
 const (
 	InvalidJSON            = "invalid_json"
 	IdempotencyKeyRequired = "idempotency_key_required"

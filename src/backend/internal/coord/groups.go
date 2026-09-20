@@ -15,7 +15,7 @@ import (
 	"github.com/kasa320/ai-hackathon/src/backend/internal/store"
 )
 
-// グループと開催回の制限（api.md 第2節）。
+// グループと開催回の制限（docs/data-structure.md）。
 const (
 	MaxNameLen     = 100
 	MinGroupSize   = 2

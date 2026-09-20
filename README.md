@@ -24,8 +24,9 @@ MVPは、既存の輪読会の「辞退→再計画→本人の引き受け・�
 | overview | 前提・目的・利用の流れ（準備中） |
 | rules | AIに任せること・委任ルール（準備中） |
 | [architecture](.agent/decisions/architecture.md) | 共通処理と用途別Playbookの境界・ディレクトリ構成 |
-| [api](.agent/decisions/api.md) | MVPのAPI契約・JSON型・認証・同意・エラー・画面別の対応（`backend` ブランチで実装済み） |
-| data-model | テーブル定義（準備中） |
+| [api-endpoint](docs/api-endpoint.md) | エンドポイント一覧・共通の呼び出し規約・エラー・画面URL |
+| [data-structure](docs/data-structure.md) | APIがやりとりする型と状態値 |
+| [database](docs/database.md) | テーブル定義と1レコードのサンプル |
 | agent | 状態遷移・ツール・モデル構成（準備中） |
 | development | セットアップ・環境変数・開発ルール（準備中） |
 | [evaluation](.agent/decisions/evaluation.md) | LINEとの比較方法・固定評価ケース・費用の計測（手順のみ、結果は未計測） |
@@ -40,7 +41,9 @@ cp .env.example .env   # 必要に応じて値を設定する
 make dev               # http://localhost:8080 で起動
 ```
 
-`AGENT_MODE=fake`（既定）では LLM を呼ばず、輪読 Playbook の規則だけで案を作ります（仮の判断処理）。OrcaRouter を使うときは `AGENT_MODE=llm` と `ORCAROUTER_API_KEY` を設定します。
+`AGENT_MODE=fake`（既定）では LLM を呼ばず、輪読 Playbook の規則だけで案を作り、自由文も規則だけで解釈します（仮の判断処理）。OrcaRouter を使うときは `AGENT_MODE=llm` と `ORCAROUTER_API_KEY` を設定します。
+
+参加条件は自由文でも入力できます（`POST /api/sessions/{id}/preparations/me/interpretations`）。LLM が決めるのは定義済み項目の値だけで、結果は保存されません。本人が確認・修正して通常の送信をしたときに初めて保存されます。原文は解釈用モデルへの送信にだけ使い、DB とログには残しません。
 
 ### 主な環境変数
 

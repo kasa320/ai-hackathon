@@ -208,7 +208,8 @@ func (s *server) boot() {
 	}
 	runLock := &sync.Mutex{}
 	base := s.http.URL
-	s.coord = coord.NewCoordinator(registry, st, s.clk, agent.WithFaults(s.planner, s.faults), coord.Options{PublicBaseURL: base, Log: quiet, RunLock: runLock, Rand: func() float64 { return 0.5 }})
+	s.coord = coord.NewCoordinator(registry, st, s.clk, agent.WithFaults(s.planner, s.faults), coord.Options{PublicBaseURL: base, Log: quiet, RunLock: runLock, Rand: func() float64 { return 0.5 },
+		Interpreter: agent.WithInterpretFaults(coord.DraftOnlyInterpreter{}, s.faults)})
 	s.dispatch = notify.NewDispatcher(st, s.clk, notify.WithFaults(s.sender, s.faults), quiet)
 	if err := s.dispatch.Recover(bg); err != nil {
 		t.Fatal(err)
@@ -294,7 +295,7 @@ func (r response) decode(t *testing.T, v any) {
 	}
 }
 
-// errorCode はエラー応答の code を返す。形式が api.md 第12節と違えば失敗させる。
+// errorCode はエラー応答の code を返す。形式が docs/api-endpoint.md と違えば失敗させる。
 func (r response) errorCode(t *testing.T) string {
 	t.Helper()
 	var e struct {

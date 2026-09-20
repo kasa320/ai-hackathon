@@ -48,7 +48,7 @@ func TestDraftReplanAfterWithdrawal(t *testing.T) {
 	_ = json.Unmarshal(d.Plan, &p)
 	var got reading.PlanData
 	_ = json.Unmarshal([]byte(replanJSON), &got)
-	// api.md R6 の例と同じ内容（C 15分、復習20分、議論25分、sec_3 持ち越し）になる。
+	// C 15分、復習20分、議論25分、sec_3 持ち越しになる。
 	if !reflect.DeepEqual(p.CoveredSectionIDs, got.CoveredSectionIDs) || !reflect.DeepEqual(p.DeferredSectionIDs, got.DeferredSectionIDs) {
 		t.Fatalf("範囲: %+v", p)
 	}

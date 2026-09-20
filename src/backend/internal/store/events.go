@@ -262,6 +262,13 @@ func (t *Tx) AddLLMCall(ctx context.Context, c LLMCall) error {
 		c.ID, nullStr(c.CaseID), nullStr(c.LookupID), c.Model, c.InputTokens, c.OutputTokens, c.Currency, c.EstimatedAmount, c.BilledAmount, c.Succeeded, ts(c.CreatedAt))
 }
 
+// CountLLMCallsByCase は1つの案件で使った LLM 呼び出しの数を返す（自由文の解釈を含む）。
+func (t *Tx) CountLLMCallsByCase(ctx context.Context, caseID string) (int, error) {
+	var n int
+	err := t.row(ctx, "SELECT COUNT(*) FROM llm_calls WHERE case_id = ?", caseID).Scan(&n)
+	return n, err
+}
+
 func (t *Tx) LLMCallsByCase(ctx context.Context, caseID string) ([]LLMCall, error) {
 	rows, err := t.query(ctx, "SELECT id, model, input_tokens, output_tokens, currency, estimated_amount, billed_amount, succeeded, created_at FROM llm_calls WHERE case_id = ? ORDER BY created_at", caseID)
 	if err != nil {

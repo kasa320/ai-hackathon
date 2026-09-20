@@ -14,7 +14,7 @@
 | 用途の分離 | 共通の調整処理と `playbook/reading` を `coord.Playbook` で分離し、起動時に静的登録する | 後から用途を追加するための境界を用意する。今回の機能・発表は輪読だけとし、会議用の実装は作らない |
 | 接点 | 回答と計画確認はWeb、通知はDiscordの指定チャンネル1つ | 従来はLINE。試作への移行の受け入れも検証し、LINE連携は見送る |
 | 認証 | Discord OAuth＋アプリ内の所属・権限検証 | 利用者ID取得と通知先・Bot権限の設定は別に行う |
-| 技術 | Go（標準の net/http・database/sql、openai-go、modernc.org/sqlite）、HTML / CSS / JavaScript。境界は api.md | 実行時はGoサーバーとSQLiteにまとめる。技術選定を広げない |
+| 技術 | Go（標準の net/http・database/sql、openai-go、modernc.org/sqlite）、HTML / CSS / JavaScript。境界は docs/api-endpoint.md | 実行時はGoサーバーとSQLiteにまとめる。技術選定を広げない |
 | LLM | OrcaRouterの単一モデルから開始。ツール呼び出しループを実装 | 先に完走と費用計測を行い、モデル比較・自動切替は余力に応じる |
 | 分担 | kasa：API・DB・AI・サーバー側認証と通知・評価。友人：画面・DiscordアプリとBotの設定・通知の実機確認 | 秘密情報と権限判定をサーバー側に集約。最初に2人でAPIと作業境界を確認する |
 | 評価 | LINEの人の調整メッセージと、利用後のチャット・Web送信等の総操作数を比較 | 固定の幹事はいなかったため、参加者全体の負担を測る。期間・案件条件を揃え、再現試験は実運用と区別する |
@@ -42,7 +42,7 @@
 
 ## 未着手・要確認
 
-- 公開APIは [api.md](api.md) のmvp-2として決定済み。内部データモデル・ツール引数の具体化と分担の確認を行う
+- 公開APIは [docs/api-endpoint.md](../../docs/api-endpoint.md)・[docs/data-structure.md](../../docs/data-structure.md) として決定済み。内部データモデル・ツール引数の具体化と分担の確認を行う
 - モデル選定、案件の金額上限、費用の見積・取得方法、自由文を送る場合のデータ保持条件
 - 過去のLINEの対象期間と変更案件の選定、比較試用、参加者の入力・通知負担の確認
 - 固定評価ケースの実行と記録。評価手順と4分デモ台本は作成済みだが、結果は未計測

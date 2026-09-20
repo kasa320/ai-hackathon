@@ -1,6 +1,6 @@
 package reading
 
-// 公開API（api.md 第2部 R1）と同じ形の輪読固有データ。
+// 公開API（docs/data-structure.md）と同じ形の輪読固有データ。
 
 type Section struct {
 	ID    string `json:"id"`
@@ -53,7 +53,7 @@ type PlanData struct {
 	Agenda             []AgendaItem `json:"agenda"`
 }
 
-// 入力の制限（api.md R2）。
+// 入力の制限（docs/data-structure.md）。
 const (
 	maxBookTitleLen    = 100
 	maxSectionTitleLen = 200

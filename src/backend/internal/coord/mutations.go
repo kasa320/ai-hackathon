@@ -44,7 +44,7 @@ func checkNotStarted(sess store.Session, now time.Time) error {
 	return nil
 }
 
-// PutPreparation は本人の参加条件を全置換する（api.md 第7節）。
+// PutPreparation は本人の参加条件を全置換する（docs/api-endpoint.md）。
 func (c *Coordinator) PutPreparation(ctx context.Context, userID, sessionID string, in apitypes.PutPreparationInput, idem *store.IdemKey) (store.Response, error) {
 	now := c.now()
 	res, err := c.st.Idempotent(ctx, idem, now, func(tx *store.Tx) (store.Response, error) {
@@ -146,7 +146,7 @@ func (c *Coordinator) submitPreparation(ctx context.Context, tx *store.Tx, sess 
 	return accepted(*sess, caseID), nil
 }
 
-// Withdraw は本人の担当辞退・欠席を登録する（api.md 第7節）。私的な理由は受け取らない。
+// Withdraw は本人の担当辞退・欠席を登録する（docs/api-endpoint.md）。私的な理由は受け取らない。
 func (c *Coordinator) Withdraw(ctx context.Context, userID, sessionID string, in apitypes.WithdrawalInput, idem *store.IdemKey) (store.Response, error) {
 	now := c.now()
 	res, err := c.st.Idempotent(ctx, idem, now, func(tx *store.Tx) (store.Response, error) {
@@ -278,7 +278,7 @@ var allowedDecisions = map[string][]string{
 	store.TaskOwnerApproval: {"approve", "reject"},
 }
 
-// RespondTask は確認への回答・担当の引き受け・投票・承認を記録する（api.md 第8節）。
+// RespondTask は確認への回答・担当の引き受け・投票・承認を記録する（docs/api-endpoint.md）。
 func (c *Coordinator) RespondTask(ctx context.Context, userID, taskID string, in apitypes.TaskResponseInput, idem *store.IdemKey) (store.Response, error) {
 	now := c.now()
 	res, err := c.st.Idempotent(ctx, idem, now, func(tx *store.Tx) (store.Response, error) {
@@ -400,7 +400,7 @@ func checkTaskResponseShape(tk store.Task, in apitypes.TaskResponseInput) error 
 	return nil
 }
 
-// SubmitProposal は管理者の判断待ちのときに代案を提出する（api.md 第9節）。
+// SubmitProposal は管理者の判断待ちのときに代案を提出する（docs/api-endpoint.md）。
 func (c *Coordinator) SubmitProposal(ctx context.Context, userID, sessionID string, in apitypes.SubmitProposalInput, idem *store.IdemKey) (store.Response, error) {
 	now := c.now()
 	res, err := c.st.Idempotent(ctx, idem, now, func(tx *store.Tx) (store.Response, error) {
