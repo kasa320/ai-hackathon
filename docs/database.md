@@ -1,12 +1,55 @@
 # データベース
 
-SQLite 1ファイル（既定 `data/app.db`）。定義は `src/backend/internal/store/schema.sql` にあり、起動時にそのまま適用される。
+SQLite 1ファイル（既定 `data/app.db`、`DB_PATH` で変更可）。定義は `src/backend/internal/store/migrations/` に版ごとに置き、起動時に未適用の版だけが順に適用される（下記「スキーマの変更」）。
 
 - 日時はすべて UTC の RFC 3339（ナノ秒付き）文字列。
 - 用途固有のデータは JSON 文字列のカラムに入れ、共通側は中身を解釈しない。輪読用の型は `src/backend/internal/playbook/reading/model.go`。
 - ID は `<接頭辞>_<24桁の16進>`。
 
 サンプルは `POST /api/dev/seed`（`replan_demo`）で投入した実際のレコード。
+
+---
+
+## スキーマの変更
+
+テーブル定義は `src/backend/internal/store/migrations/<4桁の版番号>_<説明>.sql` に置く。実行ファイルに同梱され、`store.Open` が**適用済みの版より新しいものだけ**を昇順で適用する。適用済みの版番号は `meta` テーブルの `schema_version` に入る。
+
+**既存のファイルは書き換えない。** 変更は新しい版を足して表す。
+
+```sh
+# 例：members に退会日時の列を足す
+cat > src/backend/internal/store/migrations/0002_add_member_left_at.sql <<'SQL'
+ALTER TABLE members ADD COLUMN left_at TEXT;
+SQL
+make dev   # 次の起動で自動的に適用される
+```
+
+### 決まりごと
+
+| 項目 | 内容 |
+| --- | --- |
+| ファイル名 | `<4桁の版番号>_<説明>.sql`。番号は 1 から連番（抜けがあるとテストが落ちる） |
+| 適用の単位 | 1つの版＝1トランザクション。版番号の記録も同じトランザクション内 |
+| 失敗したとき | その版の変更だけ巻き戻り、版番号も上がらない。直して起動し直せば同じ版からやり直せる |
+| 巻き戻し用のSQL | 持たない。失敗した版は直して入れ直す。手元をやり直すなら `make db-reset` |
+| 版が新しすぎるDB | プログラムが知らない版まで進んだDBは、開かずにエラーにする |
+
+### 列の削除・型変更・制約変更
+
+SQLite には該当する `ALTER TABLE` がなく、新しい表へ移し替えて改名する手順になる。この場合は**ファイルの先頭行**に `-- foreign_keys: off` と書く。適用中だけ外部キー検査を止め、コミット直前に `PRAGMA foreign_key_check` で参照を失った行がないかを確かめ、あれば巻き戻す。
+
+```sql
+-- foreign_keys: off
+CREATE TABLE members_new (...);
+INSERT INTO members_new SELECT ... FROM members;
+DROP TABLE members;
+ALTER TABLE members_new RENAME TO members;
+CREATE INDEX IF NOT EXISTS members_user ON members(user_id);  -- 索引は作り直す
+```
+
+### 0001 だけの前提
+
+`0001_init.sql` はマイグレーション導入前の `schema.sql` をそのまま移したもので、中身が全部 `CREATE ... IF NOT EXISTS` になっている。導入前に作った `data/app.db` に対しては**何も起こさずに版番号だけが 1 になる**ため、既存のDBを作り直さずに引き継げる。この冪等性は 0001 に限った前提で、0002 以降は満たさなくてよい。
 
 ---
 
@@ -323,4 +366,8 @@ LLM 呼び出し1回の記録。金額が分からなければ NULL のままに
 
 ## meta
 
-`key` / `value` の2カラム。現在どこからも使っていない。
+`key` / `value` の2カラム。
+
+| キー | 意味 | サンプル |
+| --- | --- | --- |
+| `schema_version` | 適用済みのマイグレーションの版番号（10進の文字列） | `1` |

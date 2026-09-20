@@ -46,7 +46,7 @@ func groupView(members []store.Member, g store.Group, current store.Member) apit
 }
 
 func memberView(m store.Member) apitypes.Member {
-	return apitypes.Member{ID: m.ID, DisplayName: m.DisplayName, Role: m.Role, Joined: m.Joined()}
+	return apitypes.Member{ID: m.ID, DisplayName: m.DisplayName, Role: m.Role, Joined: m.Joined(), Left: m.Left()}
 }
 
 // CreateGroup は固定メンバーでグループを作成する。作成者は owner になる。

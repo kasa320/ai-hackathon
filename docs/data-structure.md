@@ -19,6 +19,8 @@ type Member = {
   display_name: string;
   role: "owner" | "member";
   joined: boolean;           // 招待対象のDiscord IDでログイン済みか
+  left: boolean;             // 脱退済みか。Group.members には出ないが、
+                             // SessionDetail.members には固定時の顔ぶれとして残る
 };
 
 type Group = { id: ID; name: string; current_member_id: ID; members: Member[] };
@@ -141,6 +143,13 @@ type Interpretation = {
 
 // POST /api/sessions/{id}/withdrawals
 type WithdrawalInput = { expected_revision: Revision; scope: "assignment" | "attendance" };
+
+// POST /api/groups/{group_id}/leave（本人のみ。管理者は 409 invalid_state）
+type LeaveGroupInput  = {};                           // 項目なし。空オブジェクトを送る
+type LeaveGroupResult = {
+  group_id: ID;
+  affected_session_ids: ID[];                         // 本人が外れて再調整が始まった開催回
+};
 
 // POST /api/tasks/{task_id}/responses（タスクの kind により形が決まる）
 type PreparationResponse = { decision: "submit"; expected_revision: Revision; preparation: Preparation };

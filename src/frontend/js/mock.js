@@ -24,10 +24,10 @@ const SESSION_ID = "ses_demo";
 const GROUP_ID = "grp_demo";
 
 const MEMBERS = [
-  { id: "mem_a", display_name: "A", role: "owner", joined: true },
-  { id: "mem_b", display_name: "B", role: "member", joined: true },
-  { id: "mem_c", display_name: "C", role: "member", joined: true },
-  { id: "mem_d", display_name: "D", role: "member", joined: true },
+  { id: "mem_a", display_name: "A", role: "owner", joined: true, left: false },
+  { id: "mem_b", display_name: "B", role: "member", joined: true, left: false },
+  { id: "mem_c", display_name: "C", role: "member", joined: true, left: false },
+  { id: "mem_d", display_name: "D", role: "member", joined: true, left: false },
 ];
 
 const READING_DATA = {
@@ -398,6 +398,7 @@ function mockMessage(code) {
     unauthenticated: "ログインしてください。",
     proposal_superseded: "新しい案が出ています。最新の内容を確認してください。",
     revision_conflict: "状態が更新されています。最新の内容を確認してください。",
+    invalid_state: "管理者は脱退できません。先に管理者を交代してください。",
   }[code] || "モックのエラーです。";
 }
 
@@ -444,6 +445,13 @@ export function createMockApi(opts) {
 
     async createSession() { await delay(400); return { session: get().session, case_id: "case_demo" }; },
     async createGroup() { await delay(400); return { id: GROUP_ID, name: "技術書輪読", current_member_id: "mem_a", members: MEMBERS }; },
+
+    /** 管理者は脱退できない。それ以外は開始前の開催回から外れる。 */
+    async leaveGroup() {
+      await delay(400);
+      if (opts.viewer === "mem_a") return fail(409, "invalid_state");
+      return { group_id: GROUP_ID, affected_session_ids: [get().session.id] };
+    },
 
     async session() { await delay(); return get(); },
 
