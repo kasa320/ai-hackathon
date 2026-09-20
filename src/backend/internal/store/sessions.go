@@ -91,24 +91,12 @@ func (t *Tx) UpdateSessionState(ctx context.Context, s Session) error {
 }
 
 // SessionMembers は開催回に固定したメンバーを表示順で返す。
+// 固定した時点の顔ぶれを保つため、その後に脱退した人も含める（Member.Left で見分ける）。
 func (t *Tx) SessionMembers(ctx context.Context, sessionID string) ([]Member, error) {
-	rows, err := t.query(ctx, `
-		SELECT m.id, m.group_id, m.discord_user_id, m.user_id, m.display_name, m.role
+	return scanMembers(t.query(ctx, `
+		SELECT m.id, m.group_id, m.discord_user_id, m.user_id, m.display_name, m.role, m.left_at
 		FROM session_members sm JOIN members m ON m.id = sm.member_id
-		WHERE sm.session_id = ? ORDER BY m.seq`, sessionID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Member
-	for rows.Next() {
-		m, err := scanMember(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, m)
-	}
-	return out, rows.Err()
+		WHERE sm.session_id = ? ORDER BY m.seq`, sessionID))
 }
 
 type Preparation struct {

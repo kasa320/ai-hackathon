@@ -68,6 +68,25 @@ Go サーバーが `src/frontend/` をそのまま配信します。ビルドも
 
 `DISCORD_BOT_TOKEN` を設定すると、同じ項目を Discord の DM からも更新できます。Bot は足りない項目を1つずつ聞き、全部そろったら確認ボタンを出します。保存されるのは本人がボタンを押した内容だけで、会話の途中経過はメモリにしか置きません。DM を使わない人は Web だけで完結できます。
 
+### データベース
+
+SQLite 1ファイル（既定 `data/app.db`、`DB_PATH` で変更可）。テーブル定義は `src/backend/internal/store/migrations/` に版ごとに置き、**起動時に未適用の版だけが順に適用されます**。適用済みの版番号は `meta` テーブルの `schema_version` に入ります。
+
+スキーマを変えるときは、既存のファイルを書き換えず新しい版を足します。
+
+```sh
+# 例：members に退会日時を足す
+cat > src/backend/internal/store/migrations/0003_add_something.sql <<'SQL'
+ALTER TABLE members ADD COLUMN something TEXT;
+SQL
+make dev   # 次の起動で自動的に適用される
+```
+
+- ファイル名は `<4桁の版番号>_<説明>.sql`。番号は 1 から連番にする。
+- 1つの版は1トランザクションで適用する。途中で失敗するとその版だけ巻き戻り、版番号も上がらない。
+- 列の削除・型変更・制約変更は SQLite では表の作り直しになる。その場合はファイルの**先頭行**に `-- foreign_keys: off` と書く。適用中だけ外部キー検査を止め、コミット前に `PRAGMA foreign_key_check` で参照が壊れていないかを確かめる。
+- ロールバック用の SQL は持たない。失敗した版は直して入れ直す。手元をやり直したいときは `make db-reset`。
+
 ### 主な環境変数
 
 | 変数 | 既定値 | 内容 |

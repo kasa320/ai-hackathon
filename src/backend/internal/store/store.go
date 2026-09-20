@@ -1,12 +1,12 @@
 // Package store は SQLite へのアクセスを担う。
 // 業務更新は Store.Tx の中でまとめて行い、同じトランザクションで再送情報・イベント・通知待ちを保存する。
+// テーブル定義は migrations/ に版ごとに置き、起動時に未適用の版だけを適用する（migrate.go）。
 package store
 
 import (
 	"context"
 	"crypto/rand"
 	"database/sql"
-	_ "embed"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -17,9 +17,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-//go:embed schema.sql
-var schema string
-
 // ErrNotFound は対象の行がないことを示す。
 var ErrNotFound = errors.New("store: not found")
 
@@ -27,7 +24,7 @@ type Store struct {
 	db *sql.DB
 }
 
-// Open は DB ファイルを開き、スキーマを適用する。
+// Open は DB ファイルを開き、未適用のマイグレーションを適用する。
 func Open(ctx context.Context, path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("DB ディレクトリの作成: %w", err)
@@ -45,7 +42,7 @@ func open(ctx context.Context, dsn string) (*Store, error) {
 	db.SetConnMaxLifetime(0)
 	db.SetConnMaxIdleTime(0)
 
-	if _, err := db.ExecContext(ctx, schema); err != nil {
+	if err := migrate(ctx, db); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("スキーマの適用: %w", err)
 	}
