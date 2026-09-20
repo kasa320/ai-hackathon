@@ -38,6 +38,12 @@ const sessionData = `{
 
 func newHarness(t *testing.T, planner coord.Planner) *harness {
 	t.Helper()
+	return newHarnessWith(t, planner, coord.DraftOnlyInterpreter{})
+}
+
+// newHarnessWith は自由文の解釈だけ差し替えた一式を作る。
+func newHarnessWith(t *testing.T, planner coord.Planner, interpreter coord.Interpreter) *harness {
+	t.Helper()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -52,7 +58,7 @@ func newHarness(t *testing.T, planner coord.Planner) *harness {
 	}
 	clk := clock.NewOffset(clock.Fixed{T: t0})
 	h := &harness{t: t, st: st, clk: clk, users: map[string]string{}}
-	h.c = coord.NewCoordinator(reg, st, clk, planner, coord.Options{PublicBaseURL: "http://localhost:8080", Rand: func() float64 { return 0.5 }, Interpreter: coord.DraftOnlyInterpreter{}})
+	h.c = coord.NewCoordinator(reg, st, clk, planner, coord.Options{PublicBaseURL: "http://localhost:8080", Rand: func() float64 { return 0.5 }, Interpreter: interpreter})
 
 	ids := map[string]string{"A": "111111111111111111", "B": "222222222222222222", "C": "333333333333333333", "D": "444444444444444444"}
 	_ = st.Tx(ctx, func(tx *store.Tx) error {

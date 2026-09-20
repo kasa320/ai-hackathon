@@ -115,6 +115,10 @@ func (b *Bot) handleMessage(ctx context.Context, m *discordgo.MessageCreate) {
 	case isCommand(text, "ヘルプ", "help", "使い方"):
 		b.send(ctx, m.ChannelID, msgHelp, nil)
 		return
+	case isCommand(text, "変更なし", "変更ありません", "このまま", "そのまま"):
+		// 変更しない確認も本人のボタンで行う。LLM は使わない。
+		b.confirmUnchanged(ctx, m.ChannelID, user.ID, us)
+		return
 	}
 
 	if us.conv == nil {
@@ -245,6 +249,23 @@ func (b *Bot) startConversation(ctx context.Context, channelID, userID string, u
 		b.send(ctx, channelID, sessionHeader(t.Title, t.StartsAt)+"\n"+msgReenter, nil)
 	}
 	return true
+}
+
+// confirmUnchanged は今の内容のまま確認だけを出す。未回答の確認タスクはこれで完了できる。
+func (b *Bot) confirmUnchanged(ctx context.Context, channelID, userID string, us *userSession) {
+	if us.conv == nil || us.conv.sessionID == "" {
+		if !b.pickTarget(ctx, channelID, userID, us) {
+			return
+		}
+	}
+	res, err := b.co.StartDialog(ctx, userID, us.conv.sessionID)
+	if err != nil {
+		b.replyError(ctx, channelID, userID, us, err)
+		return
+	}
+	b.clearDraft(ctx, us)
+	us.conv.state = res.State
+	b.reply(ctx, channelID, us, res)
 }
 
 // replyCurrent は保存済みの内容を返す。LLM は使わない。

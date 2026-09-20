@@ -1,11 +1,13 @@
 package coord_test
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/kasa320/ai-hackathon/src/backend/internal/coord"
+	"github.com/kasa320/ai-hackathon/src/backend/internal/store"
 )
 
 // 段階的な聞き取りで参加条件を作り、本人の確認（保存）まで進められる。
@@ -169,4 +171,120 @@ func myPrep(t *testing.T, h *harness, name string) *struct {
 		}
 	}
 	return nil
+}
+
+// stubInterpreter は AI の出力を固定して返す。サーバー側の検証を確かめるのに使う。
+type stubInterpreter struct{ out coord.Interpretation }
+
+func (s stubInterpreter) Interpret(c context.Context, req coord.InterpretRequest) (coord.Interpretation, coord.Usage, error) {
+	if err := req.Check(c, s.out); err != nil {
+		return coord.Interpretation{}, coord.Usage{}, coord.ErrInvalidOutput
+	}
+	return s.out, coord.Usage{}, nil
+}
+
+// AI の出力は形と項目をサーバーが検証する。矛盾した候補から確認へ進めない。
+func TestDialogRejectsInvalidOutput(t *testing.T) {
+	bad := []struct {
+		name string
+		out  coord.Interpretation
+	}{
+		{"未知の項目名", coord.Interpretation{Attendance: "attending", Data: prepData(false, []string{}, []string{}, 0),
+			Unclear: []string{"secret_field"}, NeedsFollowup: true}},
+		{"登録されていない節ID", coord.Interpretation{Attendance: "attending", Data: prepData(true, []string{"sec_9"}, []string{"sec_9"}, 10)}},
+		{"読んでいない節を説明できる", coord.Interpretation{Attendance: "attending", Data: prepData(true, []string{"sec_2"}, []string{"sec_3"}, 10)}},
+		{"持ち時間を超える", coord.Interpretation{Attendance: "attending", Data: prepData(true, []string{"sec_2"}, []string{"sec_2"}, 999)}},
+		{"未知の out_of_scope", coord.Interpretation{Attendance: "attending", Data: prepData(false, []string{}, []string{}, 0), OutOfScope: "whatever"}},
+		{"未知のキー", coord.Interpretation{Attendance: "attending", Data: json.RawMessage(`{"willing_to_present":false,"prepared_section_ids":[],"explainable_section_ids":[],"max_presentation_minutes":0,"note":"x"}`)}},
+		{"列挙にない参加可否", coord.Interpretation{Attendance: "maybe", Data: prepData(false, []string{}, []string{}, 0)}},
+	}
+	for _, tt := range bad {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarnessWith(t, nil, stubInterpreter{out: tt.out})
+			h.createSession()
+			res, err := h.c.StartDialog(ctx, h.users["B"], h.sess)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := h.c.ContinueDialog(ctx, h.users["B"], res.State, "よろしくお願いします"); err == nil {
+				t.Fatal("不正な出力を受け入れた")
+			}
+		})
+	}
+}
+
+// 扱えない依頼では値を変えず、そのターンの候補を捨てる。
+func TestDialogOutOfScopeKeepsValues(t *testing.T) {
+	out := coord.Interpretation{Attendance: "absent", Data: prepData(false, []string{}, []string{}, 0), OutOfScope: coord.OutOfScopeScheduleChange}
+	h := newHarnessWith(t, nil, stubInterpreter{out: out})
+	h.createSession()
+	h.mustPrep("B", "attending", prepData(true, []string{"sec_2"}, []string{"sec_2"}, 30))
+
+	res, err := h.c.StartDialog(ctx, h.users["B"], h.sess)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := string(res.State.Data)
+	res, err = h.c.ContinueDialog(ctx, h.users["B"], res.State, "来週に延期してください")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.OutOfScope != coord.OutOfScopeScheduleChange {
+		t.Fatalf("out_of_scope = %q", res.OutOfScope)
+	}
+	if res.State.Attendance != "attending" || string(res.State.Data) != before || res.Progressed {
+		t.Fatalf("値が変わっている: %+v", res.State)
+	}
+}
+
+// budgetInterpreter は呼び出しの直前に予算枠を確保する解釈器。実際の LLM 実装と同じ手順を踏む。
+type budgetInterpreter struct {
+	calls int
+	out   coord.Interpretation
+}
+
+func (b *budgetInterpreter) Interpret(c context.Context, req coord.InterpretRequest) (coord.Interpretation, coord.Usage, error) {
+	id, err := req.ReserveCall(c, "test-model")
+	if err != nil {
+		return coord.Interpretation{}, coord.Usage{}, err
+	}
+	b.calls++
+	call := coord.LLMCall{Model: "test-model", Currency: "unknown", Succeeded: true}
+	req.RecordCall(c, id, call)
+	if err := req.Check(c, b.out); err != nil {
+		return coord.Interpretation{}, coord.Usage{LLMCalls: []coord.LLMCall{call}}, coord.ErrInvalidOutput
+	}
+	return b.out, coord.Usage{LLMCalls: []coord.LLMCall{call}}, nil
+}
+
+// 開催回ごとの解釈の上限を超えたら、LLM を呼ばずに断る。枠は呼び出しの前に確保する。
+func TestDialogBudgetStopsCalls(t *testing.T) {
+	bi := &budgetInterpreter{out: coord.Interpretation{Attendance: "attending", Data: prepData(false, []string{}, []string{}, 0)}}
+	h := newHarnessWith(t, nil, bi)
+	h.createSession()
+	res, err := h.c.StartDialog(ctx, h.users["B"], h.sess)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < coord.MaxInterpretCallsPerSession; i++ {
+		if _, err := h.c.ContinueDialog(ctx, h.users["B"], res.State, "参加します"); err != nil {
+			t.Fatalf("%d 回目: %v", i+1, err)
+		}
+	}
+	if _, err := h.c.ContinueDialog(ctx, h.users["B"], res.State, "参加します"); err == nil {
+		t.Fatal("上限を超えて解釈できた")
+	}
+	if bi.calls != coord.MaxInterpretCallsPerSession {
+		t.Fatalf("呼び出し回数 = %d", bi.calls)
+	}
+	// 確保した枠は記録として残る（費用が不明でも戻さない）。
+	var n int
+	_ = h.st.Tx(ctx, func(tx *store.Tx) error {
+		var err error
+		n, err = tx.CountLLMCallsByLookup(ctx, "preparation:"+h.sess)
+		return err
+	})
+	if n != coord.MaxInterpretCallsPerSession {
+		t.Fatalf("記録された呼び出し = %d", n)
+	}
 }
