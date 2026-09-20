@@ -3,6 +3,7 @@ package reading
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -183,19 +184,27 @@ func (Playbook) DraftInterpret(_ context.Context, req coord.InterpretRequest) (c
 		}
 	}
 
-	// 担当は「説明できる節」と「分数」の両方が確定したときだけ。迷う場合は担当しない側に倒す。
-	willing := attendance == coord.AttendanceAttending && len(d.ExplainableSectionIDs) > 0 && d.MaxPresentationMinutes > 0 &&
-		!unclear.has(SlotExplainable) && !unclear.has(SlotMinutes)
-	d.WillingToPresent = willing
-	if willing {
-		delete(unclear, SlotWilling)
-	}
-	if !willing && !req.Partial {
-		// 一発の解釈はそのまま保存できる形で返す。担当しないなら従属する値は落とす。
-		d.ExplainableSectionIDs = []string{}
-		d.MaxPresentationMinutes = 0
-		if attendance == coord.AttendanceAttending && wantsPresent {
-			unclear[SlotMinutes] = struct{}{}
+	if req.Partial {
+		// 対話では「担当する意思」と「説明に使える時間」を別々に確定できる。
+		// 説明できる節が決まっていれば担当する意思はあると見なし、時間は次の質問で聞く。
+		d.WillingToPresent = attendance == coord.AttendanceAttending && len(d.ExplainableSectionIDs) > 0 && !unclear.has(SlotExplainable)
+		if d.WillingToPresent {
+			delete(unclear, SlotWilling)
+		}
+	} else {
+		// 一発の解釈はそのまま保存できる形で返す。「説明できる節」と「分数」の両方が
+		// 読み取れたときだけ担当とし、迷う場合は担当しない側に倒す。
+		willing := attendance == coord.AttendanceAttending && len(d.ExplainableSectionIDs) > 0 && d.MaxPresentationMinutes > 0 &&
+			!unclear.has(SlotExplainable) && !unclear.has(SlotMinutes)
+		d.WillingToPresent = willing
+		if willing {
+			delete(unclear, SlotWilling)
+		} else {
+			d.ExplainableSectionIDs = []string{}
+			d.MaxPresentationMinutes = 0
+			if attendance == coord.AttendanceAttending && wantsPresent {
+				unclear[SlotMinutes] = struct{}{}
+			}
 		}
 	}
 	if attendance == coord.AttendanceAbsent {
@@ -247,4 +256,36 @@ func toASCIIDigits(s string) string {
 		b.WriteRune(r)
 	}
 	return b.String()
+}
+
+var _ coord.PreparationPrompter = Playbook{}
+
+// SlotQuestion は未確定の項目を聞く定型文。Bot の発話はすべてこの形で用意し、LLM には書かせない。
+func (Playbook) SlotQuestion(s coord.Snapshot, slot string) string {
+	switch slot {
+	case coord.SlotAttendance:
+		return "今回は参加できますか？（参加／欠席）"
+	case SlotWilling:
+		return "今回の説明を担当できますか？（はい／いいえ）"
+	case SlotPrepared:
+		return "どこまで読んできましたか？" + targetSectionsText(s)
+	case SlotExplainable:
+		return "説明できるのはどの範囲ですか？" + targetSectionsText(s)
+	case SlotMinutes:
+		return fmt.Sprintf("説明に使える時間は何分ですか？（0〜%d分）", s.DurationMinutes)
+	}
+	return ""
+}
+
+// targetSectionsText は今回の範囲を列挙する。節の題名は既存の可変文字列なのでそのまま載せる。
+func targetSectionsText(s coord.Snapshot) string {
+	sd, err := sessionData(s)
+	if err != nil || len(sd.TargetSectionIDs) == 0 {
+		return ""
+	}
+	titles := map[string]string{}
+	for _, sec := range sd.Sections {
+		titles[sec.ID] = sec.Title
+	}
+	return "\n今回の範囲：" + sectionsLabel(titles, sd.TargetSectionIDs)
 }

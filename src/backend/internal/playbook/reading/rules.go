@@ -225,6 +225,10 @@ func (Playbook) ValidatePartialPreparation(_ context.Context, s coord.Snapshot, 
 		// 説明できる節と分数が確定すれば、担当できるかも決まる。
 		d.WillingToPresent = attendance == coord.AttendanceAttending && len(d.ExplainableSectionIDs) > 0 && d.MaxPresentationMinutes > 0
 		delete(open, SlotWilling)
+		if !d.WillingToPresent {
+			d.ExplainableSectionIDs = []string{}
+			d.MaxPresentationMinutes = 0
+		}
 	}
 	return mustJSON(d), orderedSlots(open), nil
 }

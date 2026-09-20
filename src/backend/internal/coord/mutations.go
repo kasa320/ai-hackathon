@@ -47,6 +47,12 @@ func checkNotStarted(sess store.Session, now time.Time) error {
 
 // PutPreparation は本人の参加条件を全置換する（docs/api-endpoint.md）。
 func (c *Coordinator) PutPreparation(ctx context.Context, userID, sessionID string, in apitypes.PutPreparationInput, idem *store.IdemKey) (store.Response, error) {
+	return c.putPreparation(ctx, userID, sessionID, in, idem, EntryWeb)
+}
+
+// putPreparation は入口（Web / Discord）だけを変えて同じ保存処理を使う。
+// 認可・版の確認・冪等性・整合性は入口によらず共通で、入口は記録にだけ残す。
+func (c *Coordinator) putPreparation(ctx context.Context, userID, sessionID string, in apitypes.PutPreparationInput, idem *store.IdemKey, source string) (store.Response, error) {
 	now := c.now()
 	res, err := c.st.Idempotent(ctx, idem, now, func(tx *store.Tx) (store.Response, error) {
 		sess, m, err := c.access(ctx, tx, userID, sessionID)
@@ -59,7 +65,7 @@ func (c *Coordinator) PutPreparation(ctx context.Context, userID, sessionID stri
 		if err := checkRevision(sess, in.ExpectedRevision); err != nil {
 			return store.Response{}, err
 		}
-		return c.submitPreparation(ctx, tx, &sess, m, in.Preparation, "preparation", EntryWeb, now)
+		return c.submitPreparation(ctx, tx, &sess, m, in.Preparation, "preparation", source, now)
 	})
 	if err == nil {
 		c.Wake()
