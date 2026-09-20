@@ -2,15 +2,90 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>輪読運営エージェント</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/styles.css">
+  <meta name="description" content="担当者が準備できなくなっても、参加者の条件に合わせて次回の会を組み直し、引き受けと同意を集めて配ります。">
+  <title>会 — Quorum</title>
 </head>
-<body>
-  <main>
-    <h1>輪読運営エージェント</h1>
-    <p>サーバーの状態：<span id="health">確認中…</span></p>
+<body data-page="home">
+  <div class="devbar" id="devbar" hidden></div>
+  <header class="topbar" id="topbar"></header>
+
+  <main class="shell">
+    <div id="flash" hidden></div>
+
+    <!-- 未ログイン：この仕組みが何をするかを、組み直しの実例で見せる -->
+    <div id="guest" hidden>
+      <div class="page-head">
+        <h1>準備が変わっても、会は開ける。</h1>
+        <p>担当者が準備できなくなったとき、参加者が読めた範囲と説明できる時間に合わせて、今回の範囲と進行を組み直します。本人の引き受けと同意を集め、決まったことを配るまで進めます。</p>
+      </div>
+
+      <section class="headline">
+        <div class="headline__top">
+          <span class="stamp">例</span>
+          <span class="headline__state">60分・4人の輪読会</span>
+        </div>
+        <div class="headline__body">
+          <h2 style="font-size:clamp(1.3rem,3vw,1.7rem);font-weight:700;letter-spacing:-.02em;line-height:1.4">40分を担当していた人が、準備できなくなったとき</h2>
+          <p class="change" style="margin-top:8px">別の人が「前半だけ15分なら」と答えると、範囲を縮めて復習に振り替えた案を作ります。帯の長さは実際の分数のままです。</p>
+
+          <div class="plan plan--enter" style="margin-top:24px">
+            <div class="plan__bar" role="img" aria-label="変更後の進行表。復習20分、説明15分、議論25分。">
+              <span style="flex:20"><b>復習</b>全員 20分</span>
+              <span style="flex:15" data-tone="mid"><b>説明</b>Cさん 15分</span>
+              <span style="flex:25"><b>議論</b>全員 25分</span>
+            </div>
+            <p class="plan__scale num"><span>0</span><span>20</span><span>35</span><span>60分</span></p>
+            <div class="plan__prev">
+              <p>変更前</p>
+              <div class="plan__bar plan__bar--prev" role="img" aria-label="変更前の進行表。説明が40分、議論が20分。">
+                <span style="flex:40">説明 40分</span><span style="flex:20">議論 20分</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <a class="btn" id="login" href="/api/auth/discord">Discord でログイン</a>
+            <span class="tally"><span class="num">扱えなかった範囲は次回へ引き継ぎます</span></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section__head"><h2>任せる範囲</h2></div>
+        <div class="panels">
+          <article class="panel">
+            <h3>条件を集める</h3>
+            <strong>参加できるか、どこまで読めたか、何分説明できるか</strong>
+            <p>答えた内容だけを使います。書名から章の中身を推測しません。都合がつかない理由は集めません。</p>
+          </article>
+          <article class="panel">
+            <h3>組み直す</h3>
+            <strong>範囲を縮める、復習にあてる、担当を替える</strong>
+            <p>持ち時間を超える案や、本人が説明できない範囲を割り当てる案は作りません。</p>
+          </article>
+          <article class="panel">
+            <h3>合意を残す</h3>
+            <strong>担当は本人が引き受け、範囲の変更は過半数の同意</strong>
+            <p>同意の記録をAIが代わりに作ることはできません。返事のない人を賛成として数えません。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section__head"><h2>決まらなかったとき</h2></div>
+        <p style="margin-top:24px;max-width:60ch;color:var(--ink-2);font-size:.92rem">条件を満たす案が作れない、回答の期限が過ぎた、モデルが失敗した。このいずれでも計画を勝手に確定させず、理由を添えて管理者の判断に戻します。通知は「送信待ち・送信済み・失敗・成否不明」を分けて記録し、送信済みは既読を意味しません。</p>
+      </section>
+    </div>
+
+    <!-- ログイン後：あなたが返事をする1件を最初に置く -->
+    <div id="member" hidden></div>
   </main>
-  <script type="module" src="/js/index.js"></script>
+
+  <script type="module" src="./js/index.js"></script>
 </body>
 </html>

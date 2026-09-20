@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/styles.css">
+  <meta name="description" content="会を登録します。まず形式を選び、参加者と教材、次回の日時を入れます。">
+  <title>会を登録 — Quorum</title>
+</head>
+<body data-page="setup">
+  <div class="devbar" id="devbar" hidden></div>
+  <header class="topbar" id="topbar"></header>
+
+  <main class="shell shell--narrow">
+    <a class="back" href="/">会の一覧へ戻る</a>
+    <div id="flash" hidden></div>
+
+    <div class="page-head">
+      <h1>会を登録する</h1>
+      <p>形式を先に選びます。共通の仕組み（参加者・案・同意・通知）は形式によらず同じで、教材や範囲の入れ方だけが変わります。</p>
+    </div>
+
+    <div class="steps" id="steps"></div>
+    <div class="form" id="form"></div>
+  </main>
+
+  <script type="module" src="./js/setup.js"></script>
+</body>
+</html>
