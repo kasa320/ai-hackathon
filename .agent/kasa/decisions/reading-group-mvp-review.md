@@ -38,6 +38,6 @@
 
 ## 追記：フロントとバックエンドのAPI契約
 
-公開APIを [api.md](../../decisions/api.md) のmvp-1として決定。画面は同一オリジンのJSON APIとセッションCookieを利用し、更新は非同期受付、状態確認はポーリングとする。WebSocketや自由文の解釈APIはMVPに含めず、構造化回答で独立した画面開発と評価を可能にする。
+公開APIを mvp-1 として決定（現在の契約は [docs/api-endpoint.md](../../../docs/api-endpoint.md)・[docs/data-structure.md](../../../docs/data-structure.md)）。画面は同一オリジンのJSON APIとセッションCookieを利用し、更新は非同期受付、状態確認はポーリングとする。WebSocketや自由文の解釈APIはMVPに含めず、構造化回答で独立した画面開発と評価を可能にする。
 
 グループ作成者が既知のDiscordユーザーIDを招待先として登録し、OAuthで本人と紐付ける。参加者による準備回答・担当引き受け・投票を分離し、旧版への同意や再送による重複をAPI契約で定義する。DB・内部型は公開契約へ変換し、用途固有の型を共通処理へ混ぜない。実装・モック作成はこの決定とは別作業。
