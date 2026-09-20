@@ -63,7 +63,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     data                  TEXT NOT NULL,
     confirmed_proposal_id TEXT,
     created_at            TEXT NOT NULL,
-    updated_at            TEXT NOT NULL
+    updated_at            TEXT NOT NULL,
+    -- confirmed なら確定した案が必ずある。逆は成り立たない（needs_attention でも確定計画は残る）。
+    CHECK (status <> 'confirmed' OR confirmed_proposal_id IS NOT NULL)
 );
 CREATE INDEX IF NOT EXISTS sessions_group ON sessions(group_id, starts_at);
 
@@ -81,7 +83,9 @@ CREATE TABLE IF NOT EXISTS preparations (
     attendance TEXT NOT NULL CHECK (attendance IN ('attending', 'absent')),
     data       TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    PRIMARY KEY (session_id, member_id)
+    PRIMARY KEY (session_id, member_id),
+    -- 参加条件を書けるのは、その開催回に固定された参加者だけ。
+    FOREIGN KEY (session_id, member_id) REFERENCES session_members(session_id, member_id)
 );
 
 -- 調整案件。1開催回に未完了（confirmed 以外）の案件は最大1つ。
@@ -137,7 +141,9 @@ CREATE TABLE IF NOT EXISTS tasks (
     answered_at      TEXT,
     reminded_at      TEXT,
     created_at       TEXT NOT NULL,
-    seq              INTEGER NOT NULL
+    seq              INTEGER NOT NULL,
+    -- 依頼を出せるのは、その開催回に固定された参加者だけ。
+    FOREIGN KEY (session_id, member_id) REFERENCES session_members(session_id, member_id)
 );
 CREATE INDEX IF NOT EXISTS tasks_case ON tasks(case_id, seq);
 CREATE INDEX IF NOT EXISTS tasks_proposal ON tasks(proposal_id);
@@ -198,7 +204,9 @@ CREATE TABLE IF NOT EXISTS llm_calls (
     estimated_amount TEXT,
     billed_amount    TEXT,
     succeeded        INTEGER NOT NULL,
-    created_at       TEXT NOT NULL
+    created_at       TEXT NOT NULL,
+    -- 呼び出しは調整案件由来か目次取得由来のどちらか一方。
+    CHECK ((case_id IS NULL) <> (lookup_id IS NULL))
 );
 CREATE INDEX IF NOT EXISTS llm_calls_case ON llm_calls(case_id);
 

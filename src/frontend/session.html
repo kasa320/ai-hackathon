@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>開催回 — 輪読調整</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+
+<div id="devbar"></div>
+
+<header class="gnav">
+  <div class="wrap gnav__in on-kon">
+    <a class="brand" href="/"><span class="brand__mark" aria-hidden="true"></span>輪読調整</a>
+    <nav class="gnav__links" id="gnav-links" aria-label="全体"></nav>
+  </div>
+</header>
+
+<main id="main" class="wrap">
+  <!-- 通信の状態（読み込み中・切断・競合）。読み上げに乗せる -->
+  <div id="status" role="status" aria-live="polite"></div>
+
+  <!-- 1. あなたへの依頼。この画面で最大の面 -->
+  <div id="call"></div>
+
+  <!-- 2. 今回の案：実寸の帯と押印欄 -->
+  <div id="plan"></div>
+
+  <!-- 3. 開催回の基本情報と、みんなの回答 -->
+  <div id="facts"></div>
+
+  <!-- 4. 実行の記録（管理者のみ） -->
+  <div id="activity"></div>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot__in">
+    <span>輪読調整</span>
+    <span id="foot-health">接続を確認しています</span>
+  </div>
+</footer>
+
+<script type="module" src="js/session.js"></script>
+</body>
+</html>

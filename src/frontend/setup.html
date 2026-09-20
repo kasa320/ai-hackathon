@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>開催回の登録 — 輪読調整</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+
+<div id="devbar"></div>
+
+<header class="gnav">
+  <div class="wrap gnav__in on-kon">
+    <a class="brand" href="/"><span class="brand__mark" aria-hidden="true"></span>輪読調整</a>
+    <nav class="gnav__links" id="gnav-links" aria-label="全体"></nav>
+  </div>
+</header>
+
+<main id="main" class="wrap">
+  <div id="status" role="status" aria-live="polite"></div>
+  <ol class="steps" id="steps"></ol>
+  <div id="panel"></div>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot__in">
+    <span>輪読調整</span>
+    <span id="foot-health">接続を確認しています</span>
+  </div>
+</footer>
+
+<script type="module" src="js/setup.js"></script>
+</body>
+</html>

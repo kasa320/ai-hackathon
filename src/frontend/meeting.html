@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>会議の日程調整 — 輪読調整</title>
+<meta name="description" content="同じ調整の仕組みを会議に広げる構想。いま動くのは輪読だけで、会議の機能は未実装です。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+
+<div id="devbar"></div>
+
+<header class="gnav">
+  <div class="wrap gnav__in on-kon">
+    <a class="brand" href="/"><span class="brand__mark" aria-hidden="true"></span>輪読調整</a>
+    <nav class="gnav__links" id="gnav-links" aria-label="全体"></nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="band">
+    <div class="wrap on-kon">
+      <span class="tag">構想・未実装</span>
+      <h1 class="band__title">会議の日程調整へ広げる</h1>
+      <p class="band__lead">調整の中身は輪読でも会議でも同じで、変わるのは「何を割り当てるか」だけです。このページは広げ方の設計を示すもので、会議の機能はまだ動きません。</p>
+    </div>
+  </section>
+
+  <div class="wrap">
+
+    <section class="sec">
+      <div class="sec__head"><h2 class="sec__title">いまの状態</h2></div>
+      <p class="note note--warn" style="margin-bottom:24px">ここに書いたことは、実装済みを意味しません。現在動くのは輪読だけで、会議用の画面・判断・検証はまだ書かれていません。</p>
+      <table class="tbl">
+        <caption class="sr-only">用途ごとの実装状況</caption>
+        <thead>
+          <tr><th scope="col">用途</th><th scope="col">状態</th><th scope="col">中身</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">輪読</th>
+            <td><span class="tag tag--kon">動く</span></td>
+            <td>辞退から組み直し、本人の引き受けと同意、保存、Discord への通知まで</td>
+          </tr>
+          <tr>
+            <th scope="row">会議</th>
+            <td><span class="tag">未実装</span></td>
+            <td>共通側の仕組みは同じものを使える。会議固有の型・判断指示・検証・承認条件が要る</td>
+          </tr>
+          <tr>
+            <th scope="row">日程そのものの調整</th>
+            <td><span class="tag">対象外</span></td>
+            <td>候補日の生成と投票は今回の範囲に入れていない。日時変更が要るときは管理者に戻す</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="sec">
+      <div class="sec__head">
+        <h2 class="sec__title">会議ならこう出る</h2>
+        <span class="sec__meta">60分・定例会議の例</span>
+      </div>
+      <p class="lead-note">画面の部品は輪読と同じです。帯の長さは実際の分数のまま、色は進行の種類を表します。</p>
+
+      <figure class="bar bar--before">
+        <figcaption class="bar__caption">もとの進行</figcaption>
+        <ol class="bar__track">
+          <li class="bar__seg bar__seg--review" style="--min:10">
+            <span class="bar__what">前回の決定事項の確認</span>
+            <span class="bar__min">10分</span>
+          </li>
+          <li class="bar__seg bar__seg--presentation" style="--min:20">
+            <span class="bar__who">Aさん</span>
+            <span class="bar__what">報告：来期の企画案</span>
+            <span class="bar__min">20分</span>
+          </li>
+          <li class="bar__seg bar__seg--discussion" style="--min:20">
+            <span class="bar__what">議論：企画案</span>
+            <span class="bar__min">20分</span>
+          </li>
+          <li class="bar__seg bar__seg--joint_reading" style="--min:10">
+            <span class="bar__what">次の担当を決める</span>
+            <span class="bar__min">10分</span>
+          </li>
+        </ol>
+        <ol class="bar__ticks" aria-hidden="true">
+          <li class="bar__tick" style="--min:10">0</li>
+          <li class="bar__tick" style="--min:20">10</li>
+          <li class="bar__tick" style="--min:20">30</li>
+          <li class="bar__tick" style="--min:10">50</li>
+          <li class="bar__tick bar__tick--end">60分</li>
+        </ol>
+      </figure>
+
+      <figure class="bar">
+        <figcaption class="bar__caption">Aさんが「資料は出せるが当日は出られない」と答えたあとの案</figcaption>
+        <ol class="bar__track">
+          <li class="bar__seg bar__seg--review" style="--min:10">
+            <span class="bar__what">前回の決定事項の確認</span>
+            <span class="bar__min">10分</span>
+          </li>
+          <li class="bar__seg bar__seg--joint_reading" style="--min:15">
+            <span class="bar__what">Aさんの資料を各自で読む</span>
+            <span class="bar__min">15分</span>
+          </li>
+          <li class="bar__seg bar__seg--discussion" style="--min:25">
+            <span class="bar__what">議論：企画案</span>
+            <span class="bar__min">25分</span>
+          </li>
+          <li class="bar__seg bar__seg--presentation" style="--min:10">
+            <span class="bar__who">Bさん</span>
+            <span class="bar__what">報告：進捗</span>
+            <span class="bar__min">10分</span>
+          </li>
+        </ol>
+        <ol class="bar__ticks" aria-hidden="true">
+          <li class="bar__tick" style="--min:10">0</li>
+          <li class="bar__tick" style="--min:15">10</li>
+          <li class="bar__tick" style="--min:25">25</li>
+          <li class="bar__tick" style="--min:10">50</li>
+          <li class="bar__tick bar__tick--end">60分</li>
+        </ol>
+        <p class="bar__deferred">決めきれなかった「来期の企画案の承認」は次回へ持ち越します。</p>
+      </figure>
+
+      <div style="margin-top:40px">
+        <p class="seals__label">この案に要る押印（Bさんとして見たとき）</p>
+        <div class="seals">
+          <ul class="seals" role="list">
+            <li class="seal seal--done"><span aria-hidden="true">A</span><span class="sr-only">Aさん：資料の提出を引き受け済み</span></li>
+            <li class="seal seal--you"><span aria-hidden="true">B</span><span class="sr-only">Bさん：進捗報告の引き受けが未回答（あなた）</span></li>
+            <li class="seal"><span aria-hidden="true">C</span><span class="sr-only">Cさん：未回答</span></li>
+            <li class="seal seal--done"><span aria-hidden="true">D</span><span class="sr-only">Dさん：同意済み</span></li>
+          </ul>
+          <p class="seals__count">同意 <b class="tnum">2</b> / 必要 <b class="tnum">3</b></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec__head"><h2 class="sec__title">変わらないところ</h2></div>
+      <p class="lead-note">次の仕組みは用途によらず共通で、会議に広げても書き直しません。</p>
+      <div class="cols">
+        <div class="col">
+          <h3>版と押印</h3>
+          <p>案が変わるたびに版を上げ、前の版の同意と引き受けを流用しません。担当の引き受けは本人しかできず、AIが代わりに記録を作ることはできません。</p>
+        </div>
+        <div class="col">
+          <h3>期限と催促</h3>
+          <p>回答期限は依頼から24時間と開催1時間前の早い方。未回答の人には途中で一度だけ催促し、揃わなければ管理者に戻します。</p>
+        </div>
+        <div class="col">
+          <h3>通知の記録</h3>
+          <p>送信待ち・送信済み・失敗・成否未確認を分けて残します。送信済みは既読ではなく、成否未確認を自動で送り直して二重に届けることもしません。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec__head"><h2 class="sec__title">変わるところ</h2></div>
+      <table class="tbl">
+        <caption class="sr-only">輪読と会議で異なる項目</caption>
+        <thead>
+          <tr><th scope="col">項目</th><th scope="col">輪読</th><th scope="col">会議</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">割り当てるもの</th>
+            <td>節と、それを説明する担当</td>
+            <td>議題と、それを報告する担当</td>
+          </tr>
+          <tr>
+            <th scope="row">本人の引き受けが要る人</th>
+            <td>説明する人</td>
+            <td>報告する人、資料を出す人</td>
+          </tr>
+          <tr>
+            <th scope="row">過半数の同意が要る変更</th>
+            <td>読む範囲を縮める・復習回にする</td>
+            <td>議題を落とす・次回へ回す</td>
+          </tr>
+          <tr>
+            <th scope="row">持ち越すもの</th>
+            <td>今回扱えなかった節</td>
+            <td>決めきれなかった議題</td>
+          </tr>
+          <tr>
+            <th scope="row">組み直しの手</th>
+            <td>範囲を縮める、復習にあてる、担当を替える</td>
+            <td>議題を落とす、各自で資料を読む時間に替える、担当を替える</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="sec">
+      <div class="sec__head"><h2 class="sec__title">動かすために書くもの</h2></div>
+      <p class="lead-note">用途固有の処理は <code>internal/playbook/&lt;用途&gt;/</code> に分けてあります。共通側のコードは変えません。</p>
+      <ul class="rows" role="list">
+        <li class="row">
+          <span class="row__time">1</span>
+          <span class="row__body">会議の型を決める。議題、想定時間、報告できる人、前回の決定事項</span>
+          <span class="row__sub">model.go</span>
+        </li>
+        <li class="row">
+          <span class="row__time">2</span>
+          <span class="row__body">検証を書く。合計が持ち時間を超えない、報告者は出席予定で本人が引き受けられる範囲に収まる</span>
+          <span class="row__sub">rules.go</span>
+        </li>
+        <li class="row">
+          <span class="row__time">3</span>
+          <span class="row__body">承認条件を決める。担当だけの入れ替えか、議題そのものを落とすのかで必要な同意が変わる</span>
+          <span class="row__sub">rules.go</span>
+        </li>
+        <li class="row">
+          <span class="row__time">4</span>
+          <span class="row__body">判断指示を書く。開催日時の維持、出せる資料の活用、代役の偏りの抑制という優先順は輪読と同じ</span>
+          <span class="row__sub">prompt.go</span>
+        </li>
+        <li class="row">
+          <span class="row__time">5</span>
+          <span class="row__body">画面の用途固有部分を足し、起動処理と <code>features/</code> に登録する</span>
+          <span class="row__sub">features/meeting/</span>
+        </li>
+      </ul>
+      <p class="prose" style="margin-top:24px">この5つで収まらない用途では、共通側の作り直しも要ります。「設定だけで任意の用途を足せる」とは考えていません。</p>
+    </section>
+
+    <section class="sec">
+      <div class="sec__head"><h2 class="sec__title">やらないこと</h2></div>
+      <p class="prose">候補日を自動で出して投票にかけること、当日の自動司会、複数回分のまとめて計画、設定画面でのルール編集は、会議に広げても扱いません。日時の変更や中止が要る場面は、自動で実行せず管理者の判断に戻します。</p>
+      <div class="btns" style="margin-top:24px">
+        <a class="btn" href="/">トップへ戻る</a>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot__in">
+    <span>輪読調整</span>
+    <a href="/">トップ</a>
+    <span id="foot-health">接続を確認しています</span>
+  </div>
+</footer>
+
+<script type="module" src="js/meeting.js"></script>
+</body>
+</html>
