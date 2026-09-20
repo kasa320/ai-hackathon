@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+  <meta name="description" content="会の登録 UIプロトタイプ">
+  <title>会を登録する — Quorum</title>
+</head>
+<body data-page="register">
+  <header class="topbar">
+    <a class="brand" href="./index.html">Quorum<small>幹事エージェント</small></a>
+    <nav class="nav" aria-label="主なページ">
+      <a href="./index.html">会</a>
+      <a aria-current="page" href="./register.html">会を登録</a>
+      <a href="./audit.html">実行記録</a>
+      <a href="./system.html">UI見本</a>
+    </nav>
+    <span class="viewer"><i>綾</i><span>綾（管理者）</span></span>
+  </header>
+
+  <main class="shell shell--narrow">
+    <a class="back" href="./index.html">会の一覧へ戻る</a>
+    <div class="page-head">
+      <h1>会を登録する</h1>
+      <p>読む本と日時を決めます。登録した後、参加者には4項目だけを尋ねます。ここで決めた範囲の外側を、エージェントが勝手に使うことはありません。</p>
+    </div>
+
+    <form class="form" id="register-form">
+      <fieldset class="fieldset">
+        <legend>どの形式の会ですか</legend>
+        <div class="checks">
+          <label><input type="radio" name="plugin" value="reading" checked><span><strong>輪読</strong><small>本の範囲と担当を決めます。目次の取得と、未消化範囲の引き継ぎが使えます。</small></span></label>
+          <label><input type="radio" name="plugin" value="meeting"><span><strong>ミーティング</strong><small>議題と時間配分を決めます。輪読の機能は読み込みません。</small></span></label>
+        </div>
+        <p class="help">形式ごとの判断や検証の条件は、プラグインが持っています。日程調整と合意の仕組みは共通です。</p>
+      </fieldset>
+
+      <fieldset class="fieldset">
+        <legend>読む本</legend>
+        <div class="grid grid--2">
+          <label class="field"><span>ISBN</span><input required inputmode="numeric" value="9784798157554" aria-describedby="isbn-help"></label>
+          <label class="field"><span>会の名前</span><input required value="設計の原則　第8回"></label>
+        </div>
+        <p class="help" id="isbn-help">目次は出典のページと照合できた項目だけを候補にします。照合できないときは、目次ページの写真をお願いします。</p>
+        <div class="notice" style="margin-top:16px">
+          <span class="notice__mark">✓</span>
+          <span><strong>目次を照合しました</strong><small>出版社の書籍ページ・2026年9月19日に確認</small></span>
+        </div>
+      </fieldset>
+
+      <fieldset class="fieldset">
+        <legend>日時と持ち時間</legend>
+        <div class="grid grid--3">
+          <label class="field"><span>日付</span><input type="date" value="2026-09-21" required></label>
+          <label class="field"><span>開始</span><input type="time" value="20:00" required></label>
+          <label class="field"><span>持ち時間</span><select required><option>60分</option><option>45分</option><option>90分</option></select></label>
+        </div>
+        <p class="help">合計がこの時間を超える案は、エージェントが作れません。</p>
+      </fieldset>
+
+      <fieldset class="fieldset">
+        <legend>今回扱う範囲</legend>
+        <div class="checks">
+          <label><input type="checkbox" checked><span><strong>第1節　モデルを隔離する</strong><small>82–96ページ</small></span></label>
+          <label><input type="checkbox" checked><span><strong>第2節　境界をまたぐ</strong><small>97–111ページ</small></span></label>
+          <label><input type="checkbox"><span><strong>第3節　継続的な統合</strong><small>112–126ページ</small></span></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="fieldset">
+        <legend>参加者に尋ねること</legend>
+        <div class="steps">
+          <span><b>1</b>参加できるか</span>
+          <span><b>2</b>準備できた範囲</span>
+          <span><b>3</b>説明できる範囲</span>
+          <span><b>4</b>説明できる時間</span>
+        </div>
+        <p class="help">回答はこの会の参加者4人に共有されます。辞退の理由は尋ねません。記録にも残りません。</p>
+      </fieldset>
+
+      <div class="submit">
+        <p>登録しても計画は確定しません。参加条件が揃った後、担当者本人の引き受けと管理者の承認を求めます。</p>
+        <button class="btn" type="submit">この会を登録する</button>
+      </div>
+
+      <div class="receipt" id="register-receipt" role="status" hidden>
+        <span class="spinner" aria-hidden="true"></span>
+        <span><strong>登録を受け付けました</strong><small>まだ確定していません。参加者への確認を準備しています。</small></span>
+      </div>
+    </form>
+
+    <p class="note"><strong>この画面で最大にしたもの：</strong>入力の順番です。最初に形式（プラグイン）を選ばせ、共通の仕組みと輪読固有の入力がどこで分かれるのかを、登録の時点で見せています。</p>
+  </main>
+  <script src="./app.js" defer></script>
+</body>
+</html>

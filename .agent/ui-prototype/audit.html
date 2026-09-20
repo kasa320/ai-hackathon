@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+  <meta name="description" content="エージェントの実行記録 UIプロトタイプ">
+  <title>実行記録 — Quorum</title>
+</head>
+<body data-page="audit">
+  <header class="topbar">
+    <a class="brand" href="./index.html">Quorum<small>幹事エージェント</small></a>
+    <nav class="nav" aria-label="主なページ">
+      <a href="./index.html">会</a>
+      <a href="./register.html">会を登録</a>
+      <a aria-current="page" href="./audit.html">実行記録</a>
+      <a href="./system.html">UI見本</a>
+    </nav>
+    <span class="viewer"><i>綾</i><span>綾（管理者）</span></span>
+  </header>
+
+  <main class="shell">
+    <div class="page-head">
+      <h1>実行記録</h1>
+      <p>エージェントが何をして、何を止められたかの記録です。設計の原則　第8回（9月21日）の1件分を表示しています。</p>
+    </div>
+
+    <div class="metrics">
+      <div class="metric"><b class="num">12円</b><span>この会で使った費用</span><small>上限は1件あたり100円です</small></div>
+      <div class="metric"><b class="num">7回</b><span>LLMの呼び出し</span><small>うち再試行は1回です</small></div>
+      <div class="metric"><b class="num">3 / 1</b><span>通知 送信済み／成否不明</span><small>送信済みは読まれたことを意味しません</small></div>
+      <div class="metric"><b class="num">2件</b><span>プログラムが拒否した操作</span><small>エージェントの判断より優先します</small></div>
+    </div>
+
+    <section class="section">
+      <div class="section__head"><h2>時系列</h2><span class="row__meta num">9月19日 13:41 から 14:31 まで</span></div>
+      <table class="ledger">
+        <thead>
+          <tr><th scope="col">時刻</th><th scope="col">できごと</th><th scope="col">実行したもの</th><th scope="col">結果</th><th scope="col">費用</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><time class="num">13:41</time></td><td>文さんが担当を辞退しました</td><td class="who">本人</td><td>記録しました</td><td class="num">—</td></tr>
+          <tr><td><time class="num">13:43</time></td><td>準備状況と担当の履歴から候補を選びました</td><td class="who">エージェント</td><td>千恵さんを候補にしました</td><td class="num">4円</td></tr>
+          <tr><td><time class="num">13:45</time></td><td>千恵さんに引き受けられる範囲を尋ねました</td><td class="who">エージェント</td><td>Discordへ送信しました</td><td class="num">2円</td></tr>
+          <tr><td><time class="num">13:47</time></td><td>千恵さんが「第2節を15分なら」と回答しました</td><td class="who">本人</td><td>範囲と時間を読み取りました</td><td class="num">2円</td></tr>
+          <tr><td><time class="num">13:48</time></td><td>案 3 をつくりました</td><td class="who">エージェント</td><td>合計60分・登録された範囲内であることを確認しました</td><td class="num">3円</td></tr>
+          <tr><td><time class="num">14:05</time></td><td>綾さんが案 3 に同意しました</td><td class="who">本人</td><td>記録しました</td><td class="num">—</td></tr>
+          <tr><td><time class="num">14:07</time></td><td>綾さんが千恵さんの代わりに引き受けようとしました</td><td class="who">プログラム</td><td><strong>拒否しました。</strong>担当の引き受けは本人しかできません</td><td class="num">—</td></tr>
+          <tr><td><time class="num">14:22</time></td><td>大さんの参加条件が変わりました</td><td class="who">本人</td><td>案 3 を無効にし、案 3 への同意2件を取り消しました</td><td class="num">—</td></tr>
+          <tr><td><time class="num">14:24</time></td><td>案 4 をつくりました</td><td class="who">エージェント</td><td>合計60分・登録された範囲内であることを確認しました</td><td class="num">1円</td></tr>
+          <tr><td><time class="num">14:25</time></td><td>案が変わったことを4人に連絡しました</td><td class="who">エージェント</td><td>3件は送信済み、文さんの1件は成否不明です</td><td class="num">—</td></tr>
+          <tr><td><time class="num">14:31</time></td><td>期限切れの回答を同意として数えようとしました</td><td class="who">プログラム</td><td><strong>拒否しました。</strong>返事のない人を同意にはしません</td><td class="num">—</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section">
+      <div class="section__head"><h2>案の版と同意</h2></div>
+      <div class="rows">
+        <div class="row">
+          <span class="row__date"><span class="stamp" data-tone="void">案 3</span></span>
+          <span class="row__main">
+            <span class="row__title">第2節を中心に組み替える</span>
+            <span class="row__meta">14:22に無効化しました。綾さん・文さんの同意は引き継いでいません。</span>
+          </span>
+          <span class="row__state">無効</span>
+        </div>
+        <div class="row">
+          <span class="row__date"><span class="stamp" data-tone="open">案 4</span></span>
+          <span class="row__main">
+            <span class="row__title">説明の時間を20分に延ばす</span>
+            <span class="row__meta">同意は1件です。千恵さんの引き受けを待っています。</span>
+          </span>
+          <span class="row__state" data-tone="attention">同意を集めています</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section__head"><h2>通知</h2></div>
+      <div class="rows">
+        <div class="row"><span class="row__date num">14:25</span><span class="row__main"><span class="row__title">綾さん・千恵さん・大さん</span><span class="row__meta">Discordのダイレクトメッセージ。APIが成功を返しました。</span></span><span class="row__state" data-tone="done">送信済み 3件</span></div>
+        <div class="row"><span class="row__date num">14:25</span><span class="row__main"><span class="row__title">文さん</span><span class="row__meta">応答がタイムアウトしました。届いたかどうかは判断していません。再送すると二重に届くことがあります。</span></span><span class="row__state" data-tone="warn">成否不明 1件</span></div>
+      </div>
+    </section>
+
+    <div class="panels">
+      <article class="panel">
+        <h3>いまの状態</h3>
+        <strong>千恵さんの引き受けを待っています</strong>
+        <p>15:00の期限になると、エージェントが再開して管理者に判断を戻します。</p>
+      </article>
+      <article class="panel">
+        <h3>共有していない情報</h3>
+        <strong>辞退の理由</strong>
+        <p>文さんが辞退した事情は、尋ねても記録してもいません。通知の文面にも含めません。</p>
+      </article>
+      <article class="panel">
+        <h3>止まる条件</h3>
+        <strong>費用100円・呼び出し20回</strong>
+        <p>どちらかに達すると、案をつくる前でも停止して管理者に戻します。</p>
+      </article>
+    </div>
+
+    <p class="note"><strong>この画面で最大にしたもの：</strong>エージェントの判断ではなく、プログラムが拒否した操作です。何を任せていないかが分かるほうが、何ができるかより先に伝わるべきだと考えました。</p>
+  </main>
+  <script src="./app.js" defer></script>
+</body>
+</html>
