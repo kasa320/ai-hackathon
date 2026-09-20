@@ -58,7 +58,7 @@ func newHarnessWith(t *testing.T, planner coord.Planner, interpreter coord.Inter
 	}
 	clk := clock.NewOffset(clock.Fixed{T: t0})
 	h := &harness{t: t, st: st, clk: clk, users: map[string]string{}}
-	h.c = coord.NewCoordinator(reg, st, clk, planner, coord.Options{PublicBaseURL: "http://localhost:8080", Rand: func() float64 { return 0.5 }, Interpreter: interpreter})
+	h.c = coord.NewCoordinator(reg, st, clk, planner, coord.Options{PublicBaseURL: "http://localhost:24680", Rand: func() float64 { return 0.5 }, Interpreter: interpreter})
 
 	ids := map[string]string{"A": "111111111111111111", "B": "222222222222222222", "C": "333333333333333333", "D": "444444444444444444"}
 	_ = st.Tx(ctx, func(tx *store.Tx) error {

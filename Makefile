@@ -6,7 +6,7 @@ BACKEND := src/backend
 
 .PHONY: dev build test test-e2e fmt vet db-reset
 
-## dev: サーバーをビルドして起動する（http://localhost:8080）
+## dev: サーバーをビルドして起動する（http://localhost:24680）
 dev: build
 	./bin/server
 

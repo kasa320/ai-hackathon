@@ -47,11 +47,11 @@ type Config struct {
 
 func Load() (Config, error) {
 	c := Config{
-		Addr:        env("ADDR", ":8080"),
+		Addr:        env("ADDR", ":24680"),
 		DBPath:      env("DB_PATH", "data/app.db"),
 		FrontendDir: env("FRONTEND_DIR", "src/frontend"),
 
-		PublicBaseURL: strings.TrimRight(env("PUBLIC_BASE_URL", "http://localhost:8080"), "/"),
+		PublicBaseURL: strings.TrimRight(env("PUBLIC_BASE_URL", "http://localhost:24680"), "/"),
 		DevMode:       os.Getenv("DEV_MODE") == "1",
 
 		AgentMode:        AgentMode(env("AGENT_MODE", string(AgentModeFake))),

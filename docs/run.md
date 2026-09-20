@@ -14,7 +14,7 @@ cp .env.example .env
 make dev
 ```
 
-バックエンドが起動し、同じプロセスが `src/frontend/` を配信します。<http://localhost:8080> を開きます。フロントエンド用のサーバーは別に立てません。
+バックエンドが起動し、同じプロセスが `src/frontend/` を配信します。<http://localhost:24680> を開きます。フロントエンド用のサーバーは別に立てません。
 
 ## デモ・開発モード
 
@@ -27,8 +27,8 @@ DEV_MODE=1
 初期データは画面の帯から入れるか、直接叩きます。
 
 ```sh
-curl -X POST http://localhost:8080/api/dev/seed \
-  -H 'Content-Type: application/json' -H 'Origin: http://localhost:8080' \
+curl -X POST http://localhost:24680/api/dev/seed \
+  -H 'Content-Type: application/json' -H 'Origin: http://localhost:24680' \
   -d '{"scenario":"replan_demo"}'
 ```
 

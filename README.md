@@ -39,7 +39,7 @@ MVPは、既存の輪読会の「辞退→再計画→本人の引き受け・�
 
 ```sh
 cp .env.example .env   # 必要に応じて値を設定する
-make dev               # http://localhost:8080 で起動
+make dev               # http://localhost:24680 で起動
 ```
 
 `AGENT_MODE=fake`（既定）では LLM を呼ばず、輪読 Playbook の規則だけで案を作り、自由文も規則だけで解釈します（仮の判断処理）。OrcaRouter を使うときは `AGENT_MODE=llm` と `ORCAROUTER_API_KEY` を設定します。
@@ -72,7 +72,7 @@ Go サーバーが `src/frontend/` をそのまま配信します。ビルドも
 
 | 変数 | 既定値 | 内容 |
 | --- | --- | --- |
-| `PUBLIC_BASE_URL` | `http://localhost:8080` | 通知に載せる画面URLと Origin 検証の基点。https なら Cookie に Secure を付ける |
+| `PUBLIC_BASE_URL` | `http://localhost:24680` | 通知に載せる画面URLと Origin 検証の基点。https なら Cookie に Secure を付ける |
 | `DEV_MODE` | 空 | `1` で開発・デモ用 API（`/api/dev/*`）と障害注入を有効にする。本番では設定しない |
 | `SESSION_SECRET` | 空 | セッショントークンのハッシュ用。未設定なら起動ごとに変わる（再起動でログアウト） |
 | `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` / `DISCORD_REDIRECT_URL` | 空 | Discord ログイン。未設定なら `/api/auth/discord` は `auth_error=provider_unavailable` に戻る |
@@ -86,10 +86,10 @@ Go サーバーが `src/frontend/` をそのまま配信します。ビルドも
 `DEV_MODE=1` で起動すると、Discord の設定なしで人物を切り替えて操作できます。
 
 ```sh
-curl -X POST localhost:8080/api/dev/seed  -H 'Content-Type: application/json' -d '{"scenario":"replan_demo"}'   # 初期データ（B担当で確定済み）
-curl -X POST localhost:8080/api/dev/login -H 'Content-Type: application/json' -d '{"discord_user_id":"100000000000000002"}' -c b.jar  # B としてログイン
-curl -X POST localhost:8080/api/dev/clock/advance -H 'Content-Type: application/json' -d '{"seconds":86400}'   # 時計を24時間進める
-curl -X PUT  localhost:8080/api/dev/faults -H 'Content-Type: application/json' -d '{"llm":"error","notify":null}' # 障害注入
+curl -X POST localhost:24680/api/dev/seed  -H 'Content-Type: application/json' -d '{"scenario":"replan_demo"}'   # 初期データ（B担当で確定済み）
+curl -X POST localhost:24680/api/dev/login -H 'Content-Type: application/json' -d '{"discord_user_id":"100000000000000002"}' -c b.jar  # B としてログイン
+curl -X POST localhost:24680/api/dev/clock/advance -H 'Content-Type: application/json' -d '{"seconds":86400}'   # 時計を24時間進める
+curl -X PUT  localhost:24680/api/dev/faults -H 'Content-Type: application/json' -d '{"llm":"error","notify":null}' # 障害注入
 ```
 
 シナリオは `replan_demo`（辞退→AIの確認→再計画→同意→確定を実演する）と `initial_demo`（開催回登録の直後）。デモ用の利用者 A〜D の Discord ID は `100000000000000001`〜`…004`（架空）。

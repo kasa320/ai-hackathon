@@ -195,7 +195,7 @@ func TestProviderUnavailableWhenNotConfigured(t *testing.T) {
 }
 
 func TestDiscordAuthURL(t *testing.T) {
-	p := auth.NewDiscordProvider("cid", "secret", "http://localhost:8080/api/auth/callback")
+	p := auth.NewDiscordProvider("cid", "secret", "http://localhost:24680/api/auth/callback")
 	u, _ := url.Parse(p.AuthURL("st"))
 	q := u.Query()
 	if q.Get("client_id") != "cid" || q.Get("scope") != "identify" || q.Get("state") != "st" || strings.Contains(u.String(), "secret") {
