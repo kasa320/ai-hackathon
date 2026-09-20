@@ -24,6 +24,28 @@ var (
 	log = slog.New(slog.NewTextHandler(io.Discard, nil))
 )
 
+// setupKind は種類を指定して通知を1件積む。
+func setupKind(t *testing.T, kind string) *store.Store {
+	t.Helper()
+	st := setup(t, 0)
+	err := st.Tx(ctx, func(tx *store.Tx) error {
+		return tx.EnqueueNotification(ctx, store.Notification{ID: store.NewID("ntf"), SessionID: "s", CaseID: "c", Kind: kind,
+			DedupeKey: store.NewID("d"), Content: "hello", Mentions: []string{"222222222222222222"}, CreatedAt: t0})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return st
+}
+
+// captureSender は送信内容を記録するだけの送信先。
+type captureSender struct{ msgs []notify.Message }
+
+func (c *captureSender) Send(_ context.Context, m notify.Message) error {
+	c.msgs = append(c.msgs, m)
+	return nil
+}
+
 func setup(t *testing.T, n int) *store.Store {
 	t.Helper()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "t.db"))
@@ -207,5 +229,38 @@ func TestDiscordSenderPrefersDM(t *testing.T) {
 	}
 	if len(paths) != 1 || paths[0] != "/channels/chan/messages" {
 		t.Fatalf("確定の連絡はチャンネルへ: %v", paths)
+	}
+}
+
+// 通知の種類と DM の宛先は送信先へ渡す。本文とメンションから送り先を推測しない。
+func TestDispatcherPassesKindAndDMRecipients(t *testing.T) {
+	tests := map[string]struct{ wantDM bool }{
+		"task_requested": {true},
+		"reminder":       {true},
+		"plan_confirmed": {false},
+		"needs_owner":    {false},
+	}
+	for kind, tt := range tests {
+		t.Run(kind, func(t *testing.T) {
+			st := setupKind(t, kind)
+			sender := &captureSender{}
+			d := notify.NewDispatcher(st, clock.Fixed{T: t0}, sender, log)
+			if _, err := d.DispatchPending(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if len(sender.msgs) != 1 {
+				t.Fatalf("送信 = %d 件", len(sender.msgs))
+			}
+			m := sender.msgs[0]
+			if m.Kind != kind {
+				t.Fatalf("kind = %q", m.Kind)
+			}
+			if got := len(m.DMUserIDs) > 0; got != tt.wantDM {
+				t.Fatalf("DM の宛先 = %v, want %v", m.DMUserIDs, tt.wantDM)
+			}
+			if tt.wantDM && m.DMUserIDs[0] != "222222222222222222" {
+				t.Fatalf("DM の宛先 = %v", m.DMUserIDs)
+			}
+		})
 	}
 }

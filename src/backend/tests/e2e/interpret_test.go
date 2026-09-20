@@ -223,8 +223,21 @@ func TestInterpretDoesNotLeakPrivateReason(t *testing.T) {
 		t.Fatal("共有画面に原文が出ている")
 	}
 	a := s.client().devLogin("A")
-	if body := a.get("/api/sessions/"+seed.SessionID+"/activity").mustStatus(t, 200).body; bytes.Contains(body, []byte(private)) {
+	actBody := a.get("/api/sessions/"+seed.SessionID+"/activity").mustStatus(t, 200).body
+	if bytes.Contains(actBody, []byte(private)) {
 		t.Fatal("実行履歴に原文が出ている")
+	}
+	// 残るのは項目の差分と入口だけ。
+	var act apitypes.ActivityResponse
+	mustUnmarshal(t, actBody, &act)
+	found := ""
+	for _, item := range act.Items {
+		if strings.Contains(item.Summary, "（Web）") {
+			found = item.Summary
+		}
+	}
+	if found == "" || !strings.Contains(found, "説明できる時間：15分") {
+		t.Fatalf("差分と入口が記録されていない: %q", found)
 	}
 	for _, m := range s.sender.all() {
 		if strings.Contains(m.Content, private) {
