@@ -1,0 +1,228 @@
+/* デザイントークンと、全ページ共通のレイアウト。
+   見た目の方針：リソグラフ印刷（ミニコミの印刷手法）。高彩度のインクをベタで置き、
+   影は使わず、版ズレと罫線で立体感を作る。色は装飾ではなく意味を持たせる。
+   - ピンク  あなたが操作する場所
+   - 黄      調整中・保留
+   - 青緑    確定・合意済み
+   - 青      構造・見出し
+   単一テーマ。紙の上のインクという見立てなので、ダークテーマは持たない。 */
+
+:root {
+  color-scheme: light;
+
+  /* 紙と墨 */
+  --paper: #f7f5ee;
+  --paper-2: #fffdf6;
+  --ink: #16151a;
+  --ink-70: rgba(22, 21, 26, .70);
+  --ink-45: rgba(22, 21, 26, .45);
+  --ink-20: rgba(22, 21, 26, .20);
+  --ink-10: rgba(22, 21, 26, .10);
+
+  /* インク */
+  --pink: #ff4a7d;
+  --yellow: #ffc61e;
+  --teal: #00b39b;
+  --blue: #2d53e8;
+
+  --pink-pale: #ffe2ea;
+  --yellow-pale: #fff2cc;
+  --teal-pale: #d4f2ed;
+  --blue-pale: #dde3fd;
+
+  /* 色面の上の文字 */
+  --on-pink: var(--ink);
+  --on-yellow: var(--ink);
+  --on-teal: var(--ink);
+  --on-blue: #fffdf6;
+
+  /* 形。角丸はほぼ使わない */
+  --r: 3px;
+  --rule: 1.5px solid var(--ink);
+  --hair: 1px solid var(--ink-20);
+
+  --w-page: 1120px;
+
+  font-family: "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", system-ui, sans-serif;
+  line-height: 1.75;
+}
+
+* { box-sizing: border-box; }
+
+/* 部品側で display を指定しているため、UA の [hidden] では隠れない。
+   JS で状態を切り替えるので、著者スタイルで打ち消しておく。 */
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", sans-serif;
+  font-weight: 900;
+  line-height: 1.3;
+  letter-spacing: .005em;
+  margin: 0;
+}
+
+p { margin: 0; }
+
+a { color: var(--blue); }
+
+:focus-visible {
+  outline: 2.5px solid var(--blue);
+  outline-offset: 2px;
+}
+
+/* 数字は桁を揃える。分数・期限・票数が並ぶ画面なので効く */
+.num {
+  font-family: "Roboto Mono", ui-monospace, SFMono-Regular, monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+/* ---- デモ用の帯 ------------------------------------------------------
+   本番ビルドでは丸ごと消す。開発用の人物切り替えと本番の認証を混ぜない
+   ため、見た目でも隔離する。 */
+
+.demobar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 7px 18px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 12px;
+}
+
+.demobar__tag {
+  padding: 1px 9px;
+  background: var(--yellow);
+  color: var(--ink);
+  font-weight: 900;
+  letter-spacing: .14em;
+}
+
+.demobar select,
+.demobar button {
+  font: inherit;
+  color: var(--paper);
+  padding: 2px 10px;
+  border: 1px solid rgba(247, 245, 238, .45);
+  background: transparent;
+  cursor: pointer;
+}
+
+.demobar button:hover,
+.demobar select:hover { background: rgba(247, 245, 238, .14); }
+.demobar__spacer { margin-left: auto; }
+
+/* ---- ヘッダー -------------------------------------------------------- */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  max-width: var(--w-page);
+  margin: 0 auto;
+  padding: 22px 20px 18px;
+}
+
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  font-family: "Zen Kaku Gothic New", sans-serif;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: .02em;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+/* 棚に並んだ背表紙。この製品が扱うのは本なので、記号もそこから取る */
+.logo__spines {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2.5px;
+  height: 22px;
+}
+
+.logo__spines i {
+  display: block;
+  width: 4px;
+  background: var(--ink);
+}
+
+.logo__spines i:nth-child(1) { height: 18px; background: var(--pink); }
+.logo__spines i:nth-child(2) { height: 22px; background: var(--yellow); }
+.logo__spines i:nth-child(3) { height: 15px; background: var(--teal); }
+.logo__spines i:nth-child(4) { height: 20px; background: var(--blue); }
+
+.header nav {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13.5px;
+}
+
+.header nav a {
+  color: var(--ink-70);
+  text-decoration: none;
+  padding: 4px 12px;
+  font-weight: 500;
+}
+
+.header nav a:hover { color: var(--ink); }
+
+.header nav a[aria-current="page"] {
+  color: var(--ink);
+  font-weight: 700;
+  background: var(--yellow);
+}
+
+/* ---- ページ本体 ------------------------------------------------------ */
+
+.page {
+  max-width: var(--w-page);
+  margin: 0 auto;
+  padding: 0 20px 80px;
+}
+
+/* 見出しは罫線と一体にして、装飾ではなく区切りとして働かせる */
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: "Zen Kaku Gothic New", sans-serif;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  color: var(--ink);
+  margin: 40px 0 16px;
+}
+
+.section-title::after {
+  content: "";
+  flex: 1;
+  height: 1.5px;
+  background: var(--ink);
+}
+
+.cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 26px;
+  align-items: start;
+}
+
+.stack { display: grid; gap: 18px; }
+
+@media (max-width: 880px) {
+  .cols { grid-template-columns: 1fr; }
+}

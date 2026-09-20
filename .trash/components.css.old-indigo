@@ -1,0 +1,592 @@
+/* 画面を組み立てる部品。 */
+
+/* ---- ボタン ---------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px 26px;
+  border: 1px solid transparent;
+  border-radius: var(--pill);
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background .15s, border-color .15s, color .15s;
+}
+
+.btn--primary { background: var(--brand); color: var(--on-brand); }
+.btn--primary:hover { background: var(--brand-hover); }
+
+.btn--ghost {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--line);
+}
+.btn--ghost:hover { border-color: var(--text-muted); }
+
+.btn--onhero {
+  background: rgba(255, 255, 255, .12);
+  color: var(--hero-ink);
+  border-color: rgba(255, 255, 255, .35);
+}
+.btn--onhero:hover { background: rgba(255, 255, 255, .22); }
+
+.btn--sm { padding: 8px 16px; font-size: 13px; }
+.btn--block { width: 100%; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ---- カード ---------------------------------------------------------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-md);
+}
+
+.card__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.card__title { font-size: 16px; font-weight: 800; }
+.card__note { font-size: 13px; color: var(--text-muted); word-break: auto-phrase; }
+
+/* 版が古くなって無効になった案。押せないことを見た目で示す */
+.card--void {
+  box-shadow: none;
+  background: var(--muted-bg);
+  color: var(--text-muted);
+  border-style: dashed;
+}
+
+/* ---- バッジ ---------------------------------------------------------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid;
+  border-radius: var(--pill);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.badge--ok     { color: var(--ok);     background: var(--ok-bg);     border-color: var(--ok-line); }
+.badge--warn   { color: var(--warn);   background: var(--warn-bg);   border-color: var(--warn-line); }
+.badge--danger { color: var(--danger); background: var(--danger-bg); border-color: var(--danger-line); }
+.badge--muted  { color: var(--text-muted); background: var(--muted-bg); border-color: var(--line); }
+
+/* 案の版。常に見える位置に出す */
+.version {
+  font-variant-numeric: tabular-nums;
+  padding: 3px 9px;
+  border-radius: var(--r-sm);
+  background: var(--brand-tint);
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+/* ---- ヒーロー（あなたへの確認 / ウィザード） -------------------------- */
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  background: var(--hero-bg);
+  color: var(--hero-ink);
+  border-radius: var(--r-lg);
+  margin: 8px auto 0;
+  max-width: var(--w-page);
+  padding: 44px clamp(20px, 5vw, 56px) 48px;
+}
+
+/* 右側にはみ出す有機的なシェイプ */
+.hero__blob {
+  position: absolute;
+  z-index: 0;
+  top: -18%;
+  right: -22%;
+  width: 72%;
+  aspect-ratio: 1 / .92;
+  background: var(--hero-blob);
+  border-radius: 46% 54% 38% 62% / 52% 42% 58% 48%;
+  pointer-events: none;
+}
+
+.hero__inner,
+.hero .steps { position: relative; z-index: 1; }
+
+.hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--hero-ink-muted);
+  margin-bottom: 14px;
+}
+
+.hero__title {
+  font-size: clamp(28px, 4.4vw, 46px);
+  font-weight: 900;
+  letter-spacing: -.02em;
+  line-height: 1.25;
+}
+
+.hero__lead {
+  word-break: auto-phrase;
+  margin-top: 14px;
+  max-width: 34em;
+  color: var(--hero-ink-muted);
+  font-size: 15px;
+}
+
+.hero__actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 28px;
+}
+
+/* ヒーローの中に浮かぶ白いパネル（ウィザードの入力欄など） */
+.hero--split .hero__inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 40px;
+  align-items: center;
+}
+
+.panel {
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--r-lg);
+  padding: 28px;
+  box-shadow: var(--shadow-lg);
+}
+
+@media (max-width: 860px) {
+  .hero--split .hero__inner { grid-template-columns: 1fr; gap: 28px; }
+  .hero__blob { display: none; }
+}
+
+/* ---- 期限の表示 ------------------------------------------------------ */
+
+.deadline {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--hero-ink-muted);
+}
+
+.deadline__value {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--hero-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 次回カードの明細 ------------------------------------------------ */
+
+.facts { display: grid; gap: 12px; }
+
+.facts__row {
+  display: grid;
+  grid-template-columns: 5.5em minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+}
+
+.facts__key { font-size: 13px; color: var(--text-muted); }
+.facts__val { font-weight: 700; }
+.facts__val--tbd { font-weight: 400; color: var(--text-muted); }
+
+/* ---- 変更案の差分 ---------------------------------------------------- */
+
+.diff { display: grid; gap: 0; }
+
+.diff__row {
+  display: grid;
+  grid-template-columns: 4.5em minmax(0, 1fr) 1.6em minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  padding: 11px 0;
+  border-top: 1px solid var(--line);
+}
+
+.diff__row:first-child { border-top: none; }
+.diff__key { font-size: 13px; color: var(--text-muted); }
+.diff__from { color: var(--text-muted); text-decoration: line-through; }
+.diff__arrow { color: var(--text-muted); text-align: center; }
+.diff__to { font-weight: 700; }
+
+@media (max-width: 560px) {
+  .diff__row { grid-template-columns: 1fr; }
+  .diff__arrow { display: none; }
+  .diff__from { text-decoration: none; font-size: 13px; }
+}
+
+/* ---- 同意の集まり具合 ------------------------------------------------ */
+
+.consent {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.consent__rule { font-size: 13px; color: var(--text-muted); }
+
+.consent__dots {
+  display: flex;
+  gap: 6px;
+  margin: 10px 0 12px;
+}
+
+.consent__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+}
+
+.consent__dot--yes { background: var(--ok); border-color: var(--ok); }
+.consent__dot--no  { background: var(--danger); border-color: var(--danger); }
+
+.people { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.person {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px 5px 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--pill);
+  font-size: 13px;
+  background: var(--surface-2);
+}
+
+.person__avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--brand-tint);
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.person__state { color: var(--text-muted); font-size: 12px; }
+.person--yes .person__state { color: var(--ok); font-weight: 700; }
+.person--no  .person__state { color: var(--danger); font-weight: 700; }
+
+/* ---- 進み具合 -------------------------------------------------------- */
+
+.progress { display: grid; gap: 10px; }
+
+.progress__step {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.progress__mark {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+}
+
+.progress__step--done .progress__mark { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+.progress__step--done { color: var(--text); }
+
+.progress__step--now .progress__mark { border-color: var(--brand); color: var(--brand); font-weight: 800; }
+.progress__step--now { color: var(--text); font-weight: 700; }
+
+/* 待っていることを明示する。表示がないと「止まっている」ように見える */
+.waiting {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--brand-tint);
+  color: var(--brand);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ---- ウィザードのステップ表示 ---------------------------------------- */
+
+.steps {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  margin-bottom: 34px;
+}
+
+.steps__item {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.steps__num {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid rgba(255, 255, 255, .35);
+  color: var(--hero-ink-muted);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.steps__label { font-size: 13px; color: var(--hero-ink-muted); }
+
+.steps__item--now .steps__num { background: var(--hero-ink); border-color: var(--hero-ink); color: var(--hero-bg); }
+.steps__item--now .steps__label { color: var(--hero-ink); font-weight: 700; }
+.steps__item--done .steps__num { border-color: var(--hero-ink); color: var(--hero-ink); }
+
+.steps__item:not(:last-child) .steps__label::after {
+  content: "";
+  display: block;
+  height: 1px;
+  background: rgba(255, 255, 255, .25);
+  margin-top: 8px;
+}
+
+@media (max-width: 720px) {
+  .steps { gap: 10px; }
+  .steps__item { grid-template-columns: 34px; }
+  .steps__label { display: none; }
+}
+
+/* ---- フォーム -------------------------------------------------------- */
+
+.field { display: grid; gap: 7px; margin-bottom: 18px; }
+
+.field__label { font-size: 13px; font-weight: 700; }
+.field__hint { font-size: 12px; color: var(--text-muted); }
+
+.field input[type="text"],
+.field input[type="number"],
+.field input[type="datetime-local"],
+.field textarea,
+.field select,
+.private input[type="text"] {
+  font: inherit;
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.field textarea { resize: vertical; min-height: 116px; line-height: 1.6; }
+
+.field :focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+  border-color: var(--brand);
+}
+
+/* 選択肢（委任ルールのプリセットなど） */
+.choice { display: grid; gap: 10px; }
+
+.choice__item {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.choice__item:has(input:checked) {
+  border-color: var(--brand);
+  background: var(--brand-tint);
+}
+
+.choice__item input { margin: 4px 0 0; accent-color: var(--brand); }
+.choice__name { font-weight: 700; font-size: 14px; }
+.choice__desc { font-size: 13px; color: var(--text-muted); }
+
+/* 3択（参加可否など）。1タップで終わらせる */
+.pickset { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.pick {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 96px;
+  text-align: center;
+  padding: 12px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.pick:has(input:checked) { border-color: var(--brand); background: var(--brand-tint); color: var(--brand); font-weight: 700; }
+.pick input { position: absolute; opacity: 0; pointer-events: none; }
+
+/* ---- 非共有の入力欄 --------------------------------------------------
+   他の入力欄と見た目を分ける。セキュリティの説明をここで済ませる。 */
+
+.shared-note { font-size: 12px; color: var(--text-muted); margin-bottom: 7px; }
+
+.private {
+  margin-top: 8px;
+  padding: 16px;
+  border: 1.5px dashed var(--line);
+  border-radius: var(--r-md);
+  background: var(--muted-bg);
+}
+
+.private__head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.private__note { font-size: 12px; color: var(--text-muted); margin-top: 8px; word-break: auto-phrase; }
+
+/* ---- ドロワー（回答の入力） ------------------------------------------ */
+
+.drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: none;
+}
+
+.drawer[open] { display: block; }
+
+.drawer__scrim {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  background: rgba(18, 16, 42, .5);
+  cursor: pointer;
+}
+
+.drawer__body {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(480px, 100%);
+  overflow-y: auto;
+  background: var(--surface);
+  padding: 28px;
+  box-shadow: var(--shadow-lg);
+}
+
+.drawer__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.drawer__title { font-size: 18px; font-weight: 800; }
+
+.drawer__close {
+  margin-left: auto;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.drawer__foot {
+  position: sticky;
+  bottom: -28px;
+  margin: 24px -28px -28px;
+  padding: 16px 28px 28px;
+  background: linear-gradient(to top, var(--surface) 72%, transparent);
+}
+
+/* ---- 実行ログ -------------------------------------------------------- */
+
+.log { display: grid; gap: 0; }
+
+.log__row {
+  display: grid;
+  grid-template-columns: 4.5em minmax(0, 1fr);
+  gap: 14px;
+  padding: 11px 0;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.log__row:first-child { border-top: none; }
+.log__time { color: var(--text-muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.log__row--waiting { color: var(--brand); font-weight: 700; }
+
+/* ---- 費用 ------------------------------------------------------------ */
+
+.cost { display: flex; gap: 30px; flex-wrap: wrap; align-items: flex-end; }
+
+.cost__figure { display: grid; gap: 2px; }
+.cost__value { font-size: 30px; font-weight: 900; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.cost__label { font-size: 12px; color: var(--text-muted); }
+
+.meter {
+  height: 8px;
+  min-width: 170px;
+  border-radius: var(--pill);
+  background: var(--muted-bg);
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.meter__fill { height: 100%; background: var(--brand); border-radius: inherit; }
+
+/* ---- 折りたたみ ------------------------------------------------------ */
+
+details.fold { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 28px; }
+details.fold > summary { cursor: pointer; font-size: 14px; color: var(--text-muted); }
+details.fold > summary:hover { color: var(--text); }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}

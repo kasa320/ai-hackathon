@@ -1,0 +1,14 @@
+<!doctype html>
+<!-- 一時的な確認用。狭い画面を iframe で再現して撮る。確認後は .trash/ へ退避する。 -->
+<html lang="ja"><head><meta charset="utf-8"><title>frames</title>
+<style>body{margin:0;background:#333;display:flex;gap:10px;padding:10px;font:12px system-ui}
+figure{margin:0}figcaption{color:#eee;padding:3px}iframe{border:0;background:#fff;display:block}</style>
+</head><body><script>
+const u = new URLSearchParams(location.search).get("u") ?? "/session.html?id=ses_demo&mock=replan&as=mem_c";
+for (const w of [390, 768]) {
+  const fig = document.createElement("figure");
+  const cap = document.createElement("figcaption"); cap.textContent = w + "px";
+  const f = document.createElement("iframe"); f.width = w; f.height = 1500; f.src = u;
+  fig.append(cap, f); document.body.append(fig);
+}
+</script></body></html>

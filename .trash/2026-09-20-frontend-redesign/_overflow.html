@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="utf-8"><title>overflow check</title></head>
+<body>
+<pre id="out">measuring…</pre>
+<script>
+const target = new URLSearchParams(location.search).get("u") || "/index.html";
+const width = Number(new URLSearchParams(location.search).get("w") || 390);
+const height = Number(new URLSearchParams(location.search).get("h") || 900);
+
+const frame = document.createElement("iframe");
+frame.style.cssText = `width:${width}px;height:${height}px;border:0`;
+frame.src = target;
+document.body.append(frame);
+
+frame.addEventListener("load", () => {
+  setTimeout(() => {
+    const doc = frame.contentDocument;
+    const lines = [];
+    lines.push(`viewport=${width} documentElement.scrollWidth=${doc.documentElement.scrollWidth} body.scrollWidth=${doc.body.scrollWidth}`);
+    for (const node of doc.querySelectorAll("*")) {
+      const r = node.getBoundingClientRect();
+      if (r.right > width + 0.5 || r.left < -0.5) {
+        const id = node.id ? `#${node.id}` : "";
+        const cls = node.className && typeof node.className === "string" ? `.${node.className.trim().split(/\s+/).join(".")}` : "";
+        lines.push(`${node.tagName.toLowerCase()}${id}${cls} left=${r.left.toFixed(0)} right=${r.right.toFixed(0)} w=${r.width.toFixed(0)}`);
+      }
+    }
+    document.getElementById("out").textContent = lines.join("\n");
+  }, 2500);
+});
+</script>
+</body>
+</html>

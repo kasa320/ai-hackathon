@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>管理者 — 輪読運営エージェント</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@700;900&family=Roboto+Mono:wght@500;700&display=swap">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/components.css">
+</head>
+<body>
+
+<div class="demobar">
+  <span class="demobar__tag">デモ</span>
+  <span>表示中：A さん（管理者）</span>
+  <button type="button" id="demo-advance">時計を24時間進める</button>
+</div>
+
+<header class="header">
+  <a class="logo" href="/">
+    <span class="logo__spines" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+    輪読エージェント
+  </a>
+  <nav>
+    <a href="/">共有画面</a>
+    <a href="/admin.html" aria-current="page">管理者</a>
+    <a href="/setup.html">輪読会をつくる</a>
+  </nav>
+</header>
+
+<!-- 管理者にとっての「いまやること」。1件だけ出す -->
+<section class="hero">
+  <p class="hero__eyebrow">
+    <span>あなたの承認が必要です</span>
+    <span class="deadline">AIはこの判断を待っています</span>
+  </p>
+  <h1 class="hero__title">9/26(金)は、<br>全員の都合が合いません。</h1>
+  <p class="hero__lead">
+    Dさんが20:30からの参加、Bさんが欠席です。日時の変更と中止は、
+    設定した範囲ではAIが自分で決められません。あなたが選んでください。
+  </p>
+  <div class="hero__actions">
+    <button type="button" class="btn btn--primary">9/27(土) に変更する</button>
+    <button type="button" class="btn">9/26 のまま開催する</button>
+    <button type="button" class="btn">今回は中止する</button>
+  </div>
+</section>
+
+<main class="page">
+  <div class="cols">
+
+    <div class="stack">
+      <p class="section-title">AIの動き</p>
+
+      <article class="card">
+        <div class="card__head">
+          <span class="card__title">9/26(金) の調整</span>
+          <span class="badge badge--warn">返事を待っています</span>
+        </div>
+
+        <div class="log">
+          <div class="log__row"><span class="log__time">21:04</span><span>Bさんの辞退を受け取りました</span></div>
+          <div class="log__row"><span class="log__time">21:04</span><span>過去の担当履歴を確認。Cさんは直近3回で代役1回のため、依頼先に選びました</span></div>
+          <div class="log__row"><span class="log__time">21:05</span><span>Cさんに発表の引き受けを確認 — 送信済み</span></div>
+          <div class="log__row"><span class="log__time">21:11</span><span>Cさんの回答（2-1のみ・15分）を反映しました</span></div>
+          <div class="log__row"><span class="log__time">21:12</span><span>変更案 v3 を作成（範囲を 2-1 に縮小、2-2 は次回へ繰越）</span></div>
+          <div class="log__row"><span class="log__time">21:12</span><span>案 v2 への同意を無効化しました（案が変わったため）</span></div>
+          <div class="log__row"><span class="log__time">21:12</span><span>A・C・D に同意を依頼 — 送信済み</span></div>
+          <div class="log__row log__row--waiting"><span class="log__time">21:13</span><span>Dさんの返事を待っています（期限 9/25 20:00）。待っている間、AIは動きません</span></div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card__head">
+          <span class="card__title">実行しなかったこと</span>
+          <span class="badge badge--muted">安全側で停止</span>
+        </div>
+        <div class="log">
+          <div class="log__row"><span class="log__time">21:12</span><span>Dさんの未回答を賛成として扱う — 禁止されているため実行しませんでした</span></div>
+          <div class="log__row"><span class="log__time">21:09</span><span>Bさんに代役を再依頼 — 同じ人への催促は1回までのため送りませんでした</span></div>
+        </div>
+      </article>
+    </div>
+
+    <aside class="stack">
+      <p class="section-title">費用</p>
+
+      <article class="card">
+        <div class="cost">
+          <div class="cost__figure">
+            <span class="cost__value">¥12.40</span>
+            <span class="cost__label">推論費用（1件あたり）</span>
+          </div>
+          <div class="cost__figure">
+            <span class="cost__value">2</span>
+            <span class="cost__label">人が操作した回数</span>
+          </div>
+        </div>
+
+        <div style="margin-top:18px">
+          <p class="card__note">ツール呼び出し <span class="num">6 回</span> / 上限 <span class="num">8 回</span></p>
+          <div class="meter"><div class="meter__fill" style="width:75%"></div></div>
+        </div>
+
+        <p class="card__note" style="margin-top:16px">
+          上限に達した場合、AIは新しい案を確定させずに停止し、あなたに判断を返します。
+        </p>
+      </article>
+
+      <article class="card">
+        <div class="card__head"><span class="card__title">任せる範囲</span></div>
+        <div class="facts">
+          <div class="facts__row"><span class="facts__key">確認の送信</span><span class="facts__val">AIが行う</span></div>
+          <div class="facts__row"><span class="facts__key">催促</span><span class="facts__val">1人1回まで</span></div>
+          <div class="facts__row"><span class="facts__key">進行時間</span><span class="facts__val">±5分まで</span></div>
+          <div class="facts__row"><span class="facts__key">担当の交代</span><span class="facts__val">本人の同意</span></div>
+          <div class="facts__row"><span class="facts__key">範囲の変更</span><span class="facts__val">過半数の同意</span></div>
+          <div class="facts__row"><span class="facts__key">日時・中止</span><span class="facts__val">あなたの承認</span></div>
+        </div>
+        <p style="margin-top:18px">
+          <button type="button" class="btn btn--sm btn--block">変更する</button>
+        </p>
+      </article>
+    </aside>
+
+  </div>
+</main>
+
+<script type="module" src="/js/admin.js"></script>
+</body>
+</html>

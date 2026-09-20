@@ -1,0 +1,71 @@
+<!doctype html>
+<!-- 一時的な確認用。飛行中の見た目をヘッドレスで撮るためだけのページ。
+     確認が済んだら .trash/ へ退避する。製品には含めない。 -->
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>peek</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Zen+Old+Mincho:wght@700;900&display=swap">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/books.css">
+  <!-- 飛行の途中を撮るために、この確認ページでだけ演出を引き伸ばす -->
+  <style>
+    body.slow .books.is-leaving .book-slot.is-chosen .book { transition-duration: 20s !important; }
+    body.slow .books.is-leaving .book-slot:not(.is-chosen) { transition-duration: 8s !important; }
+    body.slow .books-flash { animation-duration: 40s !important; }
+  </style>
+</head>
+<body>
+<canvas id="backdrop" aria-hidden="true"></canvas>
+<div class="backdrop-veil" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+<div class="shell"><main class="main">
+  <section class="study">
+    <div class="study__lamp" aria-hidden="true"></div>
+    <p class="study__eyebrow">PEEK</p>
+    <h1 class="study__title" id="cap">…</h1>
+    <div id="slot"></div>
+  </section>
+</main></div>
+<script type="module">
+import { mountBookshelf } from "/js/components/bookshelf.js";
+import { renderFloatingBooks, BINDINGS } from "/js/components/floatingBooks.js";
+
+mountBookshelf(document.getElementById("backdrop"));
+
+const books = [
+  { label: "次の開催回", title: "第2回", note: "9/26(土) 20:00・60分", binding: BINDINGS.clay, href: "#", primary: true },
+  { label: "1つのグループ", title: "輪読会を選ぶ", note: "開催回は1件あります", binding: BINDINGS.slate, href: "#" },
+  { label: "管理者", title: "新しくつくる", note: "グループ・教材・開催回を登録する", binding: BINDINGS.moss, href: "#" },
+];
+const scene = renderFloatingBooks(books);
+document.getElementById("slot").append(scene);
+
+// 浮遊のアニメーションを止めて、いつ撮っても同じ位置にする
+for (const s of scene.querySelectorAll(".book-slot")) s.style.animation = "none";
+
+const mode = new URLSearchParams(location.search).get("m") ?? "idle";
+document.getElementById("cap").textContent = mode;
+
+if (mode === "hover") {
+  // 実際の :hover と同じ値を当てる（books.css の .book-slot:hover .book）
+  scene.querySelectorAll(".book-slot")[1].querySelector(".book")
+    .style.transform = "rotateY(-9deg) rotateX(2deg) translateZ(46px)";
+}
+if (mode === "flight" || mode === "flight-edge") {
+  // 本物のクリックを起こす。aimAtViewer も暗転も実装どおりに走る。
+  // ヘッドレスでは時計が進まないので、走り出した transition を指定の時点まで送って止める。
+  const i = mode === "flight-edge" ? 2 : 0;
+  const at = Number(new URLSearchParams(location.search).get("t") ?? 280);
+  requestAnimationFrame(() => {
+    scene.querySelectorAll(".book-slot")[i].click();
+    requestAnimationFrame(() => {
+      for (const a of document.getAnimations()) { a.pause(); a.currentTime = at; }
+    });
+  });
+}
+</script>
+</body>
+</html>

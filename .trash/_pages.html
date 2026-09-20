@@ -1,0 +1,35 @@
+<!doctype html>
+<!-- 一時的な確認用。iframe の中でページ送りを n 回押してから撮る。
+     確認が済んだら .trash/ へ退避する。 -->
+<html lang="ja"><head><meta charset="utf-8"><title>pages</title>
+<style>html,body{margin:0;background:#111}iframe{border:0;display:block}</style></head>
+<body>
+<script>
+const q = new URLSearchParams(location.search);
+const n = Number(q.get("n") ?? 0);
+const w = Number(q.get("w") ?? 1440);
+const h = Number(q.get("h") ?? 860);
+const f = document.createElement("iframe");
+f.width = w; f.height = h; f.style.cssText = "width:"+w+"px;height:"+h+"px"; f.src = q.get("u") ?? "/session.html?id=ses_demo&mock=replan&as=mem_c";
+document.body.append(f);
+f.onload = () => {
+  setTimeout(() => {
+    for (let i = 0; i < n; i++) {
+      const btns = f.contentDocument.querySelectorAll(".pager__btn");
+      if (btns[1]) btns[1].click();
+    }
+    // めくりの紙を消してから撮る
+    for (const s of f.contentDocument.querySelectorAll(".page-turn")) s.remove();
+    const d = f.contentDocument;
+    const sh = [...d.querySelectorAll(".sheet")].find((x) => !x.hidden);
+    const cs = getComputedStyle(sh);
+    console.log("SHEETDBG", JSON.stringify({
+      gtc: cs.gridTemplateColumns, maxH: cs.maxHeight, disp: cs.display,
+      sheetW: sh.clientWidth, sheetH: sh.clientHeight,
+      cols: [...sh.querySelectorAll(".sheet__col")].map((c) => [c.clientWidth, c.children.length]),
+      mainW: d.getElementById("main").clientWidth,
+    }));
+  }, 2500);
+};
+</script>
+</body></html>
