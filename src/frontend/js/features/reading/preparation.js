@@ -167,7 +167,10 @@ export function createPreparationForm(sessionData, current, durationMinutes) {
   };
 }
 
-/** 解釈した下書きの中身を、本人が見て確かめられる形にする。 */
+/**
+ * 解釈した下書きの中身を、本人が見て確かめられる形にする。
+ * unclear は「読み取れなかった項目」＝まだ確定していない項目で、値は推測していない。
+ */
 export function renderDraft(sessionData, interpretation, durationMinutes) {
   const d = interpretation.preparation.data;
   const list = [
@@ -195,9 +198,11 @@ export function renderDraft(sessionData, interpretation, durationMinutes) {
       ? el(
           "p",
           { class: "unclear" },
-          `読み取れなかった項目：${interpretation.unclear.map((k) => LABEL[k] ?? k).join("、")}。下の欄で確かめてください。`,
+          `確かめてほしい項目：${interpretation.unclear.map((k) => LABEL[k] ?? k).join("、")}。読み取れなかったので推測していません。下の欄で確かめてから送ってください。`,
         )
-      : null,
+      : interpretation.needs_followup
+        ? el("p", { class: "unclear" }, "読み取りに自信のない項目があります。下の欄で確かめてから送ってください。")
+        : null,
   );
 }
 

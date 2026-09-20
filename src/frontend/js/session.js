@@ -7,7 +7,7 @@
 // - 停止しているときは動いているように見せない
 
 import { el, mount, formatDateTime, remaining } from "./dom.js";
-import { api, ApiError } from "./api.js";
+import { api, ApiError, NetworkError } from "./api.js";
 import { createPoller } from "./poll.js";
 import { featureFor } from "./features/index.js";
 import {
@@ -53,6 +53,10 @@ let me = null;
 let feature = null;
 let busy = false;
 let poller = null;
+// 直近に見た自分の回答。Discord など別の入口で変わったことに気づくために持つ。
+let ownAnswer = null;
+// 開いている参加条件のダイアログ。別の入口で更新されたらその場に知らせる。
+let prepDialog = null;
 
 boot();
 
@@ -115,6 +119,7 @@ function render() {
   renderNotifications();
   renderMyActions();
   renderSharedNote();
+  watchOwnAnswer();
   if (detail.permissions.can_view_activity) loadActivity();
 }
 
@@ -417,6 +422,11 @@ function renderNotifications() {
           }),
         )
       : el("p", {}, "まだ通知はありません。"),
+    el(
+      "p",
+      { class: "help" },
+      "本人あての依頼と催促は Discord の DM に送り、DM を開けないことがはっきりした場合だけチャンネルに送ります。確定の連絡は全員が見るチャンネルに送ります。",
+    ),
   );
 }
 
@@ -440,7 +450,33 @@ function renderMyActions() {
     buttons.length
       ? el("div", { style: "display:grid;gap:8px;margin-top:12px" }, buttons)
       : el("p", {}, "いま変更できることはありません。"),
+    p.can_update_preparation
+      ? el("p", { class: "help" }, "Discord の DM でも同じ4項目を変えられます。足りない項目をBotが1つずつ聞き、最後に出る確認ボタンを押したときだけ保存されます。")
+      : null,
   );
+}
+
+/**
+ * 自分の回答が別の入口（Discord の DM）で変わったことに気づかせる。
+ * この画面からの送信は「受け付けました」で別に知らせているので、そのときは出さない。
+ */
+function watchOwnAnswer() {
+  const value = detail.preparations.find((p) => p.member_id === detail.current_member_id)?.value ?? null;
+  const next = JSON.stringify(value);
+  if (ownAnswer === null) {
+    ownAnswer = next;
+    return;
+  }
+  if (next === ownAnswer) return;
+  ownAnswer = next;
+  if (busy) return;
+
+  flash($("flash"), {
+    title: "あなたの回答が別の入口で更新されました",
+    detail: "Discord からの変更かもしれません。最新の内容に読み直しました。",
+    tone: "warn",
+  });
+  prepDialog?.showError("別の入口で回答が更新されました。いったん閉じて開き直すと、最新の内容から直せます。");
 }
 
 function renderSharedNote() {
@@ -484,7 +520,7 @@ async function loadActivity() {
                 "tr",
                 {},
                 el("td", {}, el("time", { class: "num" }, formatDateTime(item.occurred_at))),
-                el("td", {}, item.summary),
+                el("td", {}, activityEntry(item.summary)),
               ),
             ),
           ),
@@ -492,6 +528,30 @@ async function loadActivity() {
       : el("p", { class: "help", style: "margin-top:16px" }, "まだ記録はありません。"),
   );
   $("activity").hidden = false;
+}
+
+/**
+ * 記録1件の本文。参加条件の更新は「見出し＋項目の差分」で届くので、差分は行ごとに分ける。
+ * 入口（Web / Discord）は本文から外して札にする。文字列はそのまま差し込まない（el が文字として扱う）。
+ */
+function activityEntry(summary) {
+  const [head, ...rest] = String(summary ?? "").split("\n");
+  // 「（Web）」「（変更なし・Discord）」の入口だけを外に出し、ほかの注記は本文に残す。
+  const via = head.match(/（(?:([^（）]*)・)?(Web|Discord)）/);
+  const text = via ? head.replace(via[0], via[1] ? `（${via[1]}）` : "") : head;
+  const diff = rest.map((line) => line.replace(/^・/, "").trim()).filter(Boolean);
+
+  return el(
+    "div",
+    { class: "entry" },
+    el(
+      "div",
+      { class: "entry__head" },
+      el("span", {}, text),
+      via ? el("span", { class: "entry__via" }, via[2]) : null,
+    ),
+    diff.length ? el("ul", { class: "entry__diff" }, diff.map((line) => el("li", {}, line))) : null,
+  );
 }
 
 function metric(value, label, note) {
@@ -553,17 +613,20 @@ function openPreparation() {
     {
       type: "button",
       class: "btn btn--quiet",
+      // AIの呼び出しはこの会の枠を1回使うので、返ってくるまで押せないようにする。
       onClick: async () => {
         const value = text.value.trim();
-        if (!value) return;
+        if (!value || interpret.disabled) return;
+        interpret.disabled = true;
         mount(draftBox, receipt("読み取っています。保存はされません。"));
         try {
           const result = await api.interpretPreparation(sessionId, value);
           form.fill(result.preparation);
           mount(draftBox, feature.renderDraft(detail.data, result, detail.session.duration_minutes));
         } catch (err) {
-          mount(draftBox, el("p", { class: "field__error" },
-            err instanceof ApiError ? err.message : "読み取れませんでした。下の項目で直接答えてください。"));
+          mount(draftBox, el("p", { class: "field__error" }, interpretMessage(err)));
+        } finally {
+          interpret.disabled = false;
         }
       },
     },
@@ -582,6 +645,7 @@ function openPreparation() {
         { style: "margin-top:12px" },
         el("label", { class: "field" }, el("span", {}, "いまの状況を書いてください"), text),
         el("p", { class: "help" }, "読み取った内容は下の項目に入るだけで、保存はされません。あなたが確認して送信したものだけが記録されます。文章そのものは保存しません。"),
+        el("p", { class: "help" }, "読み取りに使えるAIの回数はこの会ごとに決まっていて、Discord での対話と共通です。上限に達したときは下の項目で直接答えてください。"),
         el("p", { style: "margin-top:12px" }, interpret),
         draftBox,
       ),
@@ -626,7 +690,28 @@ function openPreparation() {
       }
     },
   });
+  prepDialog = dialog;
+  dialog.dialog.addEventListener("close", () => {
+    if (prepDialog === dialog) prepDialog = null;
+  });
   return dialog;
+}
+
+/**
+ * 文章の読み取りが失敗したときの案内。上限や扱えない依頼はサーバーの定型文をそのまま出す
+ * （原文は含まれない）。どの場合も「下の項目で直接答える」道が残っていることを示す。
+ */
+function interpretMessage(err) {
+  if (err instanceof NetworkError) {
+    return "サーバーに接続できません。通信が戻ってからもう一度試すか、下の項目で直接答えてください。";
+  }
+  if (!(err instanceof ApiError)) {
+    return "読み取れませんでした。下の項目で直接答えてください。";
+  }
+  if (err.status === 422) {
+    return err.fieldErrors.map((f) => f.message).join(" ") || err.message;
+  }
+  return err.message;
 }
 
 /** 管理者の代案。案件が needs_owner のときだけ開く。 */

@@ -101,7 +101,7 @@ curl -X PUT  localhost:8080/api/dev/faults -H 'Content-Type: application/json' -
 
 その他のコマンド：`make fmt`（整形）、`make vet`（静的検査）、`make db-reset`（ローカル DB の削除）
 
-依存ライブラリ：`modernc.org/sqlite`（SQLite）、`golang.org/x/text`（目次の照合での Unicode 正規化）。LLM・Discord の呼び出しは標準ライブラリの HTTP クライアントで行う。
+依存ライブラリ：`modernc.org/sqlite`（SQLite）、`golang.org/x/text`（目次の照合での Unicode 正規化）、`github.com/bwmarrin/discordgo`（DM の受信とボタン）。LLM の呼び出しと通知の送信は標準ライブラリの HTTP クライアントで行う。
 
 ## 提出物
 

@@ -359,3 +359,9 @@ dialog::backdrop { background: rgba(35, 42, 49, .35); }
   .answer { display: grid; gap: 2px; }
   .answer__who { width: auto; }
 }
+
+/* 実行記録の1件。参加条件の更新は見出しと項目の差分で届く。 */
+.entry { display: grid; gap: 4px; }
+.entry__head { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.entry__via { flex: none; padding: 1px 8px; border: 1px solid var(--line-strong); border-radius: var(--r-chip); color: var(--ink-3); font-size: .7rem; }
+.entry__diff { display: grid; gap: 2px; margin: 0; padding-left: 1.1em; color: var(--ink-2); font-size: .8rem; list-style: disc; }
