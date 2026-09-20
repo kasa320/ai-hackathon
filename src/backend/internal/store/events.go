@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -260,6 +261,19 @@ func (t *Tx) AddLLMCall(ctx context.Context, c LLMCall) error {
 	}
 	return t.exec(ctx, "INSERT INTO llm_calls (id, case_id, lookup_id, model, input_tokens, output_tokens, currency, estimated_amount, billed_amount, succeeded, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		c.ID, nullStr(c.CaseID), nullStr(c.LookupID), c.Model, c.InputTokens, c.OutputTokens, c.Currency, c.EstimatedAmount, c.BilledAmount, c.Succeeded, ts(c.CreatedAt))
+}
+
+// UpdateLLMCall は先に確保した記録へ結果を書き込む。呼び出し前に AddLLMCall で枠を取り、
+// 結果が分かった時点でこれを呼ぶ。行が消えていても新たに作らない（二重計上を防ぐ）。
+func (t *Tx) UpdateLLMCall(ctx context.Context, c LLMCall) error {
+	if c.ID == "" {
+		return fmt.Errorf("store: LLM 呼び出しのIDがありません")
+	}
+	if c.Currency == "" {
+		c.Currency = "unknown"
+	}
+	return t.exec(ctx, "UPDATE llm_calls SET model = ?, input_tokens = ?, output_tokens = ?, currency = ?, estimated_amount = ?, billed_amount = ?, succeeded = ? WHERE id = ?",
+		c.Model, c.InputTokens, c.OutputTokens, c.Currency, c.EstimatedAmount, c.BilledAmount, c.Succeeded, c.ID)
 }
 
 // CountLLMCallsByCase は1つの案件で使った LLM 呼び出しの数を返す（自由文の解釈を含む）。

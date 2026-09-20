@@ -24,6 +24,28 @@ var (
 	log = slog.New(slog.NewTextHandler(io.Discard, nil))
 )
 
+// setupKind は種類を指定して通知を1件積む。
+func setupKind(t *testing.T, kind string) *store.Store {
+	t.Helper()
+	st := setup(t, 0)
+	err := st.Tx(ctx, func(tx *store.Tx) error {
+		return tx.EnqueueNotification(ctx, store.Notification{ID: store.NewID("ntf"), SessionID: "s", CaseID: "c", Kind: kind,
+			DedupeKey: store.NewID("d"), Content: "hello", Mentions: []string{"222222222222222222"}, CreatedAt: t0})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return st
+}
+
+// captureSender は送信内容を記録するだけの送信先。
+type captureSender struct{ msgs []notify.Message }
+
+func (c *captureSender) Send(_ context.Context, m notify.Message) error {
+	c.msgs = append(c.msgs, m)
+	return nil
+}
+
 func setup(t *testing.T, n int) *store.Store {
 	t.Helper()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "t.db"))
@@ -150,5 +172,95 @@ func TestRecoverMarksInterruptedAsUnknown(t *testing.T) {
 	}
 	if s := statuses(t, st); s["unknown"] != 1 || s["sent"] != 1 {
 		t.Fatalf("statuses = %v", s)
+	}
+}
+
+// 本人宛ての依頼は DM を試し、DM を開けないことが確実なときだけチャンネルへ退避する。
+// 成否が分からない失敗では退避せず、二重に送らない。
+func TestDiscordSenderPrefersDM(t *testing.T) {
+	var paths []string
+	dmStatus := http.StatusOK
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		if r.URL.Path == "/users/@me/channels" {
+			if dmStatus != http.StatusOK {
+				w.WriteHeader(dmStatus)
+				return
+			}
+			_, _ = w.Write([]byte(`{"id":"dm_1"}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	s := notify.NewDiscordSender("bot-token", "chan")
+	s.BaseURL = srv.URL
+
+	msg := notify.Message{Kind: "task_requested", Content: "hi", MentionUserIDs: []string{"1"}, DMUserIDs: []string{"1"}}
+	if err := s.Send(ctx, msg); err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 2 || paths[1] != "/channels/dm_1/messages" {
+		t.Fatalf("DM へ送っていない: %v", paths)
+	}
+
+	// DM 拒否（403）はチャンネルへ退避する。
+	paths, dmStatus = nil, http.StatusForbidden
+	if err := s.Send(ctx, msg); err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 2 || paths[1] != "/channels/chan/messages" {
+		t.Fatalf("チャンネルへ退避していない: %v", paths)
+	}
+
+	// 成否不明（500）は退避しない。
+	paths, dmStatus = nil, http.StatusInternalServerError
+	if err := s.Send(ctx, msg); !errors.Is(err, notify.ErrDeliveryUnknown) {
+		t.Fatalf("成否不明のはず: %v", err)
+	}
+	if len(paths) != 1 {
+		t.Fatalf("成否不明なのに二重に送った: %v", paths)
+	}
+
+	// 全員が知るべき通知は DM を試さない。
+	paths, dmStatus = nil, http.StatusOK
+	if err := s.Send(ctx, notify.Message{Kind: "plan_confirmed", Content: "hi", DMUserIDs: []string{"1"}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 1 || paths[0] != "/channels/chan/messages" {
+		t.Fatalf("確定の連絡はチャンネルへ: %v", paths)
+	}
+}
+
+// 通知の種類と DM の宛先は送信先へ渡す。本文とメンションから送り先を推測しない。
+func TestDispatcherPassesKindAndDMRecipients(t *testing.T) {
+	tests := map[string]struct{ wantDM bool }{
+		"task_requested": {true},
+		"reminder":       {true},
+		"plan_confirmed": {false},
+		"needs_owner":    {false},
+	}
+	for kind, tt := range tests {
+		t.Run(kind, func(t *testing.T) {
+			st := setupKind(t, kind)
+			sender := &captureSender{}
+			d := notify.NewDispatcher(st, clock.Fixed{T: t0}, sender, log)
+			if _, err := d.DispatchPending(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if len(sender.msgs) != 1 {
+				t.Fatalf("送信 = %d 件", len(sender.msgs))
+			}
+			m := sender.msgs[0]
+			if m.Kind != kind {
+				t.Fatalf("kind = %q", m.Kind)
+			}
+			if got := len(m.DMUserIDs) > 0; got != tt.wantDM {
+				t.Fatalf("DM の宛先 = %v, want %v", m.DMUserIDs, tt.wantDM)
+			}
+			if tt.wantDM && m.DMUserIDs[0] != "222222222222222222" {
+				t.Fatalf("DM の宛先 = %v", m.DMUserIDs)
+			}
+		})
 	}
 }

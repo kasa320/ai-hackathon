@@ -26,10 +26,16 @@ type Session struct {
 const sessionCols = "id, group_id, playbook_id, title, starts_at, duration_minutes, revision, status, data, confirmed_proposal_id, created_at, updated_at"
 
 func scanSession(row interface{ Scan(...any) error }) (Session, error) {
+	return scanSessionWith(row)
+}
+
+// scanSessionWith は開催回の列に続けて、結合したクエリの追加の列を読む。
+func scanSessionWith(row interface{ Scan(...any) error }, extra ...any) (Session, error) {
 	var s Session
 	var starts, created, updated, data string
 	var confirmed sql.NullString
-	if err := row.Scan(&s.ID, &s.GroupID, &s.PlaybookID, &s.Title, &starts, &s.DurationMinutes, &s.Revision, &s.Status, &data, &confirmed, &created, &updated); err != nil {
+	dest := append([]any{&s.ID, &s.GroupID, &s.PlaybookID, &s.Title, &starts, &s.DurationMinutes, &s.Revision, &s.Status, &data, &confirmed, &created, &updated}, extra...)
+	if err := row.Scan(dest...); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return s, ErrNotFound
 		}

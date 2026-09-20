@@ -189,3 +189,118 @@ func seedSession(t *testing.T, st *store.Store) {
 		t.Fatal(err)
 	}
 }
+
+// 対話の対象は、本人が所属し、まだ開催していない回だけ。未回答の確認タスクの有無も返す。
+func TestPreparationTargetsByUser(t *testing.T) {
+	st := openTest(t)
+	seedSession(t, st)
+	var userID, otherID string
+	err := st.Tx(ctx, func(tx *store.Tx) error {
+		u, _ := tx.UserByDiscordID(ctx, "111111111111111111")
+		userID = u.ID
+		other, err := tx.UpsertUser(ctx, "999999999999999999", "Z", t0)
+		if err != nil {
+			return err
+		}
+		otherID = other.ID
+		// 過去の回（開催済み）と、本人が所属しない別グループの回。
+		past := store.Session{ID: "ses_past", GroupID: "grp_1", PlaybookID: "reading", Title: "前回", StartsAt: t0.Add(-time.Hour), DurationMinutes: 60, Revision: 1, Status: "draft", Data: []byte(`{}`), CreatedAt: t0, UpdatedAt: t0}
+		if err := tx.CreateSession(ctx, past, []string{"mem_a"}); err != nil {
+			return err
+		}
+		if err := tx.CreateGroup(ctx, store.Group{ID: "grp_2", Name: "別", OwnerUserID: otherID, CreatedAt: t0}); err != nil {
+			return err
+		}
+		if err := tx.AddMember(ctx, store.Member{ID: "mem_z", GroupID: "grp_2", DiscordUserID: "999999999999999999", UserID: otherID, DisplayName: "Z", Role: "owner"}, 0); err != nil {
+			return err
+		}
+		other2 := store.Session{ID: "ses_other", GroupID: "grp_2", PlaybookID: "reading", Title: "別の会", StartsAt: t0.Add(72 * time.Hour), DurationMinutes: 60, Revision: 1, Status: "draft", Data: []byte(`{}`), CreatedAt: t0, UpdatedAt: t0}
+		return tx.CreateSession(ctx, other2, []string{"mem_z"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_ = st.Tx(ctx, func(tx *store.Tx) error {
+		got, err := tx.PreparationTargetsByUser(ctx, userID, t0, 25)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 1 || got[0].Session.ID != "ses_1" || got[0].MemberID != "mem_a" {
+			t.Fatalf("対象 = %+v", got)
+		}
+		if got[0].HasOpenTask {
+			t.Fatal("タスクがないのに未回答になっている")
+		}
+		// 別グループの回は本人に見えない。
+		if got, _ := tx.PreparationTargetsByUser(ctx, otherID, t0, 25); len(got) != 1 || got[0].Session.ID != "ses_other" {
+			t.Fatalf("他の利用者の対象 = %+v", got)
+		}
+		return nil
+	})
+
+	// 期限内の未回答の参加条件確認タスクがあれば HasOpenTask になる。
+	_ = st.Tx(ctx, func(tx *store.Tx) error {
+		return tx.CreateTask(ctx, store.Task{ID: "tsk_1", SessionID: "ses_1", CaseID: "case_1", MemberID: "mem_a",
+			Kind: store.TaskPreparation, Status: store.TaskOpen, Title: "確認", DueAt: t0.Add(24 * time.Hour), RequestedBy: "agent", CreatedAt: t0})
+	})
+	_ = st.Tx(ctx, func(tx *store.Tx) error {
+		got, _ := tx.PreparationTargetsByUser(ctx, userID, t0, 25)
+		if len(got) != 1 || !got[0].HasOpenTask {
+			t.Fatalf("未回答のタスクを拾えていない: %+v", got)
+		}
+		// 期限を過ぎたタスクは数えない。
+		got, _ = tx.PreparationTargetsByUser(ctx, userID, t0.Add(25*time.Hour), 25)
+		if len(got) != 1 || got[0].HasOpenTask {
+			t.Fatalf("期限切れのタスクを数えている: %+v", got)
+		}
+		return nil
+	})
+}
+
+// 自由文の解釈は呼び出し前に枠を確保し、結果で同じ行を更新する（二重計上しない）。
+func TestLLMCallReserveAndUpdate(t *testing.T) {
+	st := openTest(t)
+	seedSession(t, st)
+	lookup := "preparation:ses_1"
+	_ = st.Tx(ctx, func(tx *store.Tx) error {
+		return tx.AddLLMCall(ctx, store.LLMCall{ID: "llm_1", CaseID: "case_1", LookupID: lookup, Model: "m", Currency: "unknown", CreatedAt: t0})
+	})
+	_ = st.Tx(ctx, func(tx *store.Tx) error {
+		n, err := tx.CountLLMCallsByLookup(ctx, lookup)
+		if err != nil || n != 1 {
+			t.Fatalf("予約が数えられていない: %d %v", n, err)
+		}
+		// 案件の合計にも入る（計画用の予算と共有する）。
+		if n, _ := tx.CountLLMCallsByCase(ctx, "case_1"); n != 1 {
+			t.Fatalf("案件の合計 = %d", n)
+		}
+		return nil
+	})
+
+	in, out := 100, 20
+	_ = st.Tx(ctx, func(tx *store.Tx) error {
+		return tx.UpdateLLMCall(ctx, store.LLMCall{ID: "llm_1", Model: "m", InputTokens: &in, OutputTokens: &out, Currency: "unknown", Succeeded: true})
+	})
+	_ = st.Tx(ctx, func(tx *store.Tx) error {
+		n, _ := tx.CountLLMCallsByLookup(ctx, lookup)
+		if n != 1 {
+			t.Fatalf("更新で行が増えた: %d", n)
+		}
+		calls, err := tx.LLMCallsByCase(ctx, "case_1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(calls) != 1 || !calls[0].Succeeded || *calls[0].InputTokens != 100 {
+			t.Fatalf("結果が記録されていない: %+v", calls)
+		}
+		return nil
+	})
+	// IDのない更新は受け付けない（新しい行を作らない）。
+	_ = st.Tx(ctx, func(tx *store.Tx) error {
+		if err := tx.UpdateLLMCall(ctx, store.LLMCall{Model: "m"}); err == nil {
+			t.Fatal("IDなしの更新を受け付けた")
+		}
+		return nil
+	})
+}

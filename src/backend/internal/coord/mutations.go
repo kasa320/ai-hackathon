@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/kasa320/ai-hackathon/src/backend/internal/apitypes"
@@ -46,6 +47,12 @@ func checkNotStarted(sess store.Session, now time.Time) error {
 
 // PutPreparation は本人の参加条件を全置換する（docs/api-endpoint.md）。
 func (c *Coordinator) PutPreparation(ctx context.Context, userID, sessionID string, in apitypes.PutPreparationInput, idem *store.IdemKey) (store.Response, error) {
+	return c.putPreparation(ctx, userID, sessionID, in, idem, EntryWeb)
+}
+
+// putPreparation は入口（Web / Discord）だけを変えて同じ保存処理を使う。
+// 認可・版の確認・冪等性・整合性は入口によらず共通で、入口は記録にだけ残す。
+func (c *Coordinator) putPreparation(ctx context.Context, userID, sessionID string, in apitypes.PutPreparationInput, idem *store.IdemKey, source string) (store.Response, error) {
 	now := c.now()
 	res, err := c.st.Idempotent(ctx, idem, now, func(tx *store.Tx) (store.Response, error) {
 		sess, m, err := c.access(ctx, tx, userID, sessionID)
@@ -58,7 +65,7 @@ func (c *Coordinator) PutPreparation(ctx context.Context, userID, sessionID stri
 		if err := checkRevision(sess, in.ExpectedRevision); err != nil {
 			return store.Response{}, err
 		}
-		return c.submitPreparation(ctx, tx, &sess, m, in.Preparation, "preparation", now)
+		return c.submitPreparation(ctx, tx, &sess, m, in.Preparation, "preparation", source, now)
 	})
 	if err == nil {
 		c.Wake()
@@ -66,8 +73,22 @@ func (c *Coordinator) PutPreparation(ctx context.Context, userID, sessionID stri
 	return res, err
 }
 
+// 参加条件を更新した入口。プログラムだけが渡す内部の情報で、公開APIの入力には含めない。
+const (
+	EntryWeb     = "web"
+	EntryDiscord = "discord"
+)
+
+func entryLabel(source string) string {
+	if source == EntryDiscord {
+		return "Discord"
+	}
+	return "Web"
+}
+
 // submitPreparation は参加条件の保存と、本人宛ての未回答の確認タスクへの回答を行う。
-func (c *Coordinator) submitPreparation(ctx context.Context, tx *store.Tx, sess *store.Session, m store.Member, in *apitypes.Preparation, path string, now time.Time) (store.Response, error) {
+// source は入口（web / discord）。記録に残すのは項目の差分と入口だけで、理由や発言は残さない。
+func (c *Coordinator) submitPreparation(ctx context.Context, tx *store.Tx, sess *store.Session, m store.Member, in *apitypes.Preparation, path, source string, now time.Time) (store.Response, error) {
 	pb, err := c.playbook(sess.PlaybookID)
 	if err != nil {
 		return store.Response{}, err
@@ -93,6 +114,10 @@ func (c *Coordinator) submitPreparation(ctx context.Context, tx *store.Tx, sess 
 	}
 	cur, exists := preps[m.ID]
 	changed := !exists || cur.Attendance != in.Attendance || !jsonEqual(cur.Data, data)
+	var before *Preparation
+	if exists {
+		before = &Preparation{Attendance: cur.Attendance, Data: cur.Data}
+	}
 
 	// 本人宛ての未回答の確認タスクは回答済みにする（担当の引き受けや投票は作らない）。
 	cs, err := tx.LatestCase(ctx, sess.ID)
@@ -127,12 +152,16 @@ func (c *Coordinator) submitPreparation(ctx context.Context, tx *store.Tx, sess 
 		if err != nil {
 			return store.Response{}, err
 		}
-		if err := c.activity(ctx, tx, *sess, cs.ID, "input_received", m.DisplayName+"さんが参加条件を回答しました。", "", now); err != nil {
+		summary := m.DisplayName + "さんが参加条件を更新しました（" + entryLabel(source) + "）。"
+		if lines := preparationDiff(pb, s, before, Preparation{Attendance: in.Attendance, Data: data}); len(lines) > 0 {
+			summary += "\n・" + strings.Join(lines, "\n・")
+		}
+		if err := c.activity(ctx, tx, *sess, cs.ID, "input_received", summary, "", now); err != nil {
 			return store.Response{}, err
 		}
 	} else if answered && cs.Open() {
 		// 値が同じなら版は変えず、回答が揃ったかだけを確認する。
-		if err := c.activity(ctx, tx, *sess, cs.ID, "input_received", m.DisplayName+"さんが参加条件を確認しました（変更なし）。", "", now); err != nil {
+		if err := c.activity(ctx, tx, *sess, cs.ID, "input_received", m.DisplayName+"さんが参加条件を確認しました（変更なし・"+entryLabel(source)+"）。", "", now); err != nil {
 			return store.Response{}, err
 		}
 		if err := c.advance(ctx, tx, *sess, &cs, now); err != nil {
@@ -307,7 +336,7 @@ func (c *Coordinator) RespondTask(ctx context.Context, userID, taskID string, in
 			if err := checkRevision(sess, in.ExpectedRevision); err != nil {
 				return store.Response{}, err
 			}
-			return c.submitPreparation(ctx, tx, &sess, m, in.Preparation, "preparation", now)
+			return c.submitPreparation(ctx, tx, &sess, m, in.Preparation, "preparation", EntryWeb, now)
 		}
 
 		p, err := tx.Proposal(ctx, tk.ProposalID)

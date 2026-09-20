@@ -100,3 +100,19 @@ type Playbook interface {
 type DraftPlanner interface {
 	DraftPlan(ctx context.Context, s Snapshot) (Draft, error)
 }
+
+// PreparationDiffer は保存前後の参加条件の差分を、人が読める1行ずつの説明にする用途。
+// 記録に残すのは差分だけで、変更の理由や発言の原文は残さない。
+type PreparationDiffer interface {
+	// DiffPreparation は before（未回答なら nil）から after への変更点を返す。変更がなければ空。
+	DiffPreparation(s Snapshot, before *Preparation, after Preparation) []string
+}
+
+// preparationDiff は用途が差分を作れるならその行を返す。作れない用途では空。
+func preparationDiff(pb Playbook, s Snapshot, before *Preparation, after Preparation) []string {
+	d, ok := pb.(PreparationDiffer)
+	if !ok {
+		return nil
+	}
+	return d.DiffPreparation(s, before, after)
+}
