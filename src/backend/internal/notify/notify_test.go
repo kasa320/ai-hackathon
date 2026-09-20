@@ -152,3 +152,60 @@ func TestRecoverMarksInterruptedAsUnknown(t *testing.T) {
 		t.Fatalf("statuses = %v", s)
 	}
 }
+
+// 本人宛ての依頼は DM を試し、DM を開けないことが確実なときだけチャンネルへ退避する。
+// 成否が分からない失敗では退避せず、二重に送らない。
+func TestDiscordSenderPrefersDM(t *testing.T) {
+	var paths []string
+	dmStatus := http.StatusOK
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		if r.URL.Path == "/users/@me/channels" {
+			if dmStatus != http.StatusOK {
+				w.WriteHeader(dmStatus)
+				return
+			}
+			_, _ = w.Write([]byte(`{"id":"dm_1"}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	s := notify.NewDiscordSender("bot-token", "chan")
+	s.BaseURL = srv.URL
+
+	msg := notify.Message{Kind: "task_requested", Content: "hi", MentionUserIDs: []string{"1"}, DMUserIDs: []string{"1"}}
+	if err := s.Send(ctx, msg); err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 2 || paths[1] != "/channels/dm_1/messages" {
+		t.Fatalf("DM へ送っていない: %v", paths)
+	}
+
+	// DM 拒否（403）はチャンネルへ退避する。
+	paths, dmStatus = nil, http.StatusForbidden
+	if err := s.Send(ctx, msg); err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 2 || paths[1] != "/channels/chan/messages" {
+		t.Fatalf("チャンネルへ退避していない: %v", paths)
+	}
+
+	// 成否不明（500）は退避しない。
+	paths, dmStatus = nil, http.StatusInternalServerError
+	if err := s.Send(ctx, msg); !errors.Is(err, notify.ErrDeliveryUnknown) {
+		t.Fatalf("成否不明のはず: %v", err)
+	}
+	if len(paths) != 1 {
+		t.Fatalf("成否不明なのに二重に送った: %v", paths)
+	}
+
+	// 全員が知るべき通知は DM を試さない。
+	paths, dmStatus = nil, http.StatusOK
+	if err := s.Send(ctx, notify.Message{Kind: "plan_confirmed", Content: "hi", DMUserIDs: []string{"1"}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 1 || paths[0] != "/channels/chan/messages" {
+		t.Fatalf("確定の連絡はチャンネルへ: %v", paths)
+	}
+}

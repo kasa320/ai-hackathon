@@ -33,7 +33,16 @@ type Message struct {
 	Content string
 	// MentionUserIDs はメンションを許可する Discord ユーザーID。
 	MentionUserIDs []string
+	// Kind は通知の種類（task_requested / reminder / plan_confirmed / needs_owner）。
+	Kind string
+	// DMUserIDs は DM を試す相手。本人だけが知ればよい依頼に使う。
+	// DM が使えないことが確実なときだけチャンネルへ退避する。
+	DMUserIDs []string
 }
+
+// DMKinds は本人宛てに DM を試す通知の種類。確定の連絡や管理者への差し戻しは全員が知るべき情報なので
+// チャンネルへ送る。
+var DMKinds = map[string]bool{"task_requested": true, "reminder": true}
 
 type Sender interface {
 	Send(ctx context.Context, m Message) error
@@ -54,6 +63,8 @@ func NewDiscordSender(token, channelID string) *DiscordSender {
 	return &DiscordSender{BaseURL: "https://discord.com/api/v10", Token: token, ChannelID: channelID, HTTP: &http.Client{Timeout: 10 * time.Second}}
 }
 
+// Send は通知を送る。本人宛ての依頼はまず DM を試し、DM が使えないことが確実なときだけ
+// チャンネルへ退避する。成否が分からない送信は退避せず、到達済みの DM と二重に送らない。
 func (d *DiscordSender) Send(ctx context.Context, m Message) error {
 	content := m.Content
 	if utf8.RuneCountInString(content) > maxContentLen {
@@ -63,13 +74,46 @@ func (d *DiscordSender) Send(ctx context.Context, m Message) error {
 	if users == nil {
 		users = []string{}
 	}
+	if len(m.DMUserIDs) == 1 && DMKinds[m.Kind] {
+		err := d.sendDM(ctx, m.DMUserIDs[0], content, users)
+		if err == nil || !errors.Is(err, ErrDeliveryFailed) {
+			return err
+		}
+		// DM 拒否・共通サーバーなしなど、送信されていないことが確実な失敗だけ退避する。
+	}
+	return d.sendChannel(ctx, d.ChannelID, content, users)
+}
+
+// sendDM は相手との DM チャンネルを開いて送る。開けなければその失敗をそのまま返す。
+func (d *DiscordSender) sendDM(ctx context.Context, userID, content string, mentions []string) error {
+	body, _ := json.Marshal(map[string]any{"recipient_id": userID})
+	res, err := d.post(ctx, "/users/@me/channels", body)
+	if err != nil {
+		return err
+	}
+	var ch struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(res, &ch); err != nil || ch.ID == "" {
+		return fmt.Errorf("%w: DM チャンネルを開けません", ErrDeliveryFailed)
+	}
+	return d.sendChannel(ctx, ch.ID, content, mentions)
+}
+
+func (d *DiscordSender) sendChannel(ctx context.Context, channelID, content string, mentions []string) error {
 	body, _ := json.Marshal(map[string]any{
 		"content":          content,
-		"allowed_mentions": map[string]any{"parse": []string{}, "users": users},
+		"allowed_mentions": map[string]any{"parse": []string{}, "users": mentions},
 	})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, d.BaseURL+"/channels/"+d.ChannelID+"/messages", bytes.NewReader(body))
+	_, err := d.post(ctx, "/channels/"+channelID+"/messages", body)
+	return err
+}
+
+// post は Discord API を呼び、成否の分かる失敗と分からない失敗を区別する。
+func (d *DiscordSender) post(ctx context.Context, path string, body []byte) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, d.BaseURL+path, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrDeliveryFailed, err)
+		return nil, fmt.Errorf("%w: %v", ErrDeliveryFailed, err)
 	}
 	req.Header.Set("Authorization", "Bot "+d.Token)
 	req.Header.Set("Content-Type", "application/json")
@@ -78,21 +122,21 @@ func (d *DiscordSender) Send(ctx context.Context, m Message) error {
 		// 接続できなかった場合は送信されていない。それ以外（タイムアウト等）は成否不明。
 		var op *net.OpError
 		if errors.As(err, &op) && op.Op == "dial" {
-			return fmt.Errorf("%w: %v", ErrDeliveryFailed, err)
+			return nil, fmt.Errorf("%w: %v", ErrDeliveryFailed, err)
 		}
-		return fmt.Errorf("%w: %v", ErrDeliveryUnknown, err)
+		return nil, fmt.Errorf("%w: %v", ErrDeliveryUnknown, err)
 	}
 	defer res.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 1<<20))
+	payload, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	switch {
 	case res.StatusCode >= 200 && res.StatusCode < 300:
-		return nil
+		return payload, nil
 	case res.StatusCode == http.StatusTooManyRequests:
-		return ErrRetryLater
+		return nil, ErrRetryLater
 	case res.StatusCode >= 500:
-		return fmt.Errorf("%w: status %d", ErrDeliveryUnknown, res.StatusCode)
+		return nil, fmt.Errorf("%w: status %d", ErrDeliveryUnknown, res.StatusCode)
 	default:
-		return fmt.Errorf("%w: status %d", ErrDeliveryFailed, res.StatusCode)
+		return nil, fmt.Errorf("%w: status %d", ErrDeliveryFailed, res.StatusCode)
 	}
 }
 
@@ -174,7 +218,12 @@ func (d *Dispatcher) DispatchPending(ctx context.Context) (int, error) {
 		if err != nil {
 			return n, err
 		}
-		sendErr := d.sender.Send(ctx, Message{Content: ntf.Content, MentionUserIDs: ntf.Mentions})
+		msg := Message{Content: ntf.Content, MentionUserIDs: ntf.Mentions, Kind: ntf.Kind}
+		if DMKinds[ntf.Kind] {
+			// 本人宛ての依頼は DM を試す。宛先は通知が名指しした本人だけ。
+			msg.DMUserIDs = ntf.Mentions
+		}
+		sendErr := d.sender.Send(ctx, msg)
 		status, code, summary := store.NotifySent, "", "通知を送信しました（Discord の成功応答）。"
 		switch {
 		case errors.Is(sendErr, ErrRetryLater):
