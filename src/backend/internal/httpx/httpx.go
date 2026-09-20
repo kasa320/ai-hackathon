@@ -1,4 +1,4 @@
-// Package httpx は API 層と用途別の HTTP 拡張が共有する入出力の規約（api.md 第2・12節）。
+// Package httpx は API 層と用途別の HTTP 拡張が共有する入出力の規約（docs/api-endpoint.md）。
 // エラーは常に {"error": {code, message, details, request_id}} の形で返す。
 package httpx
 

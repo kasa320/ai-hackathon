@@ -17,7 +17,7 @@ import (
 	"github.com/kasa320/ai-hackathon/src/backend/internal/store"
 )
 
-// 期限と上限（spec.md 第4節・api.md 第8・10節）。
+// 期限と上限（spec.md 第4節）。
 const (
 	// TaskTTL はタスクの回答期限の基本値。開催1時間前の方が早ければそちらを使う。
 	TaskTTL = 24 * time.Hour

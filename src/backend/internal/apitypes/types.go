@@ -1,4 +1,4 @@
-// Package apitypes は公開 API（api.md 第1部）の入出力の型。
+// Package apitypes は公開 API（docs/data-structure.md）の入出力の型。
 // 内部の Go 型や DB テーブルをそのまま公開せず、ここで定義した形へ変換して返す。
 // 用途固有の中身は必ず Data（json.RawMessage）に包む。
 package apitypes

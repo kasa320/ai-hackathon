@@ -12,7 +12,7 @@ import (
 	"github.com/kasa320/ai-hackathon/src/backend/internal/fault"
 )
 
-// maxRepairs は不正な出力に検証エラーを返してやり直させる回数（api.md 第10節）。
+// maxRepairs は不正な出力に検証エラーを返してやり直させる回数（docs/api-endpoint.md）。
 const maxRepairs = 2
 
 const maxSummaryLen = 500

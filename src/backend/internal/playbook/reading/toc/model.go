@@ -1,4 +1,4 @@
-// Package toc は輪読の教材登録で使う「ISBN からの目次の取得」（api.md 第2部 R7）。
+// Package toc は輪読の教材登録で使う「ISBN からの目次の取得」（docs/api-endpoint.md）。
 // 取得結果は候補にすぎず、管理者が確認・修正して開催回登録に使うまで保存しない。
 // LLM に書名や記憶から目次を作らせる経路は設けず、Web 検索の結果は取得元ページとの照合をコードで行う。
 package toc
@@ -32,7 +32,7 @@ const (
 	ReasonModelError     = "model_error"
 )
 
-// 上限（api.md R7）。
+// 上限（docs/api-endpoint.md）。
 const (
 	LookupTTL        = 24 * time.Hour
 	RetryWindow      = 10 * time.Minute

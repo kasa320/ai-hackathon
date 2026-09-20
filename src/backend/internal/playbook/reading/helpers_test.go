@@ -77,7 +77,7 @@ const initialPlanJSON = `{
   ]
 }`
 
-// api.md R6 の再計画例：C が sec_2 を15分、sec_3 は持ち越し。
+// 再計画の例：C が sec_2 を15分、sec_3 は持ち越し。
 const replanJSON = `{
   "covered_section_ids": ["sec_2"],
   "deferred_section_ids": ["sec_3"],

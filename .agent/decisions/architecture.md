@@ -73,15 +73,15 @@ Playbookは判断材料と条件を返し、同意記録の作成やDB確定・�
 | `ValidatePlan` | 提案された計画の用途固有の制約を検証 |
 | `ApprovalRequirements` | その案に必要な投票・承認・本人の引き受け条件を返す |
 
-公開APIとの対応：[api.md](api.md) の第1部（汎用API）が `coord`・`api` 側、第2部（輪読Playbook）が上記メソッドの輪読実装に当たる。
+公開APIとの対応：[エンドポイント](../../docs/api-endpoint.md)の汎用APIが `coord`・`api` 側、輪読固有APIと輪読の用途固有データが上記メソッドの輪読実装に当たる。
 
-`Snapshot.Data` と `Proposal.Data` の具体的な型は用途側が持つ。共通側は節ID等の輪読固有項目を解釈しない。これらは内部契約の雛形であり、DB設計の確定版ではない。公開APIは [api.md](api.md) を正とし、内部型との変換をAPI層で行う。開催日時・参加者・持ち時間・履歴等の内部入力は業務実装前に補う。
+`Snapshot.Data` と `Proposal.Data` の具体的な型は用途側が持つ。共通側は節ID等の輪読固有項目を解釈しない。これらは内部契約の雛形であり、DB設計の確定版ではない。公開APIは [docs/api-endpoint.md](../../docs/api-endpoint.md)・[docs/data-structure.md](../../docs/data-structure.md) を正とし、内部型との変換をAPI層で行う。開催日時・参加者・持ち時間・履歴等の内部入力は業務実装前に補う。
 
 本・節の保存処理は将来 `store/reading.go` 等にまとめ、共通の案件・同意の処理から区別する。テーブルを一つの汎用JSONに押し込む設計は前提としない。共有するDB接続・トランザクションと用途別のデータ型を分ける。
 
 ## 現時点で動く範囲
 
-更新：2026-09-19。`backend` ブランチ（各 `feat/backend-*` を統合）で、api.md `mvp-2` の第1部・第2部を実装した。
+更新：2026-09-19。`backend` ブランチ（各 `feat/backend-*` を統合）で、汎用APIと輪読Playbookを実装した。
 
 - 共通側（`coord`）：開催回・参加条件・辞退・版付きの案・本人の引き受け・投票・確定、期限と催促、AI 処理の再試行・上限、再起動後の再開。確定と通知待ちの登録は同じトランザクション。
 - 輪読（`playbook/reading`）：入力・計画の検証、承認条件（R4）、代役の偏りの制約、LLM を使わない仮の計画（`coord.DraftPlanner`）。目次の取得（R7）は `playbook/reading/toc` に分け、HTTP 拡張として API 層に登録する。

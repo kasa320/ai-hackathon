@@ -1,5 +1,5 @@
 // Package api は HTTP の入口。/api/ 以下の API と、フロントエンドの静的ファイル配信を扱う。
-// 入出力は api.md 第1部の契約に従い、業務処理は coord.Coordinator に委ねる。
+// 入出力は docs/api-endpoint.md の契約に従い、業務処理は coord.Coordinator に委ねる。
 package api
 
 import (

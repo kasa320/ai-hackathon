@@ -24,7 +24,7 @@ func split(s string) []string {
 	return out
 }
 
-// GET /api/sessions/{id} の形が api.md 第6節・R6 の例と同じキーを持つ（初期登録直後）。
+// GET /api/sessions/{id} の形が docs/data-structure.md の SessionDetail と同じキーを持つ（初期登録直後）。
 func TestSessionDetailShape(t *testing.T) {
 	s := newServer(t)
 	seed := s.seed("initial_demo")
@@ -85,7 +85,7 @@ func TestSessionDetailShape(t *testing.T) {
 	}
 }
 
-// 案（Proposal）と実行履歴の形（api.md 第4・11節）。
+// 案（Proposal）と実行履歴の形（docs/data-structure.md）。
 func TestProposalAndActivityShape(t *testing.T) {
 	s := newServer(t)
 	seed := s.seed("replan_demo")

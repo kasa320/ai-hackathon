@@ -13,7 +13,7 @@
 //   - consistency_test.go   再送・二重送信・旧版への回答（E05・E06）
 //   - notify_restart_test.go 通知の失敗・成否不明と再起動からの再開（E11・E12）
 //   - toc_test.go           輪読の目次の取得（R7）
-//   - contract_test.go      応答の形（api.md の型・エラー形式）
+//   - contract_test.go      応答の形（docs/data-structure.md の型・エラー形式）
 //
 // 実行：make test-e2e（または go -C src/backend test ./tests/e2e/ -v）
 package e2e

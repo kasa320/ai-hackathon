@@ -295,7 +295,7 @@ func (r response) decode(t *testing.T, v any) {
 	}
 }
 
-// errorCode はエラー応答の code を返す。形式が api.md 第12節と違えば失敗させる。
+// errorCode はエラー応答の code を返す。形式が docs/api-endpoint.md と違えば失敗させる。
 func (r response) errorCode(t *testing.T) string {
 	t.Helper()
 	var e struct {

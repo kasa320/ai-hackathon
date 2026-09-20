@@ -6,7 +6,7 @@ import (
 	"errors"
 )
 
-// Planner の失敗の種類（api.md 第10節）。
+// Planner の失敗の種類（docs/api-endpoint.md のエラー表）。
 var (
 	// ErrTransient は通信エラー・タイムアウト・429・5xx などの一時的な障害。指数バックオフで再試行する。
 	ErrTransient = errors.New("planner: transient failure")
