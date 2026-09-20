@@ -1,16 +1,154 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>輪読運営エージェント</title>
-  <link rel="stylesheet" href="/css/style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>輪読調整</title>
+<meta name="description" content="担当者が準備できなくなったとき、参加者の条件に合わせて次回の読む範囲と進行を組み直し、引き受けと同意を集めて配ります。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/site.css">
 </head>
 <body>
-  <main>
-    <h1>輪読運営エージェント</h1>
-    <p>サーバーの状態：<span id="health">確認中…</span></p>
-  </main>
-  <script type="module" src="/js/index.js"></script>
+
+<div id="devbar"></div>
+
+<header class="gnav">
+  <div class="wrap gnav__in on-kon">
+    <a class="brand" href="/"><span class="brand__mark" aria-hidden="true"></span>輪読調整</a>
+    <nav class="gnav__links" id="gnav-links" aria-label="全体"></nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- 未ログイン：この仕組みが何をするかを、組み直しの実例で見せる -->
+  <div id="guest">
+
+    <section class="lede">
+      <!-- 見出しが内容を伝えるので、写真は装飾として alt を空にする -->
+      <div class="lede__media">
+        <img src="img/meeting-1600.jpg"
+             srcset="img/meeting-900.jpg 900w, img/meeting-1600.jpg 1600w"
+             sizes="100vw" width="1600" height="1067" alt="" fetchpriority="high">
+      </div>
+      <div class="wrap lede__in on-kon">
+        <h1 class="lede__title">準備が変わっても、<br>会は開ける。</h1>
+        <p class="lede__lead">担当者が準備できなくなったとき、参加者が読めた範囲と説明できる時間に合わせて、今回の範囲と進行を組み直します。本人の引き受けと同意を集め、決まったことを配るまで進めます。</p>
+        <div class="btns">
+          <a class="btn btn--main" id="login" href="#">Discord でログイン</a>
+          <a class="btn" href="session.html?id=ses_demo&amp;mock=replan&amp;as=mem_c">見本の開催回を見る</a>
+        </div>
+      </div>
+    </section>
+
+    <div class="wrap">
+      <section class="sec">
+        <div class="sec__head">
+          <h2 class="sec__title">組み直すとこうなる</h2>
+          <span class="sec__meta">60分・4人の輪読会</span>
+        </div>
+        <p class="lead-note">40分の説明を担当していたBさんが準備できなくなった場合。帯の長さは実際の分数のままです。</p>
+
+        <figure class="bar bar--before">
+          <figcaption class="bar__caption">辞退する前の計画</figcaption>
+          <ol class="bar__track">
+            <li class="bar__seg bar__seg--presentation" style="--min:40">
+              <span class="bar__who">Bさん</span>
+              <span class="bar__what">説明：今回の前半・後半</span>
+              <span class="bar__min">40分</span>
+            </li>
+            <li class="bar__seg bar__seg--discussion" style="--min:20">
+              <span class="bar__what">議論</span>
+              <span class="bar__min">20分</span>
+            </li>
+          </ol>
+          <ol class="bar__ticks" aria-hidden="true">
+            <li class="bar__tick" style="--min:40">0</li>
+            <li class="bar__tick" style="--min:20">40</li>
+            <li class="bar__tick bar__tick--end">60分</li>
+          </ol>
+        </figure>
+
+        <figure class="bar bar--reveal">
+          <figcaption class="bar__caption">Cさんが「前半だけ15分なら」と答えたあとの案</figcaption>
+          <ol class="bar__track">
+            <li class="bar__seg bar__seg--presentation" style="--min:15">
+              <span class="bar__who">Cさん</span>
+              <span class="bar__what">説明：今回の前半</span>
+              <span class="bar__min">15分</span>
+            </li>
+            <li class="bar__seg bar__seg--review" style="--min:20">
+              <span class="bar__what">前回の復習</span>
+              <span class="bar__min">20分</span>
+            </li>
+            <li class="bar__seg bar__seg--discussion" style="--min:25">
+              <span class="bar__what">議論</span>
+              <span class="bar__min">25分</span>
+            </li>
+          </ol>
+          <ol class="bar__ticks" aria-hidden="true">
+            <li class="bar__tick" style="--min:15">0</li>
+            <li class="bar__tick" style="--min:20">15</li>
+            <li class="bar__tick" style="--min:25">35</li>
+            <li class="bar__tick bar__tick--end">60分</li>
+          </ol>
+          <p class="bar__deferred">今回扱えなかった「今回の後半」は次回へ持ち越します。</p>
+        </figure>
+      </section>
+
+      <section class="sec">
+        <div class="sec__head"><h2 class="sec__title">任せる範囲</h2></div>
+        <div class="cols">
+          <div class="col">
+            <h3>条件を集める</h3>
+            <p>参加できるか、どこまで読めたか、何分説明できるか。答えた内容だけを使い、書名から章の中身を推測しません。</p>
+          </div>
+          <div class="col">
+            <h3>組み直す</h3>
+            <p>範囲を縮める、復習にあてる、担当を替える。持ち時間を超える案や、本人が説明できない範囲を割り当てる案は作りません。</p>
+          </div>
+          <div class="col">
+            <h3>合意を残す</h3>
+            <p>担当は本人が引き受け、範囲の変更は参加予定者の過半数の同意が要ります。同意の記録をAIが代わりに作ることはできません。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="sec">
+        <div class="sec__head"><h2 class="sec__title">決まらなかったとき</h2></div>
+        <p class="prose">条件を満たす案が作れない、回答の期限が過ぎた、モデルが失敗した。このいずれでも計画を勝手に確定させず、理由を添えて管理者の判断に戻します。通知は「送信待ち・送信済み・失敗・成否未確認」を分けて記録し、送信済みは既読を意味しません。</p>
+      </section>
+
+      <section class="sec">
+        <div class="sec__head">
+          <h2 class="sec__title">会議の日程調整へ広げる</h2>
+          <span class="sec__meta">構想・未実装</span>
+        </div>
+        <p class="prose">調整の中身は輪読でも会議でも同じで、変わるのは「何を割り当てるか」だけです。いま動くのは輪読だけですが、同じ仕組みで会議の日程と議題の調整も扱えます。</p>
+        <div class="btns" style="margin-top:24px">
+          <a class="btn" href="meeting.html">会議での使い方を見る</a>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ログイン後：輪読会と開催回を選ぶ -->
+  <div id="member" hidden></div>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot__in">
+    <span>輪読調整</span>
+    <a href="meeting.html">会議での使い方</a>
+    <span>写真：<a href="https://unsplash.com/" target="_blank" rel="noreferrer noopener">Unsplash</a>（Unsplash License）</span>
+    <span id="foot-health">接続を確認しています</span>
+  </div>
+</footer>
+
+<script type="module" src="js/index.js"></script>
 </body>
 </html>
