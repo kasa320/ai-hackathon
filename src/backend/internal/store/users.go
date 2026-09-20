@@ -58,9 +58,8 @@ func (t *Tx) User(ctx context.Context, id string) (User, error) {
 }
 
 // ActivateMemberships は招待中の所属を本人のログインで有効にし、表示名を本人のものにする。
-// 脱退した所属は対象外。ログインし直しただけで元のグループへ戻らないようにする。
 func (t *Tx) ActivateMemberships(ctx context.Context, u User) error {
-	return t.exec(ctx, "UPDATE members SET user_id = ?, display_name = ? WHERE discord_user_id = ? AND left_at IS NULL", u.ID, u.DisplayName, u.DiscordUserID)
+	return t.exec(ctx, "UPDATE members SET user_id = ?, display_name = ? WHERE discord_user_id = ?", u.ID, u.DisplayName, u.DiscordUserID)
 }
 
 type AuthSession struct {

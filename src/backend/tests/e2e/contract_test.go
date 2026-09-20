@@ -77,7 +77,7 @@ func TestSessionDetailShape(t *testing.T) {
 		t.Fatalf("B の権限: %v", perm)
 	}
 	member := d["members"].([]any)[0].(map[string]any)
-	if got := keys(member); !reflect.DeepEqual(got, split("id display_name role joined left")) {
+	if got := keys(member); !reflect.DeepEqual(got, split("id display_name role joined")) {
 		t.Fatalf("member のキー: %v", got)
 	}
 	if strings.Contains(string(r.body), persona["A"]) {

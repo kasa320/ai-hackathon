@@ -132,9 +132,6 @@ export const api = {
   group: (groupId) => request("GET", `/groups/${encodeURIComponent(groupId)}`),
   createGroup: (payload) => write("POST", "/groups", payload),
 
-  /** 自分がグループを脱退する。管理者は 409 invalid_state。戻り値の affected_session_ids は再調整が始まった開催回。 */
-  leaveGroup: (groupId) => write("POST", `/groups/${encodeURIComponent(groupId)}/leave`, {}),
-
   // ---- 開催回 ----
   sessions: (groupId) => request("GET", `/groups/${encodeURIComponent(groupId)}/sessions`),
   createSession: (groupId, payload) => write("POST", `/groups/${encodeURIComponent(groupId)}/sessions`, payload),

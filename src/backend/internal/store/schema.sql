@@ -1,6 +1,4 @@
--- 最初のテーブル定義。マイグレーション機能の導入より前に作った DB をそのまま引き継げるよう、
--- この版だけは何度適用しても同じ結果になるように CREATE ... IF NOT EXISTS で書く。
--- 以降の変更はこのファイルを書き換えず、migrations/0002_*.sql のように新しい版を足す。
+-- テーブル定義。起動時に毎回適用するため、CREATE TABLE IF NOT EXISTS で書く。
 -- 日時は UTC の RFC 3339（ナノ秒付き）文字列で保存する。用途固有のデータは JSON 文字列で保存し、共通側は解釈しない。
 
 CREATE TABLE IF NOT EXISTS meta (
@@ -65,9 +63,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     data                  TEXT NOT NULL,
     confirmed_proposal_id TEXT,
     created_at            TEXT NOT NULL,
-    updated_at            TEXT NOT NULL,
-    -- confirmed なら確定した案が必ずある。逆は成り立たない（needs_attention でも確定計画は残る）。
-    CHECK (status <> 'confirmed' OR confirmed_proposal_id IS NOT NULL)
+    updated_at            TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS sessions_group ON sessions(group_id, starts_at);
 
@@ -85,9 +81,7 @@ CREATE TABLE IF NOT EXISTS preparations (
     attendance TEXT NOT NULL CHECK (attendance IN ('attending', 'absent')),
     data       TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    PRIMARY KEY (session_id, member_id),
-    -- 参加条件を書けるのは、その開催回に固定された参加者だけ。
-    FOREIGN KEY (session_id, member_id) REFERENCES session_members(session_id, member_id)
+    PRIMARY KEY (session_id, member_id)
 );
 
 -- 調整案件。1開催回に未完了（confirmed 以外）の案件は最大1つ。
@@ -143,9 +137,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     answered_at      TEXT,
     reminded_at      TEXT,
     created_at       TEXT NOT NULL,
-    seq              INTEGER NOT NULL,
-    -- 依頼を出せるのは、その開催回に固定された参加者だけ。
-    FOREIGN KEY (session_id, member_id) REFERENCES session_members(session_id, member_id)
+    seq              INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS tasks_case ON tasks(case_id, seq);
 CREATE INDEX IF NOT EXISTS tasks_proposal ON tasks(proposal_id);
@@ -206,10 +198,7 @@ CREATE TABLE IF NOT EXISTS llm_calls (
     estimated_amount TEXT,
     billed_amount    TEXT,
     succeeded        INTEGER NOT NULL,
-    created_at       TEXT NOT NULL,
-    -- 呼び出しの出どころが分からない行は作らない。
-    -- 自由文の解釈は案件の予算と共有するため case_id と lookup_id の両方が入る（どちらか一方には限らない）。
-    CHECK (case_id IS NOT NULL OR lookup_id IS NOT NULL)
+    created_at       TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS llm_calls_case ON llm_calls(case_id);
 

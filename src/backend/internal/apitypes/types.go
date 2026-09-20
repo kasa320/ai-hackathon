@@ -13,9 +13,6 @@ type Member struct {
 	DisplayName string `json:"display_name"`
 	Role        string `json:"role"`
 	Joined      bool   `json:"joined"`
-	// Left は脱退済みか。グループのメンバー一覧には出ないが、
-	// 開催回の参加対象者は固定した時点の顔ぶれを保つため、脱退した人も含まれる。
-	Left bool `json:"left"`
 }
 
 type Group struct {
@@ -195,15 +192,6 @@ type Invitee struct {
 type CreateGroupInput struct {
 	Name     string    `json:"name"`
 	Invitees []Invitee `json:"invitees"`
-}
-
-// LeaveGroupInput は脱退の要求。項目はないが、本文は空オブジェクト `{}` を送る。
-type LeaveGroupInput struct{}
-
-// LeaveGroupResult は脱退の結果。affected_session_ids は本人が外れて再調整が始まった開催回。
-type LeaveGroupResult struct {
-	GroupID            string   `json:"group_id"`
-	AffectedSessionIDs []string `json:"affected_session_ids"`
 }
 
 type CreateSessionInput struct {
