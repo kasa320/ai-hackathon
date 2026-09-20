@@ -45,6 +45,8 @@ make dev               # http://localhost:8080 で起動
 
 参加条件は自由文でも入力できます（`POST /api/sessions/{id}/preparations/me/interpretations`）。LLM が決めるのは定義済み項目の値だけで、結果は保存されません。本人が確認・修正して通常の送信をしたときに初めて保存されます。原文は解釈用モデルへの送信にだけ使い、DB とログには残しません。
 
+`DISCORD_BOT_TOKEN` を設定すると、同じ項目を Discord の DM からも更新できます。Bot は足りない項目を1つずつ聞き、全部そろったら確認ボタンを出します。保存されるのは本人がボタンを押した内容だけで、会話の途中経過はメモリにしか置きません。DM を使わない人は Web だけで完結できます。
+
 ### 主な環境変数
 
 | 変数 | 既定値 | 内容 |
@@ -54,6 +56,7 @@ make dev               # http://localhost:8080 で起動
 | `SESSION_SECRET` | 空 | セッショントークンのハッシュ用。未設定なら起動ごとに変わる（再起動でログアウト） |
 | `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` / `DISCORD_REDIRECT_URL` | 空 | Discord ログイン。未設定なら `/api/auth/discord` は `auth_error=provider_unavailable` に戻る |
 | `DISCORD_BOT_TOKEN` / `DISCORD_CHANNEL_ID` | 空 | 通知先チャンネル。未設定なら通知はサーバーログに出すだけ |
+| `DISCORD_BOT_TOKEN`（単体） | 空 | 設定すると Bot が常駐し、DM での対話から参加条件を更新できる（`DIRECT_MESSAGES` インテントが必要） |
 | `ORCAROUTER_SEARCH_MODEL` | 空 | 目次の Web 検索に使う検索付きモデル。空なら Web 検索をせず画像の提出を依頼する |
 | `ORCAROUTER_VISION_MODEL` | 空 | 目次画像の書き写しに使うモデル（空なら `ORCAROUTER_MODEL`） |
 

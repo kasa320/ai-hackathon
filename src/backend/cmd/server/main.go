@@ -20,6 +20,7 @@ import (
 	"github.com/kasa320/ai-hackathon/src/backend/internal/config"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/coord"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/devapi"
+	"github.com/kasa320/ai-hackathon/src/backend/internal/discord"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/fault"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/httpx"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/notify"
@@ -100,6 +101,21 @@ func run(log *slog.Logger) error {
 		return err
 	}
 
+	// Bot のトークンがあるときだけ、DM での対話を受け付ける常駐Botを動かす。
+	if cfg.DiscordBotToken != "" {
+		bot, err := discord.New(discord.Deps{
+			Token: cfg.DiscordBotToken, Coord: coordinator, Clock: clk, Log: log, PublicBaseURL: cfg.PublicBaseURL,
+		})
+		if err != nil {
+			return err
+		}
+		go func() {
+			if err := bot.Run(ctx); err != nil {
+				log.Error("Discord Bot が停止", "err", err)
+			}
+		}()
+	}
+
 	var provider auth.Provider
 	if cfg.DiscordLoginConfigured() {
 		provider = auth.NewDiscordProvider(cfg.DiscordClientID, cfg.DiscordClientSecret, cfg.DiscordRedirectURL)
@@ -138,7 +154,7 @@ func run(log *slog.Logger) error {
 	errCh := make(chan error, 1)
 	go func() {
 		log.Info("起動", "addr", cfg.Addr, "agent_mode", cfg.AgentMode, "dev_mode", cfg.DevMode, "db", cfg.DBPath,
-			"discord_login", provider != nil, "discord_notify", cfg.DiscordNotifyConfigured())
+			"discord_login", provider != nil, "discord_notify", cfg.DiscordNotifyConfigured(), "discord_dm", cfg.DiscordBotToken != "")
 		errCh <- srv.ListenAndServe()
 	}()
 

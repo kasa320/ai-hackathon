@@ -306,3 +306,27 @@ func sameStrings(a, b []string) bool {
 	}
 	return true
 }
+
+// DialogUser は Discord の発言者に対応する利用者。
+type DialogUser struct {
+	ID          string
+	DisplayName string
+}
+
+// UserByDiscordID は Discord のユーザーIDから登録済みの利用者を引く。
+// 見つからなければ NotFound を返す。DM の受信を理由に利用者や所属を作らない。
+func (c *Coordinator) UserByDiscordID(ctx context.Context, discordUserID string) (DialogUser, error) {
+	var out DialogUser
+	err := c.st.Tx(ctx, func(tx *store.Tx) error {
+		u, err := tx.UserByDiscordID(ctx, discordUserID)
+		if errors.Is(err, store.ErrNotFound) {
+			return apperr.NotFoundErr()
+		}
+		if err != nil {
+			return err
+		}
+		out = DialogUser{ID: u.ID, DisplayName: u.DisplayName}
+		return nil
+	})
+	return out, err
+}
