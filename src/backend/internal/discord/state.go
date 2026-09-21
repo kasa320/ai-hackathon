@@ -39,16 +39,25 @@ type confirmation struct {
 
 // conversation は1人の利用者の進行中の会話。対象の開催回を束縛する。
 type conversation struct {
-	sessionID string
-	title     string
-	startsAt  time.Time
-	state     coord.DialogState
+	sessionID      string
+	title          string
+	startsAt       time.Time
+	scheduleStatus string
+	state          coord.DialogState
 	// draftID は下書きの世代。値・確定状態・対象・読み込んだ版が変わるたびに振り直す。
 	draftID string
 	confirm *confirmation
 	// targets は対象を選んでもらっている最中の候補。selectID はそのボタンの世代。
-	targets  []coord.DialogTarget
-	selectID string
+	targets     []coord.DialogTarget
+	selectID    string
+	selectTasks bool
+	taskCards   map[string]taskCard
+}
+
+type taskCard struct {
+	value     coord.DialogTask
+	channelID string
+	messageID string
 }
 
 // userSession は利用者ごとの状態。空振りの回数と休止は開催回の切替で戻さない。

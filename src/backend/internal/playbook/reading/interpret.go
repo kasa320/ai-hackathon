@@ -25,11 +25,11 @@ const (
 )
 
 // slotOrder は聞き取りと表示の順。unclear もこの順で返す。
-var slotOrder = []string{coord.SlotAttendance, SlotWilling, SlotPrepared, SlotExplainable, SlotMinutes}
+var slotOrder = []string{coord.SlotAttendance, SlotSchedule, SlotUnavailable, SlotWilling, SlotPrepared, SlotExplainable, SlotMinutes}
 
 // PreparationSlots は data の項目名。
 func (Playbook) PreparationSlots() []string {
-	return []string{SlotWilling, SlotPrepared, SlotExplainable, SlotMinutes}
+	return []string{SlotWilling, SlotPrepared, SlotExplainable, SlotMinutes, SlotSchedule, SlotUnavailable}
 }
 
 // interpretContext は抽出に必要な最小限の判断材料。他のメンバーの回答・担当履歴は含めない。
@@ -38,6 +38,10 @@ type interpretContext struct {
 	Sections        []Section `json:"sections"`
 	Completed       []string  `json:"completed_section_ids"`
 	Target          []string  `json:"target_section_ids"`
+	ScheduleStatus  string    `json:"schedule_status"`
+	PeriodStart     string    `json:"period_start"`
+	PeriodEnd       string    `json:"period_end"`
+	Today           string    `json:"today"`
 }
 
 // InterpretContext は節の一覧と持ち時間だけを返す。発言者本人の値を決めるのに他人の情報は要らない。
@@ -51,6 +55,8 @@ func (Playbook) InterpretContext(_ context.Context, s coord.Snapshot) (json.RawM
 		Sections:        sd.Sections,
 		Completed:       sd.CompletedSectionIDs,
 		Target:          sd.TargetSectionIDs,
+		ScheduleStatus:  s.ScheduleStatus, PeriodStart: s.PeriodStart, PeriodEnd: s.PeriodEnd,
+		Today: s.Now.In(jst).Format(dateLayout),
 	})
 }
 
@@ -61,6 +67,17 @@ func (Playbook) PreparationSchema() json.RawMessage {
   "additionalProperties": false,
   "required": ["willing_to_present", "prepared_section_ids", "explainable_section_ids", "max_presentation_minutes"],
   "properties": {
+    "unavailable_dates": {"type":"array","maxItems":60,"items":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}},
+    "schedule": {
+      "type":["object","null"], "additionalProperties":false,
+      "required":["status","weekly_windows","date_windows","max_duration_minutes"],
+      "properties":{
+        "status":{"type":"string","enum":["provided","unknown","unavailable"]},
+        "max_duration_minutes":{"type":"integer","minimum":0,"maximum":480},
+        "weekly_windows":{"type":"array","maxItems":60,"items":{"type":"object","additionalProperties":false,"required":["weekday","start","end"],"properties":{"weekday":{"type":"integer","minimum":0,"maximum":6},"start":{"type":"string"},"end":{"type":"string"}}}},
+        "date_windows":{"type":"array","maxItems":60,"items":{"type":"object","additionalProperties":false,"required":["date","start","end"],"properties":{"date":{"type":"string"},"start":{"type":"string"},"end":{"type":"string"}}}}
+      }
+    },
     "willing_to_present": {"type": "boolean", "description": "今回の説明を担当できるか"},
     "prepared_section_ids": {"type": "array", "items": {"type": "string"}, "description": "読んできた節ID"},
     "explainable_section_ids": {"type": "array", "items": {"type": "string"}, "description": "説明できる節ID（読んできた節の範囲内）"},
@@ -70,7 +87,15 @@ func (Playbook) PreparationSchema() json.RawMessage {
 }
 
 func (Playbook) InterpretInstructions() string {
-	return `取り出すのは、発言者本人の輪読の準備状況だけです。
+	return `取り出すのは、発言者本人の輪読の準備状況と参加可能時間だけです。
+
+- scheduleは本人の参加可能時間。時刻はJSTのHH:mm、曜日は日曜0〜土曜6。日をまたぐ場合は日ごとに分割する。
+- weekly_windowsは通常の曜日と時間帯、date_windowsは特定の日の時間帯（その日の週間設定を置換）。unavailable_datesは終日参加できない日。
+- max_duration_minutesは会への最大参加時間で、説明時間max_presentation_minutesとは異なる。本人が言っていない最大時間を推測しない。
+- schedule.statusは時間帯と最大時間が明確ならprovided、予定がまだ分からないならunknown、期間中は参加できないならunavailable。後二者は時間帯を空・最大参加時間0にする。
+- 日程未定の回で予定が読み取れなければscheduleをunclearに入れる。出られない日の申告がなければunavailable_datesをunclearに入れる。日時指定済みの回はこれらを追加で聞かない。
+- 現在の値のうち発言が触れていない項目は変更しない。理由・原文・指示を値として転記しない。
+- 本人の時間条件は抽出できるが、会全体の日時・長さ・参加ルールの変更や他人の代理回答・承認はできない。
 
 - 節IDは sections に載っているIDだけを使う。載っていない範囲の話は無視する。
 - prepared_section_ids は「読んできた」と読み取れる節だけ。explainable_section_ids はそのうち「説明できる」と読み取れる節だけ。
@@ -78,7 +103,7 @@ func (Playbook) InterpretInstructions() string {
 - 担当できるか判断できないときは willing_to_present=false、explainable_section_ids=[]、max_presentation_minutes=0 にして、unclear に willing_to_present を入れる（読み取れていない項目名もすべて入れる）。
 - 「自信がない」「たぶん」など確信のない範囲は explainable_section_ids に入れず、unclear に explainable_section_ids を入れる。
 - 欠席と読み取れるときだけ attendance="absent" にする。書かれていなければ "attending" とし、unclear に attendance を入れる。
-- 日程の変更、途中参加・途中退出、他の人の代理での回答は、この項目では扱えません。値を作らず out_of_scope に分類を入れてください。`
+- 会全体の変更や他の人の代理回答はout_of_scopeに分類する。本人の「21時以降なら」「30分なら」はscheduleの条件として扱う。`
 }
 
 // 仮の抽出で使う手がかり。
@@ -118,6 +143,36 @@ func (Playbook) DraftInterpret(_ context.Context, req coord.InterpretRequest) (c
 	}
 	d.PreparedSectionIDs = nonNil(d.PreparedSectionIDs)
 	d.ExplainableSectionIDs = nonNil(d.ExplainableSectionIDs)
+	if s.ScheduleStatus != coord.ScheduleProposed {
+		delete(unclear, SlotSchedule)
+		delete(unclear, SlotUnavailable)
+	}
+	if req.Pending == SlotSchedule || (req.Pending == "" && s.ScheduleStatus == coord.ScheduleProposed) {
+		if a, ok := parseScheduleText(text); ok {
+			d.Schedule = a
+			delete(unclear, SlotSchedule)
+			list := orderedSlots(unclear)
+			return coord.Interpretation{Attendance: attendance, Data: mustJSON(d), Unclear: list, NeedsFollowup: len(list) > 0}, nil
+		}
+	}
+	if req.Pending == SlotUnavailable {
+		if strings.TrimSpace(text) == "なし" {
+			d.UnavailableDates = []string{}
+			delete(unclear, SlotUnavailable)
+		} else {
+			dates := strings.Fields(strings.ReplaceAll(text, "、", " "))
+			v := &coord.ValidationError{}
+			checked := validateDates(v, SlotUnavailable, dates)
+			if v.Err() == nil {
+				d.UnavailableDates = checked
+				delete(unclear, SlotUnavailable)
+			}
+		}
+	}
+	if req.Pending == SlotSchedule || req.Pending == SlotUnavailable {
+		list := orderedSlots(unclear)
+		return coord.Interpretation{Attendance: attendance, Data: mustJSON(d), Unclear: list, NeedsFollowup: len(list) > 0}, nil
+	}
 
 	yes, no := containsAny(text, yesWords), containsAny(text, noWords)
 	wantsPresent := containsAny(text, presentWords)
@@ -264,7 +319,14 @@ var _ coord.PreparationPrompter = Playbook{}
 func (Playbook) SlotQuestion(s coord.Snapshot, slot string) string {
 	switch slot {
 	case coord.SlotAttendance:
+		if s.ScheduleStatus == coord.ScheduleProposed {
+			return "この輪読に参加しますか？（参加／欠席）。開催日時は全員の条件を集めて決めます。"
+		}
 		return "今回は参加できますか？（参加／欠席）"
+	case SlotSchedule:
+		return "参加できる曜日・時間帯と最大参加時間を教えてください（JST）。例：水 20:00-22:00 60分 ／ 2026-10-07 21:00-22:00 60分。分からなければ「未定」、期間中すべて難しければ「期間内は参加不可」。"
+	case SlotUnavailable:
+		return "終日参加できない日をYYYY-MM-DDで教えてください。複数日は空白で区切り、なければ「なし」と答えてください。"
 	case SlotWilling:
 		return "今回の説明を担当できますか？（はい／いいえ）"
 	case SlotPrepared:

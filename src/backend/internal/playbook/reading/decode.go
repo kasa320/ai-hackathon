@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/kasa320/ai-hackathon/src/backend/internal/coord"
+	"github.com/kasa320/ai-hackathon/src/backend/internal/jsonx"
 )
 
 // decodeStrict は未知のフィールドを拒否してデコードする。
@@ -15,15 +16,7 @@ func decodeStrict(raw json.RawMessage, v any) error {
 	if len(bytes.TrimSpace(raw)) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return fmt.Errorf("値がありません")
 	}
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
-		return fmt.Errorf("形式が正しくありません: %v", err)
-	}
-	if dec.More() {
-		return fmt.Errorf("余分なデータがあります")
-	}
-	return nil
+	return jsonx.Decode(raw, v)
 }
 
 func decodeError(err error) error {

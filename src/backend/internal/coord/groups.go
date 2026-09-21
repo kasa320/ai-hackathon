@@ -268,7 +268,7 @@ func (c *Coordinator) CreateSession(ctx context.Context, userID, groupID string,
 		if err := tx.CreateCase(ctx, cs); err != nil {
 			return store.Response{}, err
 		}
-		due, _ := dueAt(now, sess.StartsAt)
+		due, _ := dueAt(now, responseHorizon(sess))
 		for _, m := range members {
 			if err := c.createTask(ctx, tx, sess, cs, m, store.TaskPreparation, ask, nil, "system", due, now); err != nil {
 				return store.Response{}, err

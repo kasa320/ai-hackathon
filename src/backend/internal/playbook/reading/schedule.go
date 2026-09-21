@@ -59,8 +59,8 @@ func validateDates(v *coord.ValidationError, path string, dates []string) []stri
 // validateSchedule は案が決める開催日時を検証する。
 //
 // 日時がまだ決まっていない回（ScheduleStatus=proposed）では、案は期間内の日時を1つ決める。
-// 出席予定の人が「出られない」と答えた日は選べない。過半数の同意で決まる仕組みのため、
-// 出られない人を多数決で押し切らないよう、ここを検証で塞ぐ。
+// 開催回の全員が明示した時間帯・最大参加時間を満たす必要がある。
+// 未回答・欠席を対象から除くことはできず、日時の確定には別途全員の同意が必要。
 func validateSchedule(v *coord.ValidationError, s coord.Snapshot, p PlanData) {
 	if len([]rune(p.Frequency)) > maxFrequencyLen {
 		v.Add("frequency", "進め方の説明は%d文字までにしてください", maxFrequencyLen)
@@ -72,6 +72,10 @@ func validateSchedule(v *coord.ValidationError, s coord.Snapshot, p PlanData) {
 			if err != nil || !at.Equal(s.StartsAt) {
 				v.Add("starts_at", "この回の開催日時は決まっています。変更するには登録し直してください")
 			}
+		}
+		// A period-based session retains its all-member policy after confirmation.
+		if s.PeriodStart != "" && !scheduleAllows(s, s.StartsAt) {
+			v.Add("starts_at", "確定日時で全員の参加条件を満たせなくなりました。日時の再調整が必要です")
 		}
 		return
 	}
@@ -99,6 +103,12 @@ func validateSchedule(v *coord.ValidationError, s coord.Snapshot, p PlanData) {
 	day := at.In(jst).Format(dateLayout)
 	if busy := unavailableOn(s, day); len(busy) > 0 {
 		v.Add("starts_at", "%s は出られないと答えた人がいます（%s）", day, memberNames(s, busy))
+	}
+	if !scheduleAllows(s, at) {
+		v.Add("starts_at", "開催回の全員が回答した参加可能時間と最大参加時間を満たしていません")
+	}
+	if rejectedStart(s, at) {
+		v.Add("starts_at", "この案件で否決された日時です。別の候補を選んでください")
 	}
 }
 
@@ -133,7 +143,7 @@ func memberNames(s coord.Snapshot, ids []string) string {
 	return strings.Join(names, "、")
 }
 
-// candidateDays は期間内で、出席予定者の誰もふさがっていない日を近い順に返す。
+// candidateDays は全員の共通時間から、開始候補を30分刻みで近い順に返す。
 // 仮の判断処理（AGENT_MODE=fake）と、AI へ渡す候補の提示に使う。
 func candidateDays(s coord.Snapshot, limit int) []time.Time {
 	from, err := time.ParseInLocation(dateLayout, s.PeriodStart, jst)
@@ -146,21 +156,29 @@ func candidateDays(s coord.Snapshot, limit int) []time.Time {
 	}
 	var out []time.Time
 	for day := from; !day.After(to) && len(out) < limit; day = day.AddDate(0, 0, 1) {
-		at := time.Date(day.Year(), day.Month(), day.Day(), 19, 0, 0, 0, jst)
-		if !at.After(s.Now.Add(coord.SessionMinLead)) {
-			continue
+		for _, w := range commonWindows(s, day) {
+			for minute := w.start; minute+s.DurationMinutes <= w.end && len(out) < limit; minute += 30 {
+				at := day.Add(time.Duration(minute) * time.Minute)
+				if at.After(s.Now.Add(coord.SessionMinLead)) && !rejectedStart(s, at) {
+					out = append(out, at)
+				}
+			}
 		}
-		if len(unavailableOn(s, day.Format(dateLayout))) > 0 {
-			continue
-		}
-		out = append(out, at)
 	}
 	return out
 }
 
+func rejectedStart(s coord.Snapshot, at time.Time) bool {
+	for _, rejected := range s.Case.RejectedStartsAt {
+		if rejected.Equal(at) {
+			return true
+		}
+	}
+	return false
+}
+
 // buildSchedule は AI へ渡す日程の判断材料を組み立てる。
-// 候補日は「誰も出られないと答えていない日」だけを並べる。選ぶのは AI だが、
-// 選べない日を候補に混ぜない。
+// 全員が明示した条件を満たす候補だけを渡す。
 func buildSchedule(s coord.Snapshot) aiSchedule {
 	out := aiSchedule{Status: s.ScheduleStatus}
 	if out.Status == "" {

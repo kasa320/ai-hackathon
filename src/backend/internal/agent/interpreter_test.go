@@ -76,7 +76,7 @@ func TestLLMInterpreterToolContract(t *testing.T) {
 	}
 	// unclear に入れてよい名前と out_of_scope の値は列挙で縛る。
 	slots := props["unclear"].(map[string]any)["items"].(map[string]any)["enum"].([]any)
-	if len(slots) != 5 {
+	if len(slots) != 7 {
 		t.Fatalf("unclear の列挙 = %v", slots)
 	}
 	kinds := props["out_of_scope"].(map[string]any)["enum"].([]any)

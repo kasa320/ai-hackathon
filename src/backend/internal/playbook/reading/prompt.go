@@ -17,9 +17,9 @@ func (Playbook) Instructions() string {
 開催日時（schedule）：
 - schedule.status が confirmed の回では日時は決まっている。starts_at は書かず、日時変更や中止も提案しない。
 - schedule.status が proposed の回では、この案で開催日時も決める。starts_at に期間内（period_start〜period_end）の日時を RFC 3339 で入れる。
-- 日時は candidate_datetimes から選ぶ。これは「出られない」と答えた人がいない日だけを並べたもの。ほかの日を選ぶ場合も、誰かの unavailable_dates と重なる日は選べない。
+- 日時は candidate_datetimes から選ぶ。開催回の全員が明示した時間帯と最大参加時間を満たす候補だけが入る。未回答・未定・欠席の人を除いて確定しない。
 - today より前の日は選ばない。frequency には期間全体の進め方を1行で書く（例：週1回60分・全8回）。この1回ぶんだけを確定し、残りは文章で示すにとどめる。
-- 候補がなく、誰も出られる日が分からないときは、案を作らずに request_preparation で出られない日を確認する。
+- 候補がなく、予定が未回答・未定の人がいるときは、その人だけにrequest_preparationで参加可能時間を確認する。一度確認した人へ繰り返し依頼しない。回答済みでも共通時間がないときはreport_no_feasible_planで期間・所要時間・時間帯の見直しを案内する。会全体の条件を勝手に変更しない。
 
 優先順位：決まっている開催日時の維持 → 全員が出られる日の選択 → 準備済み範囲の活用 → 代役の偏りの抑制。
 

@@ -55,6 +55,9 @@ func TestPeriodOnlyRegistrationDecidesTheDate(t *testing.T) {
 	prep := func(c *client, unavailable []string) {
 		d := prepData(true, []string{"sec_2", "sec_3"}, []string{"sec_2", "sec_3"}, 20)
 		d["unavailable_dates"] = unavailable
+		d["schedule"] = map[string]any{"status": "provided", "weekly_windows": []any{}, "date_windows": []any{
+			map[string]any{"date": "2026-09-24", "start": "20:00", "end": "22:00"},
+		}, "max_duration_minutes": 60}
 		c.submitPreparation(id, "attending", d).mustStatus(t, 202)
 	}
 	prep(a, []string{})
@@ -67,9 +70,12 @@ func TestPeriodOnlyRegistrationDecidesTheDate(t *testing.T) {
 		t.Fatalf("案が出ていない: %s", dump(d.ActiveCase))
 	}
 
-	// 管理者の承認と、出席予定者の過半数の同意を1回で集める。
+	// 管理者の承認と、全員の同意を集める。過半数だけでは確定しない。
 	a.respond(id, "owner_approval", "approve").mustStatus(t, 202)
 	for _, name := range []string{"A", "B", "C"} {
+		if name == "C" && a.detail(id).Session.ScheduleStatus == "confirmed" {
+			t.Fatal("最後の1人が未回答のまま確定した")
+		}
 		if tk := people[name].openTask(id, "approval"); tk != nil {
 			people[name].respond(id, "approval", "approve").mustStatus(t, 202)
 		}
@@ -84,6 +90,9 @@ func TestPeriodOnlyRegistrationDecidesTheDate(t *testing.T) {
 		t.Fatalf("同意がそろったら日時が決まる: %s", dump(d.Session))
 	}
 	got := d.Session.StartsAt.In(time.FixedZone("JST", 9*3600))
+	if got.Hour() != 20 {
+		t.Fatalf("申告した時間帯から決まっていない: %s", got)
+	}
 	day := got.Format("2006-01-02")
 	for _, ng := range busy {
 		if day == ng {

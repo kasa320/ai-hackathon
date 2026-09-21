@@ -42,7 +42,7 @@ type aiSchedule struct {
 	Status      string `json:"status"`
 	PeriodStart string `json:"period_start,omitempty"`
 	PeriodEnd   string `json:"period_end,omitempty"`
-	// Candidates は誰も「出られない」と答えていない日の候補（先頭から近い順、19:00 JST）。
+	// Candidates は全員の共通時間から計算した候補（近い順、JST）。
 	Candidates []string `json:"candidate_datetimes,omitempty"`
 	// Today は判断時点の日付（JST）。過去の日を選ばないために渡す。
 	Today string `json:"today,omitempty"`

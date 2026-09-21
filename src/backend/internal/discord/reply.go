@@ -14,7 +14,7 @@ const (
 	msgNoAccount   = "この機能を使うには、先にWebでログインしてください。"
 	msgNoTargets   = "いま変更できる開催回がありません。"
 	msgPickTarget  = "どの回の予定を変更しますか？"
-	msgReenter     = "対象を選びました。変更したい内容をもう一度送ってください。"
+	msgReenter     = "対象を選びました。"
 	msgCanceled    = "下書きを取り消しました。"
 	msgNoDraft     = "この確認は古くなっています。もう一度、変更したい内容を送ってください。"
 	msgSaved       = "保存しました。"
@@ -22,9 +22,9 @@ const (
 	msgCooldown    = "うまく読み取れませんでした。しばらくしてからやり直すか、Webから入力してください。"
 	msgUnavailable = "いまは応答できません。Webから入力してください。"
 	msgStarted     = "この開催回は開催時刻を過ぎているため、変更できません。"
-	msgConfirmAsk  = "この内容で保存しますか？"
+	msgConfirmAsk  = "上の参加条件が合っていれば「参加条件を保存する」を押してください。直したい項目は、このDMに訂正内容を返信してください。日程案への同意・担当の引き受けは「回答」から別に行います。"
 	msgOutOfScope  = "その内容は参加条件の項目では扱えません。"
-	msgHelp        = "「予定」で今の内容、「取消」で下書きの取り消し、「変更」で対象の選び直しができます。"
+	msgHelp        = "「参加条件」で予定・準備状況の入力、「回答」で日程案の確認・同意・担当の引き受け、「予定」で今の参加条件、「取消」で下書きの取り消し、「変更」で対象の選び直しができます。"
 )
 
 // outOfScopeHint は扱えない依頼の種類ごとの案内。分類は案内にだけ使い、認可の代わりにはしない。
@@ -33,11 +33,11 @@ func outOfScopeHint(kind string) string {
 	case coord.OutOfScopeScheduleChange:
 		return msgOutOfScope + "日程の変更は管理者に相談してください。"
 	case coord.OutOfScopePartialAttendance:
-		return msgOutOfScope + "途中参加・途中退出は、参加／欠席のどちらかで答えてください。"
+		return msgOutOfScope + "日時調整中なら、本人の参加できる時間帯と最大参加時間を教えてください。"
 	case coord.OutOfScopeOtherMember:
 		return msgOutOfScope + "登録できるのはご本人の予定だけです。"
 	default:
-		return msgOutOfScope + "参加可否・読んできた範囲・説明できる範囲と時間だけを送ってください。"
+		return msgOutOfScope + "本人の参加可否・参加可能時間・準備状況だけを送ってください。案への同意は「回答」からボタンで行えます。"
 	}
 }
 
@@ -54,6 +54,13 @@ func webLink(baseURL, sessionID string) string {
 // sessionHeader は対象の開催回を毎回示す。取り違えたまま進めないようにする。
 func sessionHeader(title string, startsAt time.Time) string {
 	return "【" + escape(title) + "】" + formatClock(startsAt)
+}
+
+func conversationHeader(conv *conversation) string {
+	if conv.scheduleStatus == coord.ScheduleProposed {
+		return "【" + escape(conv.title) + "】日時調整中"
+	}
+	return sessionHeader(conv.title, conv.startsAt)
 }
 
 func formatClock(t time.Time) string {
@@ -76,13 +83,13 @@ func escapeLines(lines []string) string {
 
 // confirmText は確認表示。開催回・日時・全項目を含み、正規化済みの値をそのまま載せる。
 func confirmText(conv *conversation, lines []string) string {
-	return sessionHeader(conv.title, conv.startsAt) + "\n" + escapeLines(lines) + "\n\n" + msgConfirmAsk
+	return conversationHeader(conv) + "\n" + escapeLines(lines) + "\n\n" + msgConfirmAsk
 }
 
 // confirmButtons は確認のボタン。custom_id には操作と下書きの世代だけを入れ、値は埋めない。
 func confirmButtons(draftID string) []discordgo.MessageComponent {
 	return []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{
-		discordgo.Button{Label: "保存する", Style: discordgo.PrimaryButton, CustomID: "save:" + draftID},
+		discordgo.Button{Label: "参加条件を保存する", Style: discordgo.PrimaryButton, CustomID: "save:" + draftID},
 		discordgo.Button{Label: "取り消す", Style: discordgo.SecondaryButton, CustomID: "cancel:" + draftID},
 	}}}
 }
@@ -93,6 +100,9 @@ func targetButtons(selectID string, targets []coord.DialogTarget) []discordgo.Me
 	var row []discordgo.MessageComponent
 	for _, t := range targets {
 		label := t.Title + "（" + formatClock(t.StartsAt) + "）"
+		if t.ScheduleStatus == coord.ScheduleProposed {
+			label = t.Title + "（日時調整中）"
+		}
 		if t.HasOpenTask {
 			label = "未回答：" + label
 		}

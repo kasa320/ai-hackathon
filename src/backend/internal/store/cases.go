@@ -200,6 +200,23 @@ func (t *Tx) CountRejectedProposals(ctx context.Context, caseID string) (int, er
 	return n, err
 }
 
+func (t *Tx) RejectedProposals(ctx context.Context, caseID string) ([]Proposal, error) {
+	rows, err := t.query(ctx, "SELECT "+proposalCols+" FROM proposals WHERE case_id = ? AND status = 'rejected' ORDER BY version", caseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Proposal
+	for rows.Next() {
+		p, err := scanProposal(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // タスクの種類と状態。
 const (
 	TaskPreparation   = "preparation"

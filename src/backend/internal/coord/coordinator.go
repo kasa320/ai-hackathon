@@ -105,6 +105,16 @@ func retryCutoff(startsAt time.Time) time.Time {
 	return startsAt.Add(-ResponseCutoff - MinResponseWindow)
 }
 
+// Before a date is agreed, the arbitrary placeholder must not close the whole period.
+func responseHorizon(sess store.Session) time.Time {
+	if sess.ScheduleStatus == ScheduleProposed {
+		if day, err := time.ParseInLocation("2006-01-02", sess.PeriodEnd, time.FixedZone("JST", 9*3600)); err == nil {
+			return day.Add(24 * time.Hour)
+		}
+	}
+	return sess.StartsAt
+}
+
 func (c *Coordinator) retryDelay(retryCount int) time.Duration {
 	d := RetryBase
 	for i := 0; i < retryCount && d < RetryMax; i++ {
@@ -278,6 +288,21 @@ func (c *Coordinator) snapshot(ctx context.Context, tx *store.Tx, sess store.Ses
 		}
 		if s.Case.RejectedProposals, err = tx.CountRejectedProposals(ctx, cs.ID); err != nil {
 			return s, err
+		}
+		if s.ScheduleStatus == ScheduleProposed {
+			pb, err := c.playbook(sess.PlaybookID)
+			if err != nil {
+				return s, err
+			}
+			rejected, err := tx.RejectedProposals(ctx, cs.ID)
+			if err != nil {
+				return s, err
+			}
+			for _, p := range rejected {
+				if at, ok := plannedStart(pb, p.Data); ok {
+					s.Case.RejectedStartsAt = append(s.Case.RejectedStartsAt, at)
+				}
+			}
 		}
 	}
 	return s, nil
