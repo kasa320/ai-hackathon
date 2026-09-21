@@ -11,7 +11,7 @@ import (
 )
 
 // E02：中心の流れ。B が担当を辞退 → AI が辞退していない C に全範囲を割り振り直す →
-// 進行表が変わるので、C 本人の引き受けと参加予定者の過半数で確定 → 計画を保存 → Discord に通知。
+// 進行表が変わるので、C 本人の引き受けと参加予定者全員の同意で確定 → 計画を保存 → Discord に通知。
 func TestReplanDemoFlow(t *testing.T) {
 	s := newServer(t)
 	seed := s.seed("replan_demo")
@@ -76,15 +76,15 @@ func TestReplanDemoFlow(t *testing.T) {
 	if len(prop.Assignments) != 1 || prop.Assignments[0].MemberID != cID || prop.Assignments[0].Status != "pending" {
 		t.Fatalf("C 本人の引き受けが必要: %s", dump(prop.Assignments))
 	}
-	if len(prop.Approvals) != 1 || prop.Approvals[0].Kind != "majority" || prop.Approvals[0].RequiredCount != 3 || len(prop.Approvals[0].EligibleMemberIDs) != 4 {
-		t.Fatalf("範囲の変更には参加予定者4人の過半数（3人）が必要: %s", dump(prop.Approvals))
+	if len(prop.Approvals) != 1 || prop.Approvals[0].Kind != "all" || prop.Approvals[0].RequiredCount != 4 || len(prop.Approvals[0].EligibleMemberIDs) != 4 {
+		t.Fatalf("範囲の変更には参加予定者4人全員の同意が必要: %s", dump(prop.Approvals))
 	}
 	// 1人に複数タスク（C は引き受けと投票）。
 	if p["C"].openTask(id, "assignment") == nil || p["C"].openTask(id, "approval") == nil {
 		t.Fatal("C には assignment と approval の両方が必要")
 	}
 
-	// 4. 投票が過半数に達しても、C 本人の引き受けがなければ確定しない。
+	// 4. 全員同意でも、C 本人の引き受けがなければ確定しない。
 	for _, name := range []string{"A", "B", "D"} {
 		p[name].respond(id, "approval", "approve").mustStatus(t, http.StatusAccepted)
 	}
@@ -92,6 +92,7 @@ func TestReplanDemoFlow(t *testing.T) {
 		t.Fatalf("引き受け前に確定した: %s", dump(d.Session))
 	}
 	p["C"].respond(id, "assignment", "accept").mustStatus(t, http.StatusAccepted)
+	p["C"].respond(id, "approval", "approve").mustStatus(t, http.StatusAccepted)
 
 	// 5. 必要な条件が揃うとバックエンドが確定する。
 	d = p["D"].detail(id)

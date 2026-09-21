@@ -18,6 +18,7 @@ func confirmReplan(t *testing.T, s *server, p map[string]*client, id string) {
 		p[name].respond(id, "approval", "approve").mustStatus(t, 202)
 	}
 	p["C"].respond(id, "assignment", "accept").mustStatus(t, 202)
+	p["C"].respond(id, "approval", "approve").mustStatus(t, 202)
 	if d := p["A"].detail(id); d.Session.Status != "confirmed" {
 		t.Fatalf("確定していない: %s", dump(d.Session))
 	}

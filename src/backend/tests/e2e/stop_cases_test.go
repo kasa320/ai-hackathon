@@ -10,7 +10,7 @@ import (
 )
 
 // E03：B に続いて C も担当を辞退し、割り振れる人がいない → 確認依頼を出さず管理者判断待ち →
-// 管理者が代案（復習回）を出し、過半数の同意で確定する。
+// 管理者が代案（復習回）を出し、参加予定者全員の同意で確定する。
 func TestNoFeasiblePlanThenOwnerProposal(t *testing.T) {
 	s := newServer(t)
 	seed := s.seed("replan_demo")
@@ -59,11 +59,11 @@ func TestNoFeasiblePlanThenOwnerProposal(t *testing.T) {
 	if r := p["A"].send(http.MethodPost, "/api/sessions/"+id+"/proposals", map[string]any{"expected_revision": d.Session.Revision, "data": review}); r.status != 409 || r.errorCode(t) != "invalid_state" {
 		t.Fatalf("判断待ち以外の代案: %d", r.status)
 	}
-	for _, name := range []string{"A", "C", "D"} {
+	for _, name := range []string{"A", "B", "C", "D"} {
 		p[name].respond(id, "approval", "approve").mustStatus(t, http.StatusAccepted)
 	}
 	if d := p["B"].detail(id); d.Session.Status != "confirmed" || d.ConfirmedPlan.Author != "owner" {
-		t.Fatalf("過半数で確定するはず: %s", dump(d.Session))
+		t.Fatalf("全員同意で確定するはず: %s", dump(d.Session))
 	}
 }
 
@@ -79,7 +79,7 @@ func TestUnansweredVotesExpireToOwner(t *testing.T) {
 	p["C"].respond(id, "assignment", "accept").mustStatus(t, http.StatusAccepted)
 	p["A"].respond(id, "approval", "approve").mustStatus(t, http.StatusAccepted)
 	p["B"].respond(id, "approval", "approve").mustStatus(t, http.StatusAccepted)
-	// C・D の投票は未回答のまま（2/4 で過半数3に届かない）。
+	// C・D の投票は未回答のまま（全員同意には届かない）。
 	due := p["D"].openTask(id, "approval").DueAt
 	if want := t0.Add(24 * time.Hour); !due.Equal(want) {
 		t.Fatalf("期限は作成から24時間: %v", due)
@@ -143,8 +143,8 @@ func TestMissingPreparationExpiresThenResumes(t *testing.T) {
 	if d.CurrentProposal == nil || d.CurrentProposal.ChangeKind != "initial" || d.ActiveCase.Status != "awaiting_consent" {
 		t.Fatalf("新しい入力で再開するはず: %s", dump(d.ActiveCase))
 	}
-	// 欠席の C は担当・投票の対象にならない。初回案は担当者 B の引き受けと管理者 A の承認。
-	if p["C"].openTask(id, "approval") != nil || p["B"].openTask(id, "assignment") == nil || p["A"].openTask(id, "owner_approval") == nil {
+	// 欠席の C は担当・投票の対象にならない。初回案は担当者 B の引き受けと参加予定者全員の同意。
+	if p["C"].openTask(id, "approval") != nil || p["B"].openTask(id, "assignment") == nil || p["A"].openTask(id, "approval") == nil || p["D"].openTask(id, "approval") == nil {
 		t.Fatal("初回案のタスクが違う")
 	}
 }

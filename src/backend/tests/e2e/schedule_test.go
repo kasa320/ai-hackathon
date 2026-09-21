@@ -71,8 +71,7 @@ func TestPeriodOnlyRegistrationDecidesTheDate(t *testing.T) {
 		t.Fatalf("案が出ていない: %s", dump(d.ActiveCase))
 	}
 
-	// 管理者の承認と、全員の同意を集める。過半数だけでは確定しない。
-	a.respond(id, "owner_approval", "approve").mustStatus(t, 202)
+	// 全員の同意を集める。管理者にも通常参加者として1票がある。
 	for _, name := range []string{"A", "B", "C"} {
 		if name == "C" && a.detail(id).Session.ScheduleStatus == "confirmed" {
 			t.Fatal("最後の1人が未回答のまま確定した")

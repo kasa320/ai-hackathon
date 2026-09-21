@@ -416,14 +416,10 @@ func (Playbook) ApprovalRequirements(_ context.Context, s coord.Snapshot, prop c
 	req := coord.ApprovalRequirements{RequiredAcceptorIDs: nonNil(p.presenters()), Approvals: []coord.ApprovalRequirement{}}
 	switch prop.ChangeKind {
 	case coord.ChangeInitial:
-		req.Approvals = append(req.Approvals, coord.ApprovalRequirement{Kind: coord.ApprovalOwner})
-		if s.ScheduleStatus == coord.ScheduleProposed {
-			// 日時も決める案は管理者だけで通さない。出席予定者にも諮る。
-			req.Approvals = append(req.Approvals, coord.ApprovalRequirement{
-				Kind:              coord.ApprovalAll,
-				EligibleMemberIDs: nonNil(s.Attending()),
-			})
-		}
+		req.Approvals = append(req.Approvals, coord.ApprovalRequirement{
+			Kind:              coord.ApprovalAll,
+			EligibleMemberIDs: nonNil(s.Attending()),
+		})
 	case coord.ChangeReplan:
 		cur := s.CurrentPlan()
 		if cur == nil {
@@ -434,12 +430,8 @@ func (Playbook) ApprovalRequirements(_ context.Context, s coord.Snapshot, prop c
 			return coord.ApprovalRequirements{}, fmt.Errorf("reading: 確定計画を読めません: %w", err)
 		}
 		if !onlyPresentersChanged(prev, p) {
-			kind := coord.ApprovalMajority
-			if s.PeriodStart != "" {
-				kind = coord.ApprovalAll
-			}
 			req.Approvals = append(req.Approvals, coord.ApprovalRequirement{
-				Kind:              kind,
+				Kind:              coord.ApprovalAll,
 				EligibleMemberIDs: nonNil(s.Attending()),
 			})
 		}

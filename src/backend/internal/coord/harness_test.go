@@ -182,14 +182,16 @@ func (h *harness) mustRespond(name, kind, decision string) {
 	}
 }
 
-// confirmInitial は初回案を B の引き受けと A の承認で確定させる。
+// confirmInitial は初回案を担当者の引き受けと参加予定者全員の同意で確定させる。
 func (h *harness) confirmInitial() {
 	h.t.Helper()
 	h.createSession()
 	h.allPrepared()
 	h.process()
 	h.mustRespond("B", "assignment", "accept")
-	h.mustRespond("A", "owner_approval", "approve")
+	for _, name := range []string{"A", "B", "C", "D"} {
+		h.mustRespond(name, "approval", "approve")
+	}
 	if d := h.detail("A"); d.Session.Status != "confirmed" {
 		h.t.Fatalf("初回案が確定していない: %+v", d.ActiveCase)
 	}

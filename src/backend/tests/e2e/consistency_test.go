@@ -62,6 +62,7 @@ func TestRetriesAndDuplicates(t *testing.T) {
 	accept := map[string]any{"decision": "accept", "proposal_id": ctk.ProposalID, "proposal_version": ctk.ProposalVersion}
 	p["C"].sendKey(http.MethodPost, "/api/tasks/"+ctk.ID+"/responses", ckey, accept).mustStatus(t, 202)
 	p["C"].sendKey(http.MethodPost, "/api/tasks/"+ctk.ID+"/responses", ckey, accept).mustStatus(t, 202)
+	p["C"].respond(id, "approval", "approve").mustStatus(t, 202)
 	s.process()
 	sent := len(s.sender.all())
 	confirms := 0
@@ -146,8 +147,8 @@ func TestStaleVersionAndRevisionConflict(t *testing.T) {
 	if d.CurrentProposal.Version <= oldVersion || d.CurrentProposal.Status != "pending" {
 		t.Fatalf("新しい版で取り直す: %s", dump(d.CurrentProposal))
 	}
-	// 新しい版の投票対象は案の作成時点の参加予定者（欠席の D を除く3人、必要2人）。
-	if a := d.CurrentProposal.Approvals[0]; len(a.EligibleMemberIDs) != 3 || a.RequiredCount != 2 {
+	// 新しい版の投票対象は案の作成時点の参加予定者（欠席の D を除く3人、全員が必要）。
+	if a := d.CurrentProposal.Approvals[0]; len(a.EligibleMemberIDs) != 3 || a.RequiredCount != 3 {
 		t.Fatalf("投票対象: %s", dump(a))
 	}
 	// 旧版の同意は新しい版に流用しない。
