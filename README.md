@@ -75,7 +75,7 @@ Go サーバーが `src/frontend/` をそのまま配信します。ビルドも
 | 変数 | 既定値 | 内容 |
 | --- | --- | --- |
 | `PUBLIC_BASE_URL` | `http://localhost:24680` | 通知に載せる画面URLと Origin 検証の基点。https なら Cookie に Secure を付ける |
-| `DEV_MODE` | 空 | `1` で開発・デモ用 API（`/api/dev/*`）と障害注入を有効にする。本番では設定しない |
+| `DEV_MODE` | 空 | `1` で開発・デモ用 API（`/api/dev/*`）と障害注入を有効にする。画面のファイルは `Clear-Site-Data` で毎回読み直させる（古い JS・CSS を掴んだブラウザ対策）。本番では設定しない |
 | `SESSION_SECRET` | 空 | セッショントークンのハッシュ用。未設定なら起動ごとに変わる（再起動でログアウト） |
 | `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` / `DISCORD_REDIRECT_URL` | 空 | Discord ログイン。未設定なら `/api/auth/discord` は `auth_error=provider_unavailable` に戻る |
 | `DISCORD_BOT_TOKEN` | 空 | Bot が常駐し、DM での対話と本人宛て通知の DM 送信を行う（`DIRECT_MESSAGES` インテントが必要）。未設定なら通知はサーバーログに出すだけ |

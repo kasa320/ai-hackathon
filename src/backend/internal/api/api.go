@@ -110,6 +110,16 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			w.Header().Set("Cache-Control", "no-store")
 			w.Header().Set("X-Request-Id", id)
+		} else {
+			// 画面のファイルは毎回問い合わせる。古い JS・CSS が残ると、直したはずの不具合が
+			// 再読み込みでも消えない。更新がなければ 304 を返すので通信量は増えない。
+			w.Header().Set("Cache-Control", "no-cache")
+			// no-cache は「すでに溜め込んだ側」を救えない。保存済みの応答が新鮮な間、
+			// ブラウザは問い合わせに来ないため、このヘッダー自体が届かない（実測）。
+			// 開発中はHTMLの応答でキャッシュごと捨てさせ、確実に作り直す。cookie は消えない。
+			if s.DevMode && (r.URL.Path == "/" || strings.HasSuffix(r.URL.Path, ".html")) {
+				w.Header().Set("Clear-Site-Data", `"cache"`)
+			}
 		}
 		defer func() {
 			if v := recover(); v != nil {
