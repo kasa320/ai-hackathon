@@ -42,7 +42,7 @@ func normalizeRequirements(s Snapshot, req ApprovalRequirements) (storedRequirem
 				return out, fmt.Errorf("coord: 管理者が見つかりません")
 			}
 			out.Approvals = append(out.Approvals, storedApproval{Kind: ApprovalOwner, Eligible: []string{s.OwnerMemberID}, Required: 1})
-		case ApprovalMajority:
+		case ApprovalMajority, ApprovalAll:
 			var eligible []string
 			for _, id := range a.EligibleMemberIDs {
 				if !contains(attending, id) {
@@ -53,7 +53,14 @@ func normalizeRequirements(s Snapshot, req ApprovalRequirements) (storedRequirem
 			if len(eligible) == 0 {
 				return out, errNoEligibleVoters
 			}
-			out.Approvals = append(out.Approvals, storedApproval{Kind: ApprovalMajority, Eligible: eligible, Required: len(eligible)/2 + 1})
+			required := len(eligible)/2 + 1
+			if a.Kind == ApprovalAll {
+				if len(eligible) != len(s.Members) {
+					return out, errNoEligibleVoters
+				}
+				required = len(eligible)
+			}
+			out.Approvals = append(out.Approvals, storedApproval{Kind: a.Kind, Eligible: eligible, Required: required})
 		default:
 			return out, fmt.Errorf("coord: 不明な承認の種類 %q", a.Kind)
 		}
@@ -114,6 +121,19 @@ func changeKindFor(s Snapshot) string {
 
 // createTask は本人宛てのタスクと、催促・期限のイベント、依頼の通知を登録する。
 func (c *Coordinator) createTask(ctx context.Context, tx *store.Tx, sess store.Session, cs store.Case, m store.Member, kind, title string, p *store.Proposal, requestedBy string, due, now time.Time) error {
+	if kind == store.TaskPreparation {
+		pb, err := c.playbook(sess.PlaybookID)
+		if err != nil {
+			return err
+		}
+		if describer, ok := pb.(PreparationRequestDescriber); ok {
+			s, err := c.snapshot(ctx, tx, sess, &cs)
+			if err != nil {
+				return err
+			}
+			title = describer.PreparationRequest(s, m.ID)
+		}
+	}
 	tk := store.Task{
 		ID: store.NewID("task"), SessionID: sess.ID, CaseID: cs.ID, MemberID: m.ID, Kind: kind, Status: store.TaskOpen,
 		Title: title, DueAt: due, RequestedBy: requestedBy, CreatedAt: now,
@@ -134,7 +154,15 @@ func (c *Coordinator) createTask(ctx context.Context, tx *store.Tx, sess store.S
 		}
 	}
 	text := fmt.Sprintf("%s（回答期限：%s）", title, formatClock(due))
+	text += taskReplyInstructions(kind)
 	return c.notify(ctx, tx, sess, cs.ID, "task_requested", "task:"+tk.ID, text, []store.Member{m}, now)
+}
+
+func taskReplyInstructions(kind string) string {
+	if kind == store.TaskPreparation {
+		return "\n返信方法：このBotのDMに「参加条件」と送ってください。1項目ずつ質問します。最後に内容を確認し、保存ボタンを押すと回答が登録されます。Webからも入力できます。"
+	}
+	return "\n返信方法：このBotのDMに「回答」と送ってください。案の詳しい内容と回答ボタンを表示します。"
 }
 
 // supersedePending は pending の案を旧版にし、その未回答タスクを無効にする。案が変わったら返す。
@@ -253,7 +281,7 @@ func (c *Coordinator) advance(ctx context.Context, tx *store.Tx, sess store.Sess
 		// 初回の未回答者を欠席扱いせず、回答が揃うまで案を作らない。
 		cs.Status, cs.Summary = store.CaseCollecting, "参加条件を確認しています。"
 		return tx.UpdateCase(ctx, *cs)
-	case !canSecure(now, sess.StartsAt):
+	case !canSecure(now, responseHorizon(sess)):
 		return c.needsOwner(ctx, tx, sess, cs, "deadline_expired", "開催までに回答期限を確保できないため、管理者の判断が必要です。", now)
 	default:
 		cs.Status, cs.Summary = store.CasePlanning, "AIが案を作成しています。"
@@ -312,6 +340,12 @@ func (c *Coordinator) createProposal(ctx context.Context, tx *store.Tx, sess *st
 	if err != nil {
 		return store.Proposal{}, err
 	}
+	// Keep provisional deadline calculations aligned with the date shown in the proposal.
+	if sess.ScheduleStatus == ScheduleProposed {
+		if at, ok := plannedStart(pb, plan); ok {
+			sess.StartsAt = at.UTC()
+		}
+	}
 	due, ok := dueAt(now, sess.StartsAt)
 	if !ok {
 		return store.Proposal{}, errDeadline
@@ -353,6 +387,13 @@ func (c *Coordinator) createProposal(ctx context.Context, tx *store.Tx, sess *st
 	}
 	for _, a := range req.Approvals {
 		kind, title := store.TaskApproval, fmt.Sprintf("%s（版%d）に賛成か反対かを回答してください。", label, version)
+		if a.Kind == ApprovalAll {
+			at, ok := plannedStart(pb, plan)
+			if !ok {
+				at = sess.StartsAt
+			}
+			title = fmt.Sprintf("%s（版%d）：%sから%d分、提案された内容で参加できますか？全員の回答後に確定します。", label, version, formatClock(at), sess.DurationMinutes)
+		}
 		if a.Kind == ApprovalOwner {
 			kind, title = store.TaskOwnerApproval, fmt.Sprintf("%s（版%d）を承認するか回答してください。", label, version)
 		}

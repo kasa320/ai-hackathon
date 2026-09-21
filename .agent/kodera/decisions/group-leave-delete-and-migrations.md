@@ -191,3 +191,30 @@
 - `go -C src/backend test ./... -count=1` が全パッケージで成功した。これまで Windows Application Control に阻まれていた auth、coord、discord も含め、実行完了を確認できた。WSL2 の導入は不要だった。
 - あわせて `go build ./...` と `go vet ./...` も成功。
 - これにより「全テストの扱い」の保留を解除し、この状態で push する。
+
+## 2026-09-21: feat/structured-scheduling を取り込んだ
+
+`feat/member-leave` に `origin/feat/structured-scheduling`（master から5コミット先行）をマージした。取り込み前の状態は `backup/member-leave-before-scheduling-20260921` に退避してある。
+
+### 競合と解決
+
+- 競合したのは `src/frontend/js/ui.js` の `createDialog` だけ。両ブランチが同じ関数を別の目的で書き換えていた。
+  - こちら（脱退・削除）：`aria-labelledby` 用の `titleId`、エラー欄の `id` と `aria-live="assertive"`、フォーカス復帰の厳密化、入力欄が無いダイアログでの送信ボタンへのフォーカス。
+  - 向こう（日程調整）：`pending` による二重送信の防止、`setPending` による入力欄の一括無効化と送信中ラベル、送信中の Esc 取り消しの抑止、`onSubmit` の await と失敗時のエラー表示。
+- どちらも残す形で統合した。片方を選ぶとアクセシビリティか二重送信対策のどちらかが失われるため。戻り値は `{ dialog, close, showError, showReceipt, setPending, errorId }` とした。
+- 後始末は `cleanup()` に一本化した。向こうにあった `close` イベントの重複後始末は、`onClose` から呼ぶ `cleanup()` と二重になるため落とした。`cleanup()` は `isConnected` で守ってあり、二重呼び出しでも安全。
+- これに合わせて `index.js` の脱退・削除ダイアログから、手書きの送信ボタン無効化と `aria-busy` 操作を外し、共通の `setPending` に寄せた。`onSubmit` に渡していた `form` は不要になったので削除した。
+
+### 判断
+
+- 却下した案: `ui.js` をどちらか一方の版に寄せる。日程調整側の画面は二重送信防止に依存し、脱退・削除側のダイアログはキーボード操作と読み上げに依存しているため、どちらを捨ててもすでに確認した挙動が壊れる。
+
+### ドキュメント
+
+- 取り込んだ日程調整は公開エンドポイントと共通型を変えていない（`api.go`、`apitypes/types.go` はマージで変化なし）。一方、輪読の用途固有データに `schedule`（参加できる時間帯）が増えていたが `docs/data-structure.md` に未記載だった。凍結解除後の方針にしたがい、`ScheduleAvailability` を型の契約へ追記した。値の範囲は `docs/scheduling-rule.md` と実装の `availability.go` に合わせている。
+
+### 検証
+
+- `go build ./...`、`go vet ./...` が成功。
+- `go test ./... -count=1` が全パッケージで成功。脱退・削除の E2E と、取り込んだ日程調整のテストの両方が通っている。
+- JavaScript は構文を機械的に検査していない。このPCに Node.js などの JS 実行環境が入っていないため。画面での動作確認は未実施。

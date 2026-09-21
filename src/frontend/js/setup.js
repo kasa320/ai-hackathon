@@ -28,8 +28,6 @@ const state = {
   book: { title: "", isbn: null },
   sections: [],
   tocSource: { kind: "manual", urls: [] },
-  completed: new Set(),
-  target: new Set(),
   title: "",
   periodStart: "",
   periodEnd: "",
@@ -38,6 +36,22 @@ const state = {
 
 let me = null;
 let picker = null;
+let submitting = false;
+
+function lockForm(button, label) {
+  submitting = true;
+  const controls = [...$("form").querySelectorAll("input, select, button")].map(node => [node, node.disabled]);
+  const text = button.textContent;
+  for (const [node] of controls) node.disabled = true;
+  button.textContent = label;
+  $("form").setAttribute("aria-busy", "true");
+  return () => {
+    submitting = false;
+    for (const [node, disabled] of controls) if (node.isConnected) node.disabled = disabled;
+    button.textContent = text;
+    $("form").removeAttribute("aria-busy");
+  };
+}
 
 boot();
 
@@ -64,6 +78,7 @@ function go(step) {
   clearFlash($("flash"));
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
+  $("form").querySelector("input:not(:disabled), button:not(:disabled)")?.focus({ preventScroll: true });
 }
 
 function render() {
@@ -87,7 +102,7 @@ function render() {
 // ---- 01 形式と参加者 --------------------------------------------------------
 
 function renderGroupStep() {
-  const name = el("input", { type: "text", value: state.groupName, placeholder: "技術書輪読" });
+  const name = el("input", { type: "text", value: state.groupName, placeholder: "技術書輪読", disabled: !!state.group, onInput: e => { state.groupName = e.target.value; } });
 
   const rows = el("div", { class: "repeater" });
   const renderRows = () => {
@@ -100,6 +115,7 @@ function renderGroupStep() {
           el("input", {
             type: "text",
             inputmode: "numeric",
+            disabled: !!state.group,
             placeholder: "Discord ユーザーID（17〜20桁）",
             value: inv.discord_user_id,
             onInput: (e) => (state.invitees[i].discord_user_id = e.target.value.trim()),
@@ -107,6 +123,7 @@ function renderGroupStep() {
           el("input", {
             type: "text",
             placeholder: "表示名（仮）",
+            disabled: !!state.group,
             value: inv.display_name,
             onInput: (e) => (state.invitees[i].display_name = e.target.value),
           }),
@@ -114,6 +131,7 @@ function renderGroupStep() {
             "button",
             {
               type: "button",
+              disabled: !!state.group,
               "aria-label": "この行を消す",
               onClick: () => {
                 state.invitees.splice(i, 1);
@@ -136,6 +154,7 @@ function renderGroupStep() {
       { class: "fieldset" },
       el("legend", {}, "参加者"),
       el("label", { class: "field", style: "margin-top:16px" }, el("span", {}, "会の名前"), name),
+      state.group ? el("p", { class: "help" }, "この会の参加者は登録済みです。続けて教材と日程を設定してください。") : null,
       el(
         "details",
         { class: "form-details" },
@@ -151,6 +170,7 @@ function renderGroupStep() {
           {
             type: "button",
             class: "btn btn--quiet",
+            disabled: !!state.group,
             onClick: () => {
               state.invitees.push({ discord_user_id: "", display_name: "" });
               renderRows();
@@ -168,10 +188,11 @@ function renderGroupStep() {
         {
           class: "btn",
           type: "button",
-          onClick: async () => {
+          onClick: async (event) => {
+            if (submitting) return;
             state.groupName = name.value.trim();
             if (state.group) return go(1);
-            await createGroup();
+            await createGroup(event.currentTarget);
           },
         },
         "次へ",
@@ -180,12 +201,13 @@ function renderGroupStep() {
   );
 }
 
-async function createGroup() {
+async function createGroup(button) {
   const invitees = state.invitees.filter((i) => i.discord_user_id);
   if (!state.groupName) return flash($("flash"), { title: "会の名前を入れてください", tone: "warn" });
   if (invitees.length === 0) return flash($("flash"), { title: "参加者を1人以上入れてください", tone: "warn" });
 
   clearFlash($("flash"));
+  const unlock = lockForm(button, "登録しています…");
   try {
     state.group = await api.createGroup({
       name: state.groupName,
@@ -194,6 +216,8 @@ async function createGroup() {
     go(1);
   } catch (err) {
     await reportMutationError(err, { node: $("flash"), loginUrl });
+  } finally {
+    unlock();
   }
 }
 
@@ -207,7 +231,7 @@ function renderMaterialStep() {
   }
 
   const box = el("div", {});
-  const title = el("input", { type: "text", value: state.book.title, placeholder: "サンプル技術書" });
+  const title = el("input", { type: "text", value: state.book.title, placeholder: "サンプル技術書", onInput: e => { state.book.title = e.target.value; } });
 
   const renderSections = () => {
     if (state.sections.length === 0) {
@@ -219,7 +243,7 @@ function renderMaterialStep() {
     }
     mount(
       box,
-      el("p", { class: "help" }, "今回扱う範囲を選んでください。"),
+      el("p", { class: "help" }, "今回扱う範囲を入力してください。"),
       el(
         "div",
         { class: "toc-list" },
@@ -238,34 +262,6 @@ function renderMaterialStep() {
               onInput: (e) => { s.title = e.target.value; },
             }),
             el(
-              "label",
-              { style: "display:inline-flex;gap:6px;color:var(--ink-2);font-size:.78rem" },
-              el("input", {
-                type: "checkbox",
-                checked: state.completed.has(s.id),
-                onChange: (e) => {
-                  e.target.checked ? state.completed.add(s.id) : state.completed.delete(s.id);
-                  if (e.target.checked) state.target.delete(s.id);
-                  renderSections();
-                },
-              }),
-              "読了済み",
-            ),
-            el(
-              "label",
-              { style: "display:inline-flex;gap:6px;color:var(--ink-2);font-size:.78rem" },
-              el("input", {
-                type: "checkbox",
-                checked: state.target.has(s.id),
-                onChange: (e) => {
-                  e.target.checked ? state.target.add(s.id) : state.target.delete(s.id);
-                  if (e.target.checked) state.completed.delete(s.id);
-                  renderSections();
-                },
-              }),
-              "今回",
-            ),
-            el(
               "button",
               {
                 type: "button",
@@ -273,9 +269,8 @@ function renderMaterialStep() {
                 "aria-label": `${s.title || "この範囲"}を消す`,
                 onClick: () => {
                   state.sections = state.sections.filter((x) => x.id !== s.id);
-                  state.target.delete(s.id);
-                  state.completed.delete(s.id);
                   renderSections();
+                  box.querySelector("input, button")?.focus();
                 },
               },
               "×",
@@ -297,8 +292,6 @@ function renderMaterialStep() {
         state.book.title = book.title;
       }
       state.book.isbn = book?.isbn ?? null;
-      state.completed = new Set();
-      state.target = new Set(sections.map((s) => s.id));
       mount(tocBox, el("p", { class: "help" }, "目次を取り込みました。"));
       renderSections();
     },
@@ -335,9 +328,9 @@ function renderMaterialStep() {
             if (!state.book.title) return flash($("flash"), { title: "書名を入れてください", tone: "warn" });
             for (const s of state.sections) s.title = s.title.trim();
             if (state.sections.some((s) => !s.title)) {
-              return flash($("flash"), { title: "名前のない範囲があります", body: "名前を入れるか、×で消してください。", tone: "warn" });
+              return flash($("flash"), { title: "名前のない範囲があります", detail: "名前を入れるか、×で消してください。", tone: "warn" });
             }
-            if (state.target.size === 0) return flash($("flash"), { title: "今回扱う範囲を1つ以上選んでください", tone: "warn" });
+            if (state.sections.length === 0) return flash($("flash"), { title: "今回扱う範囲を1つ以上入力してください", tone: "warn" });
             go(2);
           },
         },
@@ -369,7 +362,6 @@ function addSectionButton(rerender, box) {
         onClick: () => {
           const section = { id: nextSectionId(), title: "" };
           state.sections.push(section);
-          state.target.add(section.id);
           rerender();
           box.querySelector(`[data-section="${section.id}"]`)?.focus();
         },
@@ -383,11 +375,15 @@ function addSectionButton(rerender, box) {
 
 function renderSessionStep() {
   const from = el("input", { type: "date", value: state.periodStart, min: today() });
-  const to = el("input", { type: "date", value: state.periodEnd, min: today() });
+  const to = el("input", { type: "date", value: state.periodEnd, min: state.periodStart || today() });
   const duration = el("input", { type: "number", min: "15", max: "180", step: "5", value: String(state.duration) });
   const periodSummary = el("span", {}, `${from.value || "—"}〜${to.value || "—"}`);
   const durationSummary = el("span", {}, `${duration.value}分`);
   const syncSummary = () => {
+    state.periodStart = from.value;
+    state.periodEnd = to.value;
+    state.duration = Number(duration.value);
+    to.min = from.value || today();
     periodSummary.textContent = `${from.value || "—"}〜${to.value || "—"}`;
     durationSummary.textContent = `${duration.value || "—"}分`;
   };
@@ -419,8 +415,7 @@ function renderSessionStep() {
         el("tr", {}, el("th", {}, "会"), el("td", {}, state.groupName)),
         el("tr", {}, el("th", {}, "参加者"), el("td", {}, `あなたを含めて ${state.invitees.filter((i) => i.discord_user_id).length + 1}人`)),
         el("tr", {}, el("th", {}, "本"), el("td", {}, state.book.title)),
-        el("tr", {}, el("th", {}, "今回の範囲"), el("td", {}, sectionNames(state.target))),
-        el("tr", {}, el("th", {}, "読了済み"), el("td", {}, state.completed.size ? sectionNames(state.completed) : "なし")),
+        el("tr", {}, el("th", {}, "今回の範囲"), el("td", {}, state.sections.map(s => s.title).join("、"))),
         el("tr", {}, el("th", {}, "期間"), el("td", {}, periodSummary)),
         el("tr", {}, el("th", {}, "長さ"), el("td", {}, durationSummary)),
       ),
@@ -434,11 +429,12 @@ function renderSessionStep() {
         {
           class: "btn",
           type: "button",
-          onClick: () => {
+          onClick: (event) => {
+            if (submitting) return;
             state.periodStart = from.value;
             state.periodEnd = to.value;
             state.duration = Number(duration.value);
-            createSession();
+            createSession(event.currentTarget);
           },
         },
         "登録して確認を送る",
@@ -447,24 +443,24 @@ function renderSessionStep() {
   );
 }
 
-function sectionNames(ids) {
-  return state.sections.filter((s) => ids.has(s.id)).map((s) => s.title).join("、") || "—";
-}
-
 /** 今日（ブラウザーの時刻）を YYYY-MM-DD で返す。日付入力の下限に使う。 */
 function today() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-async function createSession() {
+async function createSession(button) {
   if (!state.periodStart) return flash($("flash"), { title: "開始日を入れてください", tone: "warn" });
   if (!state.periodEnd) return flash($("flash"), { title: "終了目安日を入れてください", tone: "warn" });
   if (state.periodEnd < state.periodStart) {
     return flash($("flash"), { title: "終了目安日は開始日以降にしてください", tone: "warn" });
   }
+  if (!Number.isInteger(state.duration) || state.duration < 15 || state.duration > 180) {
+    return flash($("flash"), { title: "会の長さは15〜180分で入力してください", tone: "warn" });
+  }
 
   clearFlash($("flash"));
+  const unlock = lockForm(button, "登録しています…");
   try {
     // 回の名前と開始日時は送らない。名前は通し番号、日時は案で決まる。
     const created = await api.createSession(state.group.id, {
@@ -477,12 +473,13 @@ async function createSession() {
         isbn: state.book.isbn,
         toc_source: state.tocSource,
         sections: state.sections,
-        completed_section_ids: state.sections.filter((s) => state.completed.has(s.id)).map((s) => s.id),
-        target_section_ids: state.sections.filter((s) => state.target.has(s.id)).map((s) => s.id),
+        completed_section_ids: [],
+        target_section_ids: state.sections.map(s => s.id),
       },
     });
     location.href = `/session.html?id=${encodeURIComponent(created.session.id)}`;
   } catch (err) {
     await reportMutationError(err, { node: $("flash"), loginUrl });
+    unlock();
   }
 }

@@ -32,6 +32,23 @@ func (pb Playbook) DraftPlan(ctx context.Context, s coord.Snapshot) (coord.Draft
 	if err != nil {
 		return coord.Draft{}, err
 	}
+	if s.ScheduleStatus == coord.ScheduleConfirmed && s.PeriodStart != "" && !scheduleAllows(s, s.StartsAt) {
+		return coord.Draft{Kind: coord.DraftNoFeasible, Summary: "確定日時で全員が参加できなくなりました。欠席者を除いて進めず、管理者と日程を再調整してください。確定日時の変更は新しい開催回で登録してください。"}, nil
+	}
+	if s.ScheduleStatus == coord.ScheduleProposed && len(candidateDays(s, 1)) == 0 {
+		var ask []string
+		asked := newIDSet(append(append([]string{}, s.Case.AskedMemberIDs...), s.Case.WithdrawnMemberIDs...))
+		for _, m := range s.Members {
+			p, d := preparationData(s, m.ID)
+			if !asked.has(m.ID) && (p == nil || d.Schedule == nil || d.Schedule.Status == "unknown") {
+				ask = append(ask, m.ID)
+			}
+		}
+		if len(ask) > 0 {
+			return coord.Draft{Kind: coord.DraftAsk, AskMemberIDs: ask, Summary: "予定が未定の人に、参加可能な曜日・時間帯と最大参加時間を確認します。"}, nil
+		}
+		return coord.Draft{Kind: coord.DraftNoFeasible, Summary: fmt.Sprintf("%s〜%sに全員が%d分参加できる共通時間がありません。参加可能時間を見直すか、管理者に期間・所要時間の変更を相談してください。欠席者を除いて確定はしません。", s.PeriodStart, s.PeriodEnd, s.DurationMinutes)}, nil
+	}
 	attending := s.Attending()
 	if len(attending) == 0 {
 		return coord.Draft{Kind: coord.DraftNoFeasible, Summary: "参加予定者がいないため、案を作れません。"}, nil

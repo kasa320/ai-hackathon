@@ -29,8 +29,30 @@ type PreparationData struct {
 	ExplainableSectionIDs  []string `json:"explainable_section_ids"`
 	MaxPresentationMinutes int      `json:"max_presentation_minutes"`
 	// UnavailableDates は出られない日（YYYY-MM-DD、JST）。日時がまだ決まっていない回で使う。
-	// 「出られる日」ではなく「出られない日」を集める。答えない人を予定なしとみなさないため。
-	UnavailableDates []string `json:"unavailable_dates"`
+	// 参加可能時間の申告より優先する終日不可の例外。
+	UnavailableDates []string              `json:"unavailable_dates"`
+	Schedule         *ScheduleAvailability `json:"schedule,omitempty"`
+}
+
+// ScheduleAvailability contains only the member's confirmed scheduling constraints.
+// Times are JST; free-form explanations never cross this boundary.
+type ScheduleAvailability struct {
+	Status             string         `json:"status"`
+	WeeklyWindows      []WeeklyWindow `json:"weekly_windows"`
+	DateWindows        []DateWindow   `json:"date_windows"`
+	MaxDurationMinutes int            `json:"max_duration_minutes"`
+}
+
+type WeeklyWindow struct {
+	Weekday int    `json:"weekday"`
+	Start   string `json:"start"`
+	End     string `json:"end"`
+}
+
+type DateWindow struct {
+	Date  string `json:"date"`
+	Start string `json:"start"`
+	End   string `json:"end"`
 }
 
 // 進行項目の種類。

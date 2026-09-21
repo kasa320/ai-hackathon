@@ -142,6 +142,7 @@ func (Playbook) ValidatePreparation(_ context.Context, s coord.Snapshot, attenda
 
 	v := &coord.ValidationError{}
 	d.UnavailableDates = validateDates(v, "unavailable_dates", d.UnavailableDates)
+	validateAvailability(v, d.Schedule)
 	known := sd.sectionSet()
 	checkIDList(v, "prepared_section_ids", d.PreparedSectionIDs, known)
 	checkIDList(v, "explainable_section_ids", d.ExplainableSectionIDs, known)
@@ -200,6 +201,14 @@ func (Playbook) ValidatePartialPreparation(_ context.Context, s coord.Snapshot, 
 		v.Add("max_presentation_minutes", "0分以上、持ち時間（%d分）以内で指定してください", s.DurationMinutes)
 	}
 	open := newIDSet(unclear)
+	d.UnavailableDates = validateDates(v, SlotUnavailable, d.UnavailableDates)
+	validateAvailability(v, d.Schedule)
+	if s.ScheduleStatus != coord.ScheduleProposed {
+		delete(open, SlotSchedule)
+		delete(open, SlotUnavailable)
+	} else if d.Schedule == nil {
+		open[SlotSchedule] = struct{}{}
+	}
 	// 部分集合の関係は、両方が確定してから確かめる（勝手に「読んできた節」を増やさない）。
 	if !open.has(SlotPrepared) && !open.has(SlotExplainable) {
 		prepared := newIDSet(d.PreparedSectionIDs)
@@ -246,6 +255,7 @@ func (Playbook) ApplyWithdrawal(_ context.Context, _ coord.Snapshot, _ string, c
 		d.PreparedSectionIDs = nonNil(cur.PreparedSectionIDs)
 		// 出られない日は担当の辞退では変わらない。本人が答えた予定なので引き継ぐ。
 		d.UnavailableDates = nonNil(cur.UnavailableDates)
+		d.Schedule = cur.Schedule
 	}
 	d.ExplainableSectionIDs = []string{}
 	return mustJSON(d), nil
@@ -461,7 +471,7 @@ func (Playbook) ApprovalRequirements(_ context.Context, s coord.Snapshot, prop c
 		if s.ScheduleStatus == coord.ScheduleProposed {
 			// 日時も決める案は管理者だけで通さない。出席予定者にも諮る。
 			req.Approvals = append(req.Approvals, coord.ApprovalRequirement{
-				Kind:              coord.ApprovalMajority,
+				Kind:              coord.ApprovalAll,
 				EligibleMemberIDs: nonNil(s.Attending()),
 			})
 		}
@@ -475,8 +485,12 @@ func (Playbook) ApprovalRequirements(_ context.Context, s coord.Snapshot, prop c
 			return coord.ApprovalRequirements{}, fmt.Errorf("reading: 確定計画を読めません: %w", err)
 		}
 		if !onlyPresentersChanged(prev, p) {
+			kind := coord.ApprovalMajority
+			if s.PeriodStart != "" {
+				kind = coord.ApprovalAll
+			}
 			req.Approvals = append(req.Approvals, coord.ApprovalRequirement{
-				Kind:              coord.ApprovalMajority,
+				Kind:              kind,
 				EligibleMemberIDs: nonNil(s.Attending()),
 			})
 		}
@@ -539,6 +553,10 @@ func (Playbook) DiffPreparation(s coord.Snapshot, before *coord.Preparation, aft
 	add("読んできた範囲", sectionsLabel(titles, old.PreparedSectionIDs), sectionsLabel(titles, now.PreparedSectionIDs))
 	add("説明できる範囲", sectionsLabel(titles, old.ExplainableSectionIDs), sectionsLabel(titles, now.ExplainableSectionIDs))
 	add("説明できる時間", minutesLabel(old.MaxPresentationMinutes), minutesLabel(now.MaxPresentationMinutes))
+	if s.ScheduleStatus == coord.ScheduleProposed || old.Schedule != nil || now.Schedule != nil {
+		add("日程条件", strings.Join(scheduleLines(old.Schedule), "／"), strings.Join(scheduleLines(now.Schedule), "／"))
+		add("出られない日", strings.Join(old.UnavailableDates, "、"), strings.Join(now.UnavailableDates, "、"))
+	}
 	return lines
 }
 

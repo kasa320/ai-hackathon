@@ -109,6 +109,16 @@ type PlanScheduler interface {
 	PlannedStart(plan json.RawMessage) (time.Time, bool, error)
 }
 
+// PlanDescriber renders exact proposal contents for explicit consent outside the Web UI.
+type PlanDescriber interface {
+	DescribePlan(sessionData, plan json.RawMessage, duration int, memberNames map[string]string) ([]string, error)
+}
+
+// PreparationRequestDescriber provides a deterministic, purpose-specific request.
+type PreparationRequestDescriber interface {
+	PreparationRequest(s Snapshot, memberID string) string
+}
+
 // plannedStart は用途が日時を決めるならその値を返す。決めない用途では ok=false。
 func plannedStart(pb Playbook, plan json.RawMessage) (time.Time, bool) {
 	sc, ok := pb.(PlanScheduler)

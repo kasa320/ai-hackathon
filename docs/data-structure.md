@@ -228,6 +228,15 @@ type ReadingPreparationData = {
   explainable_section_ids: ID[];           // 説明できる節（読んできた節の範囲内）
   max_presentation_minutes: number;        // 説明に使える時間。担当しないなら0
   unavailable_dates: string[];             // 出られない日（"YYYY-MM-DD"、JST、60件まで）。空なら制約なし
+  schedule?: ScheduleAvailability;         // 参加できる時間帯。日時未定の回（schedule_status="proposed"）で聞く
+};
+
+// 参加できる時間帯。時刻はすべてJST。決め方は scheduling-rule.md を参照。
+type ScheduleAvailability = {
+  status: "provided" | "unknown" | "unavailable";
+  weekly_windows: { weekday: number; start: string; end: string }[];  // weekday は 0=日曜。"HH:mm"、60件まで
+  date_windows: { date: string; start: string; end: string }[];       // "YYYY-MM-DD" と "HH:mm"、60件まで
+  max_duration_minutes: number;            // provided は1〜480、unknown・unavailable は0
 };
 
 // PlanData：今回の計画

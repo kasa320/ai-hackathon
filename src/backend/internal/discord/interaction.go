@@ -21,6 +21,9 @@ func (b *Bot) onInteraction(_ *discordgo.Session, i *discordgo.InteractionCreate
 	if user == nil || user.Bot {
 		return
 	}
+	if i.GuildID != "" || i.Message == nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), turnTimeout)
 	defer cancel()
 
@@ -51,6 +54,8 @@ func (b *Bot) onInteraction(_ *discordgo.Session, i *discordgo.InteractionCreate
 
 	kind, token, arg := splitCustomID(i.MessageComponentData().CustomID)
 	switch kind {
+	case "respond":
+		b.onTaskButton(ctx, i, appUser.ID, us, token, arg)
 	case "target":
 		b.onTargetButton(ctx, i, appUser.ID, us, token, arg)
 	case "save":
@@ -77,9 +82,12 @@ func (b *Bot) onTargetButton(ctx context.Context, i *discordgo.InteractionCreate
 		b.editInteraction(ctx, i, msgNoDraft)
 		return
 	}
-	b.editInteraction(ctx, i, sessionHeader(target.Title, target.StartsAt)+"\nこの回の予定を変更します。")
+	b.editInteraction(ctx, i, "【"+escape(target.Title)+"】\nこの回を選びました。")
 	// 選択前の発言は保持していないので、あらためて入力してもらう。
-	b.startConversation(ctx, i.ChannelID, userID, us, *target, true)
+	tasks := conv.selectTasks
+	if b.startConversation(ctx, i.ChannelID, userID, us, *target, !tasks) && tasks {
+		b.replyTasks(ctx, i.ChannelID, userID, us)
+	}
 }
 
 // onSaveButton は表示した下書きを保存する。表示と違う値を承認させない。
@@ -97,7 +105,7 @@ func (b *Bot) onSaveButton(ctx context.Context, i *discordgo.InteractionCreate, 
 		b.replyError(ctx, i.ChannelID, userID, us, err)
 		return
 	}
-	b.editInteraction(ctx, i, sessionHeader(conv.title, conv.startsAt)+"\n"+escapeLines(c.lines)+"\n\n"+msgSaved)
+	b.editInteraction(ctx, i, conversationHeader(conv)+"\n"+escapeLines(c.lines)+"\n\n"+msgSaved)
 	// 保存が済んだら会話を終える。未保存の下書きも確認も残さない。
 	us.conv = nil
 }

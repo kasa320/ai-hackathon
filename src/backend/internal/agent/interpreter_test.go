@@ -52,7 +52,8 @@ func interpretRequest(t *testing.T, partial bool) coord.InterpretRequest {
 // LLM に渡すツールは項目の値を決めるものだけで、引数は決められた項目名・列挙値に限る。
 func TestLLMInterpreterToolContract(t *testing.T) {
 	f := &fakeLLM{responses: []func(http.ResponseWriter){toolCall("record_preparation", map[string]any{
-		"attendance": "attending", "data": validPreparation(15), "unclear": []string{}, "needs_followup": false, "out_of_scope": nil,
+		// 一部モデルが列挙値の大文字小文字を変えても、範囲内として安全に扱う。
+		"attendance": "attending", "data": validPreparation(15), "unclear": []string{}, "needs_followup": false, "out_of_scope": "None",
 	})}}
 	p := newInterpreter(t, f)
 	if _, _, err := p.Interpret(context.Background(), interpretRequest(t, false)); err != nil {
@@ -75,19 +76,22 @@ func TestLLMInterpreterToolContract(t *testing.T) {
 	}
 	// unclear に入れてよい名前と out_of_scope の値は列挙で縛る。
 	slots := props["unclear"].(map[string]any)["items"].(map[string]any)["enum"].([]any)
-	if len(slots) != 5 {
+	if len(slots) != 7 {
 		t.Fatalf("unclear の列挙 = %v", slots)
 	}
 	kinds := props["out_of_scope"].(map[string]any)["enum"].([]any)
 	if len(kinds) != len(coord.OutOfScopeKinds)+1 {
 		t.Fatalf("out_of_scope の列挙 = %v", kinds)
 	}
+	if kinds[0] != "none" {
+		t.Fatalf("out_of_scope の範囲内指定 = %v", kinds[0])
+	}
 }
 
 // 対話では検証済みの値と質問中の項目だけを渡す。発言の履歴は渡さない。
 func TestLLMInterpreterSendsCurrentValuesOnly(t *testing.T) {
 	f := &fakeLLM{responses: []func(http.ResponseWriter){toolCall("record_preparation", map[string]any{
-		"attendance": "attending", "data": validPreparation(15), "unclear": []string{}, "needs_followup": false, "out_of_scope": nil,
+		"attendance": "attending", "data": validPreparation(15), "unclear": []string{}, "needs_followup": false, "out_of_scope": "none",
 	})}}
 	p := newInterpreter(t, f)
 	req := interpretRequest(t, true)

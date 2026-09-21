@@ -21,9 +21,10 @@ const MaxDialogTargets = 25
 
 // DialogTarget は対話の対象にできる開催回。
 type DialogTarget struct {
-	SessionID string
-	Title     string
-	StartsAt  time.Time
+	SessionID      string
+	Title          string
+	StartsAt       time.Time
+	ScheduleStatus string
 	// HasOpenTask は本人宛ての未回答・期限内の参加条件確認タスクがあること。
 	HasOpenTask bool
 }
@@ -74,7 +75,7 @@ func (c *Coordinator) PreparationTargets(ctx context.Context, userID string) ([]
 		out = make([]DialogTarget, 0, len(targets))
 		for _, t := range targets {
 			out = append(out, DialogTarget{
-				SessionID: t.Session.ID, Title: t.Session.Title, StartsAt: t.Session.StartsAt, HasOpenTask: t.HasOpenTask,
+				SessionID: t.Session.ID, Title: t.Session.Title, StartsAt: t.Session.StartsAt, ScheduleStatus: scheduleStatus(t.Session), HasOpenTask: t.HasOpenTask,
 			})
 		}
 		return nil
@@ -123,6 +124,10 @@ func (c *Coordinator) StartDialog(ctx context.Context, userID, sessionID string)
 		if p, ok := preps[m.ID]; ok {
 			// 保存済みの値はすべて確定扱い。触れなかった項目はそのまま残る。
 			st.Attendance, st.Data, st.Unclear = p.Attendance, p.Data, []string{}
+			st.Data, st.Unclear, err = pi.ValidatePartialPreparation(ctx, snap, st.Attendance, st.Data, st.Unclear)
+			if err != nil {
+				return err
+			}
 		} else {
 			st.Attendance = AttendanceAttending
 			st.Data, st.Unclear, err = pi.ValidatePartialPreparation(ctx, snap, st.Attendance, emptyPreparationData, allSlots(pi))

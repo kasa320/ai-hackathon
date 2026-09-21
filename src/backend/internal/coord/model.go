@@ -80,7 +80,8 @@ type CaseContext struct {
 	// AskedMemberIDs はこの案件でAIが参加条件の確認を依頼した人。
 	AskedMemberIDs []string `json:"asked_member_ids"`
 	// RejectedProposals はこの案件で棄却された案の数。
-	RejectedProposals int `json:"rejected_proposals"`
+	RejectedProposals int         `json:"rejected_proposals"`
+	RejectedStartsAt  []time.Time `json:"rejected_starts_at,omitempty"`
 }
 
 // Snapshot はサーバーが組み立てた開催回の状態。用途固有の Data は各 Playbook が解釈する。
@@ -150,6 +151,7 @@ type ApprovalKind string
 const (
 	// ApprovalMajority は対象者の過半数（floor(n/2)+1）の賛成。
 	ApprovalMajority ApprovalKind = "majority"
+	ApprovalAll      ApprovalKind = "all"
 	// ApprovalOwner は管理者の承認。対象者は共通側が管理者に固定する。
 	ApprovalOwner ApprovalKind = "owner"
 )

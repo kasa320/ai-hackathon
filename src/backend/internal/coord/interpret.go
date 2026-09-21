@@ -235,12 +235,13 @@ func (c *Coordinator) InterpretPreparation(ctx context.Context, userID, sessionI
 	}
 
 	var (
-		snap   Snapshot
-		pi     PreparationInterpreter
-		caseID string
+		snap    Snapshot
+		pi      PreparationInterpreter
+		caseID  string
+		current *Interpretation
 	)
 	err = c.st.Tx(ctx, func(tx *store.Tx) error {
-		sess, _, err := c.access(ctx, tx, userID, sessionID)
+		sess, member, err := c.access(ctx, tx, userID, sessionID)
 		if err != nil {
 			return err
 		}
@@ -256,6 +257,11 @@ func (c *Coordinator) InterpretPreparation(ctx context.Context, userID, sessionI
 			return err
 		}
 		snap, err = c.snapshot(ctx, tx, sess, nil)
+		if err == nil {
+			if p := snap.Preparation(member.ID); p != nil {
+				current = &Interpretation{Attendance: p.Attendance, Data: p.Data, Unclear: []string{}}
+			}
+		}
 		return err
 	})
 	if err != nil {
@@ -265,6 +271,7 @@ func (c *Coordinator) InterpretPreparation(ctx context.Context, userID, sessionI
 	// LLM 呼び出しはトランザクションの外で行う。結果は保存せず、本人の確認後に通常の送信で保存される。
 	req := InterpretRequest{
 		Snapshot: snap, Playbook: pi, Text: text, MaxLLMCalls: MaxLLMCallsPerInterpretation,
+		Current: current,
 		Check: func(ctx context.Context, got Interpretation) error {
 			_, _, err := c.checkInterpretation(ctx, pi, snap, got, false)
 			return err

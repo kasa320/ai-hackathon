@@ -171,8 +171,7 @@ function renderGroups(groups, sessions) {
 }
 
 function openLeaveGroup(group) {
-  let modal;
-  modal = createDialog({
+  createDialog({
     title: `${group.name}から脱退しますか`,
     body: el(
       "div",
@@ -181,10 +180,7 @@ function openLeaveGroup(group) {
       el("p", { class: "help" }, "脱退後は、このグループの過去の開催回も閲覧できません。残るメンバーには個人DMで知らせます。"),
     ),
     submitLabel: "脱退する",
-    onSubmit: async ({ showError, close, form }) => {
-      const submit = modal.dialog.querySelector('button[type="submit"]');
-      submit.disabled = true;
-      form.setAttribute("aria-busy", "true");
+    onSubmit: async ({ showError, close }) => {
       showError("");
       try {
         await api.leaveGroup(group.id);
@@ -192,16 +188,13 @@ function openLeaveGroup(group) {
         await renderMember();
       } catch (err) {
         showError(err instanceof ApiError ? err.message : "脱退を完了できませんでした。時間をおいてお試しください。");
-        submit.disabled = false;
-        form.removeAttribute("aria-busy");
       }
     },
   });
 }
 
 function openDeleteGroup(group) {
-  let modal;
-  modal = createDialog({
+  const modal = createDialog({
     title: `${group.name}を削除しますか`,
     body: el(
       "div",
@@ -210,10 +203,7 @@ function openDeleteGroup(group) {
       el("p", { class: "help" }, "保存済みデータは論理削除として保持されます。"),
     ),
     submitLabel: "削除する",
-    onSubmit: async ({ showError, close, form }) => {
-      const submit = modal.dialog.querySelector('button[type="submit"]');
-      submit.disabled = true;
-      form.setAttribute("aria-busy", "true");
+    onSubmit: async ({ showError, close }) => {
       showError("");
       try {
         await api.deleteGroup(group.id);
@@ -221,8 +211,6 @@ function openDeleteGroup(group) {
         await renderMember();
       } catch (err) {
         showError(err instanceof ApiError ? err.message : "削除を完了できませんでした。時間をおいてお試しください。");
-        submit.disabled = false;
-        form.removeAttribute("aria-busy");
       }
     },
   });

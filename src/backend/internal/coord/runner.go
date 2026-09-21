@@ -89,7 +89,7 @@ func (c *Coordinator) handlePlan(ctx context.Context, e store.Event) error {
 			stale = true
 			return tx.SetEventStatus(ctx, e.ID, "cancelled")
 		}
-		if now.After(retryCutoff(sess.StartsAt)) {
+		if now.After(retryCutoff(responseHorizon(sess))) {
 			stale = true
 			if err := tx.SetEventStatus(ctx, e.ID, "done"); err != nil {
 				return err
@@ -158,7 +158,7 @@ func (c *Coordinator) handlePlan(ctx context.Context, e store.Event) error {
 		case errors.Is(planErr, ErrTransient):
 			delay := c.retryDelay(cur.RetryCount)
 			next := now.Add(delay)
-			if next.After(retryCutoff(latest.StartsAt)) {
+			if next.After(retryCutoff(responseHorizon(latest))) {
 				return c.needsOwner(ctx, tx, latest, &cur, "deadline_expired", "AIの応答に失敗し、開催までに再試行できないため、管理者の判断が必要です。", now)
 			}
 			cur.RetryCount++
@@ -214,7 +214,7 @@ func (c *Coordinator) handlePlan(ctx context.Context, e store.Event) error {
 
 // ask は AI が選んだ相手に参加条件の確認を依頼する。同じ案件で同じ人に再依頼しない。
 func (c *Coordinator) ask(ctx context.Context, tx *store.Tx, sess store.Session, cs *store.Case, o Outcome, now time.Time) error {
-	due, ok := dueAt(now, sess.StartsAt)
+	due, ok := dueAt(now, responseHorizon(sess))
 	if !ok {
 		return c.needsOwner(ctx, tx, sess, cs, "deadline_expired", "開催までに回答期限を確保できないため、管理者の判断が必要です。", now)
 	}
@@ -312,6 +312,7 @@ func (c *Coordinator) handleReminder(ctx context.Context, e store.Event) error {
 			return err
 		}
 		text := fmt.Sprintf("未回答の依頼があります：%s（回答期限：%s）", tk.Title, formatClock(tk.DueAt))
+		text += taskReplyInstructions(tk.Kind)
 		return c.notify(ctx, tx, sess, tk.CaseID, "reminder", "reminder:"+tk.ID, text, []store.Member{m}, now)
 	})
 }

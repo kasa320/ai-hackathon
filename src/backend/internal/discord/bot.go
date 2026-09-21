@@ -100,6 +100,12 @@ func (b *Bot) handleMessage(ctx context.Context, m *discordgo.MessageCreate) {
 	text := strings.TrimSpace(m.Content)
 	// 定型の読み取り・取消・対象切替は LLM を使わない。クールダウン中も使える。
 	switch {
+	case isCommand(text, "参加条件", "入力"):
+		b.confirmUnchanged(ctx, m.ChannelID, user.ID, us)
+		return
+	case isCommand(text, "回答", "日程確認", "提案"):
+		b.replyTasks(ctx, m.ChannelID, user.ID, us)
+		return
 	case isCommand(text, "取消", "取り消し", "キャンセル", "やめる"):
 		b.clearDraft(ctx, us)
 		b.send(ctx, m.ChannelID, msgCanceled, nil)
@@ -158,10 +164,16 @@ func (b *Bot) reply(ctx context.Context, channelID string, us *userSession, res 
 	conv := us.conv
 	conv.draftID = newToken()
 	if !res.Ready {
-		b.send(ctx, channelID, sessionHeader(conv.title, conv.startsAt)+"\n"+res.Question, nil)
+		b.send(ctx, channelID, conversationHeader(conv)+"\n"+res.Question, nil)
 		return
 	}
-	msg, err := b.sendComplex(ctx, channelID, confirmText(conv, res.Confirm), confirmButtons(conv.draftID))
+	content := confirmText(conv, res.Confirm)
+	if len([]rune(content)) > 1800 {
+		conv.confirm = nil
+		b.send(ctx, channelID, "条件が多いため、Webで全体を入力・確認して保存してください。"+webLink(b.base, conv.sessionID), nil)
+		return
+	}
+	msg, err := b.sendComplex(ctx, channelID, content, confirmButtons(conv.draftID))
 	if err != nil {
 		b.log.Warn("確認の送信に失敗", "session_id", conv.sessionID)
 		return
@@ -184,6 +196,9 @@ func (b *Bot) countMiss(ctx context.Context, channelID string, us *userSession, 
 
 // clearDraft は表示済みの確認を無効にし、未保存の下書きの世代を進める。
 func (b *Bot) clearDraft(ctx context.Context, us *userSession) {
+	if us.conv != nil {
+		us.conv.taskCards = nil
+	}
 	if us.conv == nil || us.conv.confirm == nil {
 		return
 	}
@@ -244,9 +259,10 @@ func (b *Bot) startConversation(ctx context.Context, channelID, userID string, u
 		b.replyError(ctx, channelID, userID, us, err)
 		return false
 	}
-	us.conv = &conversation{sessionID: t.SessionID, title: t.Title, startsAt: t.StartsAt, state: res.State, draftID: newToken()}
+	us.conv = &conversation{sessionID: t.SessionID, title: t.Title, startsAt: t.StartsAt, scheduleStatus: t.ScheduleStatus, state: res.State, draftID: newToken()}
 	if announce {
-		b.send(ctx, channelID, sessionHeader(t.Title, t.StartsAt)+"\n"+msgReenter, nil)
+		b.send(ctx, channelID, conversationHeader(us.conv)+"\n"+msgReenter, nil)
+		b.reply(ctx, channelID, us, res)
 	}
 	return true
 }
@@ -291,10 +307,10 @@ func (b *Bot) replyCurrent(ctx context.Context, channelID, userID string, us *us
 	}
 	conv := us.conv
 	if len(res.Confirm) == 0 {
-		b.send(ctx, channelID, sessionHeader(conv.title, conv.startsAt)+"\nまだ回答がありません。\n"+res.Question, nil)
+		b.send(ctx, channelID, conversationHeader(conv)+"\nまだ回答がありません。\n"+res.Question, nil)
 		return
 	}
-	b.send(ctx, channelID, sessionHeader(conv.title, conv.startsAt)+"\n"+escapeLines(res.Confirm), nil)
+	b.send(ctx, channelID, conversationHeader(conv)+"\n"+escapeLines(res.Confirm), nil)
 }
 
 // replyError は業務エラーを定型文に直す。原文や詳細はログにも出さない。

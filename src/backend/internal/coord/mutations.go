@@ -39,7 +39,7 @@ func checkRevision(sess store.Session, expected *int64) error {
 }
 
 func checkNotStarted(sess store.Session, now time.Time) error {
-	if !now.Before(sess.StartsAt) {
+	if !now.Before(responseHorizon(sess)) {
 		return apperr.InvalidStateErr("開催時刻を過ぎたため、変更できません。")
 	}
 	return nil
