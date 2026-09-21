@@ -283,7 +283,9 @@ function renderMaterialStep() {
   };
 
   const tocBox = el("div", {});
+  // 取り込み方はいつでも切り替えられる。手入力に切り替えても、取り込んだ範囲は残して直せる
   picker = feature.createTocPicker(api, state.group.id, {
+    picked: state.sections.length ? state.tocSource : null,
     onPick: (sections, source, book) => {
       state.sections = sections;
       state.tocSource = source;
@@ -292,13 +294,12 @@ function renderMaterialStep() {
         state.book.title = book.title;
       }
       state.book.isbn = book?.isbn ?? null;
-      mount(tocBox, el("p", { class: "help" }, "目次を取り込みました。"));
       renderSections();
     },
     onManual: () => {
       state.tocSource = { kind: "manual", urls: [] };
-      mount(tocBox);
       renderSections();
+      if (state.sections.length === 0) box.querySelector("button")?.focus();
     },
   });
   mount(tocBox, picker.node);

@@ -258,8 +258,8 @@ type TocLookup = {
           "reading_image" | "succeeded" | "failed";
   book: { isbn: string; title: string; authors: string[];
           publisher: string | null; pages: number | null } | null;
-  source: "web" | "image" | null;                  // 候補の出どころ
-  source_urls: string[];                           // source="web" のとき1件以上
+  source: "ndl" | "web" | "image" | null;          // 候補の出どころ（ndl=国立国会図書館サーチのJPRO登録データ）
+  source_urls: string[];                           // source="ndl"・"web" のとき1件以上
   entries: { title: string; level: 1 | 2 | 3 }[];  // 候補（章=1、節=2、項=3）
   unreadable_count: number;                        // 画像から読めなかった箇所
   reason_code: null | "book_not_found" | "toc_not_found" | "source_mismatch" |
@@ -268,4 +268,4 @@ type TocLookup = {
 };
 ```
 
-`entries` はフロントで選択・編集し、`sections` に変換してから開催回登録に使う（IDはフロントが付ける）。`failed` になったら手入力へ案内し、`toc_source.kind` を `manual` にする。
+`entries` はフロントで選択・編集し、`sections` に変換してから開催回登録に使う（IDはフロントが付ける）。`source="ndl"` の候補は `toc_source.kind="web"`（`urls` はNDLサーチの書誌ページ）として登録する。JPROの目次には階層がないため、`level` は番号の書き方（部・第N章・1.1・1-1 など）から推定する。`failed` になったら手入力へ案内し、`toc_source.kind` を `manual` にする。

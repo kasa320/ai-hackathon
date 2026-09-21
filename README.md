@@ -92,7 +92,7 @@ Discordに「参加条件」と送ると、予定・準備状況を1項目ずつ
 | `ORCAROUTER_PLANNER_MODEL` | 空 | 案（日時・進行・担当）を考えるモデル。空なら `ORCAROUTER_MODEL` |
 | `ORCAROUTER_INTERPRETER_MODEL` | 空 | Web・Discordの自由文から参加条件を取り出すモデル。空なら `ORCAROUTER_MODEL`。Discordの1往復は60秒で打ち切るので、応答の速いモデルを選ぶ |
 | `ORCAROUTER_TIMEOUT_SECONDS` | `180` | LLM 呼び出し1回の待ち時間の上限（1〜600秒）。超えると一時的な失敗として再試行する |
-| `ORCAROUTER_SEARCH_MODEL` | 空 | 目次の Web 検索に使う検索付きモデル。空なら Web 検索をせず画像の提出を依頼する |
+| `ORCAROUTER_SEARCH_MODEL` | 空 | 国立国会図書館サーチに目次が登録されていない本を Web 検索で探す検索付きモデル。空なら Web 検索をせず画像の提出を依頼する |
 | `ORCAROUTER_VISION_MODEL` | 空 | 目次画像の書き写しに使うモデル（空なら `ORCAROUTER_MODEL`） |
 
 ### 開発モード（デモ）

@@ -66,7 +66,7 @@ func run(log *slog.Logger) error {
 
 	var planner coord.Planner = coord.DraftOnlyPlanner{}
 	var interpreter coord.Interpreter = coord.DraftOnlyInterpreter{}
-	tocDeps := toc.Deps{Store: st, Clock: clk, Faults: faults, Bib: toc.Chain{toc.NewOpenBD(), toc.NewNDLSearch()}, Fetcher: toc.NewSafeFetcher(), Log: log}
+	tocDeps := toc.Deps{Store: st, Clock: clk, Faults: faults, Bib: toc.Chain{toc.NewOpenBD(), toc.NewNDLSearch()}, Contents: toc.NewNDLToc(), Fetcher: toc.NewSafeFetcher(), Log: log}
 	if cfg.AgentMode == config.AgentModeLLM {
 		client := agent.NewClient(cfg.OrcaRouterURL, cfg.OrcaRouterAPIKey, cfg.OrcaRouterTimeout)
 		// 案を考える処理と、自由文から条件を取り出す処理は別のモデルを使える

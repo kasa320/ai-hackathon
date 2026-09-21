@@ -54,11 +54,13 @@
 
 | メソッド・パス | 成功 | できること |
 | --- | --- | --- |
-| `POST /api/groups/{group_id}/reading/toc-lookups` | 202 | ISBNから目次の取得を開始する |
+| `POST /api/groups/{group_id}/reading/toc-lookups` | 202 | ISBNから目次の取得を開始する。本文は `{"isbn": "978…"}`。`isbn` を空文字にすると書誌を調べず、画像の提出待ち（`needs_image`）から始める |
 | `GET /api/groups/{group_id}/reading/toc-lookups/{lookup_id}` | 200 | 取得状況と候補を取得する（3秒間隔のポーリング） |
 | `POST /api/groups/{group_id}/reading/toc-lookups/{lookup_id}/images` | 202 | 目次ページの画像を提出する（`needs_image` のときだけ） |
 
-取得結果は**候補にすぎず**、管理者が確認・修正して開催回登録の `data.sections` に使うまで保存されない。書名から目次を推測する経路はなく、取得元ページと照合できなければ画像の提出を求める。画像は LLM への送信にだけ使い、保存しない。
+ISBNからの取得は、まず国立国会図書館サーチ（OAI-PMH）から出版情報登録センター（JPRO）が登録した目次を引く（`source: "ndl"`）。出版社が目次を登録している本だけが対象で、登録がなければ画像の提出を求める。NDLサーチは混雑時に429を返すため、一時的な失敗は10分まで再試行する。画面にはNDLサーチから取得した旨と取得元のリンクを出す（NDLサーチのAPI利用条件）。
+
+取得結果は**候補にすぎず**、管理者が確認・修正して開催回登録の `data.sections` に使うまで保存されない。書名から目次を推測する経路はなく、Web 検索（`ORCAROUTER_SEARCH_MODEL` 設定時のみ）の結果は取得元ページと照合できなければ使わない。画像は LLM への送信にだけ使い、保存しない。
 
 画像は `multipart/form-data` のフィールド名 `images` に1〜5枚（JPEG・PNG・WebP、1枚4 MB・合計10 MBまで）。
 

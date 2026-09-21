@@ -22,14 +22,15 @@ var ErrNotConfigured = errors.New("toc: not configured")
 
 // Service は目次の取得を進める。処理状態は DB に保存し、再起動後も続きから処理する（画像の読み取りを除く）。
 type Service struct {
-	st     *store.Store
-	clock  clock.Clock
-	faults *fault.Registry
-	bib    Bibliography
-	search Searcher // nil なら Web 検索しない（toc_not_found）
-	fetch  Fetcher
-	reader ImageReader // nil なら画像を読めない（model_error）
-	log    *slog.Logger
+	st       *store.Store
+	clock    clock.Clock
+	faults   *fault.Registry
+	bib      Bibliography
+	contents Contents // nil なら登録済みの目次を引かない
+	search   Searcher // nil なら Web 検索しない（toc_not_found）
+	fetch    Fetcher
+	reader   ImageReader // nil なら画像を読めない（model_error）
+	log      *slog.Logger
 	// Async は画像の読み取りを実行する。テストでは同期実行に差し替える。
 	Async func(func())
 	wake  chan struct{}
@@ -40,6 +41,7 @@ type Deps struct {
 	Clock    clock.Clock
 	Faults   *fault.Registry
 	Bib      Bibliography
+	Contents Contents
 	Searcher Searcher
 	Fetcher  Fetcher
 	Reader   ImageReader
@@ -47,7 +49,7 @@ type Deps struct {
 }
 
 func NewService(d Deps) *Service {
-	return &Service{st: d.Store, clock: d.Clock, faults: d.Faults, bib: d.Bib, search: d.Searcher, fetch: d.Fetcher, reader: d.Reader, log: d.Log,
+	return &Service{st: d.Store, clock: d.Clock, faults: d.Faults, bib: d.Bib, contents: d.Contents, search: d.Searcher, fetch: d.Fetcher, reader: d.Reader, log: d.Log,
 		Async: func(f func()) { go f() }, wake: make(chan struct{}, 1)}
 }
 
@@ -90,10 +92,11 @@ func encode(v any) []byte {
 }
 
 // Start は ISBN から目次の取得を開始する。1日の上限を超えた場合も受け付けた上で failed（budget_exceeded）にする。
+// ISBN が空なら書誌は調べず、目次ページの写真を受け付ける状態（needs_image）で始める。
 func (s *Service) Start(ctx context.Context, groupID, isbn string, idem *store.IdemKey) (store.Response, error) {
 	now := s.now()
 	res, err := s.st.Idempotent(ctx, idem, now, func(tx *store.Tx) (store.Response, error) {
-		if !reading.ValidISBN13(isbn) {
+		if isbn != "" && !reading.ValidISBN13(isbn) {
 			return store.Response{}, apperr.Validation(apperr.Field{Path: "isbn", Message: "ISBNはハイフンなしの13桁で入力してください"})
 		}
 		n, err := tx.CountTocLookupsSince(ctx, groupID, now.Add(-24*time.Hour))
@@ -102,6 +105,9 @@ func (s *Service) Start(ctx context.Context, groupID, isbn string, idem *store.I
 		}
 		l := store.TocLookup{ID: store.NewID("toc"), GroupID: groupID, ISBN: isbn, Status: StatusResolvingBook, Entries: json.RawMessage("[]"),
 			NextRunAt: now, CreatedAt: now, ExpiresAt: now.Add(LookupTTL)}
+		if isbn == "" {
+			l.Status = StatusNeedsImage
+		}
 		if n >= DailyLimit {
 			l.Status, l.ReasonCode = StatusFailed, ReasonBudget
 		}
@@ -190,7 +196,7 @@ func (s *Service) readImages(ctx context.Context, lookupID string, images []Imag
 		case len(result.Entries) == 0:
 			l.Status, l.ReasonCode = StatusFailed, ReasonImageUnread
 		default:
-			l.Status, l.Source, l.ReasonCode = StatusSucceeded, "image", ""
+			l.Status, l.Source, l.ReasonCode = StatusSucceeded, SourceImage, ""
 			l.Entries, l.UnreadableCount, l.SourceURLs = encode(result.Entries), result.UnreadableCount, nil
 		}
 	})
@@ -323,6 +329,24 @@ func (s *Service) searchStep(ctx context.Context, l store.TocLookup) error {
 		// 取得元に書かれていない目次が返ってきた状況を再現する。照合で不一致になる。
 		res = SearchResult{Found: true, URLs: []string{"https://example.com/fault-injection"}, Entries: []Entry{{Title: "障害注入による架空の章", Level: 1}}}
 	default:
+		// まず国立国会図書館サーチに登録された目次を引く。構造化データなので照合せずに使う
+		if s.contents != nil {
+			entries, cerr := s.contents.Contents(ctx, l.ISBN)
+			switch {
+			case errors.Is(cerr, coord.ErrTransient):
+				s.log.Info("目次の取得元が混雑しているため再試行", "lookup", l.ID, "err", cerr)
+				return s.update(ctx, l.ID, nil, func(cur *store.TocLookup) {
+					s.retryOrFail(cur, func(cur *store.TocLookup) { cur.Status, cur.ReasonCode = StatusNeedsImage, ReasonTocNotFound })
+				})
+			case cerr != nil:
+				s.log.Warn("登録済みの目次の取得に失敗", "lookup", l.ID, "err", cerr)
+			case len(entries) > 0:
+				return s.update(ctx, l.ID, nil, func(cur *store.TocLookup) {
+					cur.Status, cur.Source, cur.ReasonCode = StatusSucceeded, SourceNDL, ""
+					cur.SourceURLs, cur.Entries, cur.RetryCount = []string{NDLPageURL(l.ISBN)}, encode(entries), 0
+				})
+			}
+		}
 		if s.search == nil {
 			res = SearchResult{Found: false}
 		} else {
@@ -387,7 +411,7 @@ func (s *Service) verifyStep(ctx context.Context, l store.TocLookup) error {
 	ok := MatchRatio(entries, pages) >= MatchThreshold
 	return s.update(ctx, l.ID, nil, func(cur *store.TocLookup) {
 		if ok {
-			cur.Status, cur.Source, cur.ReasonCode = StatusSucceeded, "web", ""
+			cur.Status, cur.Source, cur.ReasonCode = StatusSucceeded, SourceWeb, ""
 			return
 		}
 		cur.Status, cur.ReasonCode, cur.SourceURLs, cur.Entries = StatusNeedsImage, ReasonSourceMismatch, nil, json.RawMessage("[]")
