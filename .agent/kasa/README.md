@@ -8,6 +8,7 @@ AI HACK 2026 に向けた調査、アイデア検討、意思決定、発表準�
 - `ideas/`: アイデア候補、比較、具体化した企画
 - `decisions/`: 採用・不採用の判断とその理由
 - `pitch/`: 発表構成、デモシナリオ、原稿
+- `workflows/`: 繰り返し使う開発・レビュー手順
 
 ## 記録ルール
 
@@ -25,6 +26,7 @@ AI HACK 2026 に向けた調査、アイデア検討、意思決定、発表準�
 - [旅行エージェント競合調査](research/travel-agent-competitors.md)
 - [Notion Agentと知識ベース予定管理](research/notion-agent-task-planning.md)
 - [初期アイデア候補](ideas/initial-candidates.md)
+- [Codex並列開発runbook](workflows/parallel-worktree-development.md)
 - [適応型Personal Ops Agent案](ideas/adaptive-personal-ops-agent.md)
 - [冷蔵庫エージェント案](ideas/refrigerator-agent.md)
 - [適応型旅行コンダクター案](ideas/adaptive-travel-companion.md)
