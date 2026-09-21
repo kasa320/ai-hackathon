@@ -41,7 +41,7 @@ func (pb Playbook) DraftPlan(ctx context.Context, s coord.Snapshot) (coord.Draft
 		asked := newIDSet(append(append([]string{}, s.Case.AskedMemberIDs...), s.Case.WithdrawnMemberIDs...))
 		for _, m := range s.Members {
 			p, d := preparationData(s, m.ID)
-			if !asked.has(m.ID) && (p == nil || d.Schedule == nil || d.Schedule.Status == "unknown") {
+			if !asked.has(m.ID) && (p == nil || (d.Schedule == nil && standingOf(s, m.ID) == nil) || (d.Schedule != nil && d.Schedule.Status == "unknown")) {
 				ask = append(ask, m.ID)
 			}
 		}
@@ -94,6 +94,9 @@ func (pb Playbook) DraftPlan(ctx context.Context, s coord.Snapshot) (coord.Draft
 		if pd.DeclinedPresentation || declined.has(id) {
 			continue
 		}
+		if sd.AssigneeMemberID != "" && id != sd.AssigneeMemberID {
+			continue // 全体計画で担当が決まっている回では、担当者だけが発表する
+		}
 		c := &candidate{id: id, name: names[id], order: i, past: pastPresentations(s, id), consecutive: consecutiveSubstituteCount(s, id)}
 		// 3回連続の代役になる人は候補から外す。
 		if changeKind == coord.ChangeReplan && !original.has(id) && c.consecutive >= maxConsecutiveSubstitutes {
@@ -102,6 +105,9 @@ func (pb Playbook) DraftPlan(ctx context.Context, s coord.Snapshot) (coord.Draft
 		cands = append(cands, c)
 	}
 	if len(cands) == 0 {
+		if sd.AssigneeMemberID != "" {
+			return coord.Draft{Kind: coord.DraftNoFeasible, Summary: "全体計画で決めた担当者がこの回に参加できない（欠席・辞退）ため、担当の変更が必要です。管理者の判断が必要です。"}, nil
+		}
 		return coord.Draft{Kind: coord.DraftNoFeasible, Summary: "説明を割り振れる人がいない（全員が辞退・欠席した）ため、管理者の判断が必要です。"}, nil
 	}
 

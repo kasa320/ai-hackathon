@@ -110,6 +110,9 @@ func validateSchedule(v *coord.ValidationError, s coord.Snapshot, p PlanData) {
 	if rejectedStart(s, at) {
 		v.Add("starts_at", "この案件で否決された日時です。別の候補を選んでください")
 	}
+	if busyConflict(s, at) {
+		v.Add("starts_at", "参加者の別の確定済みの予定（別のブック・会）と重なっています。別の日時を選んでください")
+	}
 }
 
 // unavailableOn はその日に出られないと答えた出席予定者を返す。
@@ -159,7 +162,7 @@ func candidateDays(s coord.Snapshot, limit int) []time.Time {
 		for _, w := range commonWindows(s, day) {
 			for minute := w.start; minute+s.DurationMinutes <= w.end && len(out) < limit; minute += 30 {
 				at := day.Add(time.Duration(minute) * time.Minute)
-				if at.After(s.Now.Add(coord.SessionMinLead)) && !rejectedStart(s, at) {
+				if at.After(s.Now.Add(coord.SessionMinLead)) && !rejectedStart(s, at) && !busyConflict(s, at) {
 					out = append(out, at)
 				}
 			}
