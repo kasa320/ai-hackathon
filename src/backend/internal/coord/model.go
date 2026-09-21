@@ -11,6 +11,14 @@ type Descriptor struct {
 	Name string `json:"name"`
 }
 
+// 開催日時の決まり具合（Snapshot.ScheduleStatus）。
+const (
+	// ScheduleProposed は期間だけが決まっていて、日時は案で決める状態。
+	ScheduleProposed = "proposed"
+	// ScheduleConfirmed は日時が決まっている状態。
+	ScheduleConfirmed = "confirmed"
+)
+
 // 参加予定の値。用途によらず共通。
 const (
 	AttendanceAttending = "attending"
@@ -78,10 +86,17 @@ type CaseContext struct {
 // Snapshot はサーバーが組み立てた開催回の状態。用途固有の Data は各 Playbook が解釈する。
 // 認証情報や私的な原文を含めない。
 type Snapshot struct {
-	SessionID       string              `json:"session_id"`
-	CaseID          string              `json:"case_id"`
-	Revision        int64               `json:"revision"`
-	StartsAt        time.Time           `json:"starts_at"`
+	SessionID string `json:"session_id"`
+	CaseID    string `json:"case_id"`
+	// Now は判断時刻（UTC）。用途側が「この日時はもう過ぎている」を判断するために使う。
+	Now      time.Time `json:"now"`
+	Revision int64     `json:"revision"`
+	StartsAt time.Time `json:"starts_at"`
+	// ScheduleStatus が proposed の間、StartsAt は仮の候補で、案が日時を決める。
+	// PeriodStart / PeriodEnd（YYYY-MM-DD）はその日時を選べる範囲。
+	ScheduleStatus  string              `json:"schedule_status"`
+	PeriodStart     string              `json:"period_start"`
+	PeriodEnd       string              `json:"period_end"`
 	DurationMinutes int                 `json:"duration_minutes"`
 	OwnerMemberID   string              `json:"owner_member_id"`
 	Members         []SnapshotMember    `json:"members"`

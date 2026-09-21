@@ -459,6 +459,14 @@ func (c *Coordinator) confirm(ctx context.Context, tx *store.Tx, sess *store.Ses
 		return err
 	}
 	sess.ConfirmedProposalID, sess.Status = p.ID, sessionConfirm
+	// 期間だけで登録した回は、この案で開催日時も決まる。
+	scheduled := ""
+	if sess.ScheduleStatus == store.ScheduleProposed {
+		if at, ok := plannedStart(pb, p.Data); ok {
+			sess.StartsAt, sess.ScheduleStatus = at.UTC(), store.ScheduleConfirmed
+			scheduled = formatClock(at)
+		}
+	}
 	if err := bump(ctx, tx, sess, now); err != nil {
 		return err
 	}
@@ -468,6 +476,9 @@ func (c *Coordinator) confirm(ctx context.Context, tx *store.Tx, sess *store.Ses
 	}
 	cs.Status, cs.ReasonCode, cs.NextRetryAt, cs.UpdatedAt = store.CaseConfirmed, "", nil, now
 	cs.Summary = fmt.Sprintf("計画が確定しました（版%d）。", p.Version)
+	if scheduled != "" {
+		cs.Summary = fmt.Sprintf("開催日時が %s に決まりました（版%d）。", scheduled, p.Version)
+	}
 	if err := tx.UpdateCase(ctx, *cs); err != nil {
 		return err
 	}

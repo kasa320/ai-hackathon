@@ -33,11 +33,25 @@ type SessionSummary = {
   group_id: ID;
   playbook_id: string;
   title: string;
-  starts_at: Timestamp;
+  starts_at: Timestamp;                    // schedule_status="proposed" の間は仮の候補。確定した日時ではない
+  schedule_status: "proposed" | "confirmed";
+  period_start: string;                    // "YYYY-MM-DD"。日時を直接指定して登録した回では空文字
+  period_end: string;                      // 同上
   duration_minutes: number;
   revision: Revision;
   status: "draft" | "confirmed" | "needs_attention";
   updated_at: Timestamp;
+};
+
+// 開催回の登録（POST /api/groups/{group_id}/sessions）。日時の決め方は2通り。
+type CreateSession = {
+  playbook_id: string;
+  title?: string;                          // 省略すると「第N回」を自動で付ける
+  starts_at?: Timestamp;                   // 人が日時を決める場合だけ。オフセット必須
+  period_start?: string;                   // starts_at を省いたときは必須（"YYYY-MM-DD"）
+  period_end?: string;                     // 同上。開始日以降、1年以内
+  duration_minutes: number;
+  data: SessionData;
 };
 
 type Proposal = {
@@ -204,10 +218,13 @@ type ReadingPreparationData = {
   prepared_section_ids: ID[];              // 読んできた節
   explainable_section_ids: ID[];           // 説明できる節（読んできた節の範囲内）
   max_presentation_minutes: number;        // 説明に使える時間。担当しないなら0
+  unavailable_dates: string[];             // 出られない日（"YYYY-MM-DD"、JST、60件まで）。空なら制約なし
 };
 
 // PlanData：今回の計画
 type ReadingPlanData = {
+  starts_at?: Timestamp;                   // schedule_status="proposed" の回では必須。案が決める開催日時
+  frequency?: string;                      // 期間全体の進め方を1行で（例：週1回60分・全8回）。説明用
   covered_section_ids: ID[];               // 今回扱う範囲
   deferred_section_ids: ID[];              // 次回へ持ち越す範囲
   agenda: {                                // 1〜20件

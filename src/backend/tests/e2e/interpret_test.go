@@ -205,12 +205,13 @@ func TestInterpretDoesNotLeakPrivateReason(t *testing.T) {
 	// 返る値は定義済みの項目だけで、原文は含まれない。
 	var data map[string]any
 	mustUnmarshal(t, got.Preparation.Data, &data)
-	for _, key := range []string{"willing_to_present", "prepared_section_ids", "explainable_section_ids", "max_presentation_minutes"} {
+	fields := []string{"willing_to_present", "prepared_section_ids", "explainable_section_ids", "max_presentation_minutes", "unavailable_dates"}
+	for _, key := range fields {
 		if _, ok := data[key]; !ok {
 			t.Fatalf("%s がない", key)
 		}
 	}
-	if len(data) != 4 {
+	if len(data) != len(fields) {
 		t.Fatalf("定義済み以外の項目がある: %v", data)
 	}
 	if bytes.Contains(got.Preparation.Data, []byte(private)) {

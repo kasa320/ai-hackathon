@@ -208,8 +208,12 @@ func (c *Coordinator) taskAccess(ctx context.Context, tx *store.Tx, userID, task
 func (c *Coordinator) snapshot(ctx context.Context, tx *store.Tx, sess store.Session, cs *store.Case) (Snapshot, error) {
 	s := Snapshot{
 		SessionID:       sess.ID,
+		Now:             c.now(),
 		Revision:        sess.Revision,
 		StartsAt:        sess.StartsAt,
+		ScheduleStatus:  scheduleStatus(sess),
+		PeriodStart:     sess.PeriodStart,
+		PeriodEnd:       sess.PeriodEnd,
 		DurationMinutes: sess.DurationMinutes,
 		SessionData:     sess.Data,
 		Case:            CaseContext{DeclinedMemberIDs: []string{}, WithdrawnMemberIDs: []string{}, AskedMemberIDs: []string{}},

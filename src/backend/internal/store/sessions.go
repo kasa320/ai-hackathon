@@ -8,12 +8,26 @@ import (
 	"time"
 )
 
+// 開催日時の決まり具合。
+const (
+	// ScheduleProposed は期間だけが決まっていて、日時はまだ合意していない状態。
+	ScheduleProposed = "proposed"
+	// ScheduleConfirmed は日時が決まっている状態（人が指定した回も含む）。
+	ScheduleConfirmed = "confirmed"
+)
+
 type Session struct {
-	ID                  string
-	GroupID             string
-	PlaybookID          string
-	Title               string
-	StartsAt            time.Time
+	ID         string
+	GroupID    string
+	PlaybookID string
+	Title      string
+	// StartsAt は常に値を持つ。ScheduleStatus が proposed の間は仮の候補で、確定した日時ではない。
+	StartsAt time.Time
+	// PeriodStart / PeriodEnd は「この期間のどこかで開く」という登録のときの範囲（YYYY-MM-DD）。
+	// 日時を直接指定して登録した回では空。
+	PeriodStart         string
+	PeriodEnd           string
+	ScheduleStatus      string
 	DurationMinutes     int
 	Revision            int64
 	Status              string
@@ -23,7 +37,7 @@ type Session struct {
 	UpdatedAt           time.Time
 }
 
-const sessionCols = "id, group_id, playbook_id, title, starts_at, duration_minutes, revision, status, data, confirmed_proposal_id, created_at, updated_at"
+const sessionCols = "id, group_id, playbook_id, title, starts_at, period_start, period_end, schedule_status, duration_minutes, revision, status, data, confirmed_proposal_id, created_at, updated_at"
 
 func scanSession(row interface{ Scan(...any) error }) (Session, error) {
 	return scanSessionWith(row)
@@ -34,7 +48,8 @@ func scanSessionWith(row interface{ Scan(...any) error }, extra ...any) (Session
 	var s Session
 	var starts, created, updated, data string
 	var confirmed sql.NullString
-	dest := append([]any{&s.ID, &s.GroupID, &s.PlaybookID, &s.Title, &starts, &s.DurationMinutes, &s.Revision, &s.Status, &data, &confirmed, &created, &updated}, extra...)
+	dest := append([]any{&s.ID, &s.GroupID, &s.PlaybookID, &s.Title, &starts, &s.PeriodStart, &s.PeriodEnd, &s.ScheduleStatus,
+		&s.DurationMinutes, &s.Revision, &s.Status, &data, &confirmed, &created, &updated}, extra...)
 	if err := row.Scan(dest...); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return s, ErrNotFound
@@ -48,8 +63,12 @@ func scanSessionWith(row interface{ Scan(...any) error }, extra ...any) (Session
 }
 
 func (t *Tx) CreateSession(ctx context.Context, s Session, memberIDs []string) error {
-	err := t.exec(ctx, "INSERT INTO sessions ("+sessionCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		s.ID, s.GroupID, s.PlaybookID, s.Title, ts(s.StartsAt), s.DurationMinutes, s.Revision, s.Status, string(s.Data),
+	if s.ScheduleStatus == "" {
+		s.ScheduleStatus = ScheduleConfirmed
+	}
+	err := t.exec(ctx, "INSERT INTO sessions ("+sessionCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		s.ID, s.GroupID, s.PlaybookID, s.Title, ts(s.StartsAt), s.PeriodStart, s.PeriodEnd, s.ScheduleStatus,
+		s.DurationMinutes, s.Revision, s.Status, string(s.Data),
 		nullStr(s.ConfirmedProposalID), ts(s.CreatedAt), ts(s.UpdatedAt))
 	if err != nil {
 		return err
@@ -60,6 +79,15 @@ func (t *Tx) CreateSession(ctx context.Context, s Session, memberIDs []string) e
 		}
 	}
 	return nil
+}
+
+// CountSessions はグループの開催回の数を返す。名前を自動で振るときの通し番号に使う。
+func (t *Tx) CountSessions(ctx context.Context, groupID string) (int, error) {
+	var n int
+	if err := t.row(ctx, "SELECT COUNT(*) FROM sessions WHERE group_id = ?", groupID).Scan(&n); err != nil {
+		return 0, err
+	}
+	return n, nil
 }
 
 func (t *Tx) Session(ctx context.Context, id string) (Session, error) {
@@ -84,10 +112,13 @@ func (t *Tx) SessionsByGroup(ctx context.Context, groupID string) ([]Session, er
 	return out, rows.Err()
 }
 
-// UpdateSessionState は revision・status・確定計画を更新する。
+// UpdateSessionState は revision・status・確定計画と、開催日時の決まり具合を更新する。
 func (t *Tx) UpdateSessionState(ctx context.Context, s Session) error {
-	return t.exec(ctx, "UPDATE sessions SET revision = ?, status = ?, confirmed_proposal_id = ?, updated_at = ? WHERE id = ?",
-		s.Revision, s.Status, nullStr(s.ConfirmedProposalID), ts(s.UpdatedAt), s.ID)
+	if s.ScheduleStatus == "" {
+		s.ScheduleStatus = ScheduleConfirmed
+	}
+	return t.exec(ctx, "UPDATE sessions SET revision = ?, status = ?, confirmed_proposal_id = ?, starts_at = ?, schedule_status = ?, updated_at = ? WHERE id = ?",
+		s.Revision, s.Status, nullStr(s.ConfirmedProposalID), ts(s.StartsAt), s.ScheduleStatus, ts(s.UpdatedAt), s.ID)
 }
 
 // SessionMembers は開催回に固定したメンバーを表示順で返す。

@@ -22,12 +22,15 @@ type SessionData struct {
 	TargetSectionIDs    []string  `json:"target_section_ids"`
 }
 
-// PreparationData は参加条件の輪読用の型。準備状況と担当できる範囲。
+// PreparationData は参加条件の輪読用の型。準備状況と担当できる範囲、出られない日。
 type PreparationData struct {
 	WillingToPresent       bool     `json:"willing_to_present"`
 	PreparedSectionIDs     []string `json:"prepared_section_ids"`
 	ExplainableSectionIDs  []string `json:"explainable_section_ids"`
 	MaxPresentationMinutes int      `json:"max_presentation_minutes"`
+	// UnavailableDates は出られない日（YYYY-MM-DD、JST）。日時がまだ決まっていない回で使う。
+	// 「出られる日」ではなく「出られない日」を集める。答えない人を予定なしとみなさないため。
+	UnavailableDates []string `json:"unavailable_dates"`
 }
 
 // 進行項目の種類。
@@ -46,11 +49,15 @@ type AgendaItem struct {
 	Minutes           int      `json:"minutes"`
 }
 
-// PlanData は coord.Proposal.Data の輪読用の型。今回の範囲と進行表。
+// PlanData は coord.Proposal.Data の輪読用の型。今回の範囲と進行表、決まっていなければ開催日時。
 type PlanData struct {
 	CoveredSectionIDs  []string     `json:"covered_section_ids"`
 	DeferredSectionIDs []string     `json:"deferred_section_ids"`
 	Agenda             []AgendaItem `json:"agenda"`
+	// StartsAt は案が決める開催日時（RFC 3339）。日時が決まっている回では空。
+	StartsAt string `json:"starts_at,omitempty"`
+	// Frequency は期間全体の進め方を1行で書いたもの（例：週1回60分・全8回）。説明用で、判断には使わない。
+	Frequency string `json:"frequency,omitempty"`
 }
 
 // 入力の制限（docs/data-structure.md）。
@@ -60,6 +67,8 @@ const (
 	maxSections        = 100
 	maxAgendaItems     = 20
 	maxIDLen           = 128
+	maxUnavailableDays = 60
+	maxFrequencyLen    = 100
 	// 同じ人を代役にできる連続回数の上限。3回連続を禁止する。
 	maxConsecutiveSubstitutes = 2
 )

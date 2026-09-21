@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // ErrNotImplemented は業務処理が未実装であることを示す。
@@ -99,6 +100,26 @@ type Playbook interface {
 // AGENT_MODE=fake の仮の判断処理で使う。実装しない用途では案を作らず管理者へ戻す。
 type DraftPlanner interface {
 	DraftPlan(ctx context.Context, s Snapshot) (Draft, error)
+}
+
+// PlanScheduler は「案が開催日時も決める」用途で実装する任意のインターフェース。
+// 期間だけで登録された開催回（ScheduleStatus=proposed）で、確定時にどの日時になったかを共通側へ渡す。
+type PlanScheduler interface {
+	// PlannedStart は案が決めた開催日時を返す。案が日時を含まなければ ok=false。
+	PlannedStart(plan json.RawMessage) (time.Time, bool, error)
+}
+
+// plannedStart は用途が日時を決めるならその値を返す。決めない用途では ok=false。
+func plannedStart(pb Playbook, plan json.RawMessage) (time.Time, bool) {
+	sc, ok := pb.(PlanScheduler)
+	if !ok {
+		return time.Time{}, false
+	}
+	at, ok, err := sc.PlannedStart(plan)
+	if err != nil || !ok {
+		return time.Time{}, false
+	}
+	return at, true
 }
 
 // PreparationDiffer は保存前後の参加条件の差分を、人が読める1行ずつの説明にする用途。

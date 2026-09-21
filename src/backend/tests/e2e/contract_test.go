@@ -40,7 +40,7 @@ func TestSessionDetailShape(t *testing.T) {
 		t.Fatalf("トップレベルのキー: %v", got)
 	}
 	sess := d["session"].(map[string]any)
-	if got := keys(sess); !reflect.DeepEqual(got, split("id group_id playbook_id title starts_at duration_minutes revision status updated_at")) {
+	if got := keys(sess); !reflect.DeepEqual(got, split("id group_id playbook_id title starts_at schedule_status period_start period_end duration_minutes revision status updated_at")) {
 		t.Fatalf("session のキー: %v", got)
 	}
 	for _, k := range []string{"starts_at", "updated_at"} {

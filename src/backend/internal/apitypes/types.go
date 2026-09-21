@@ -40,11 +40,15 @@ type Preparation struct {
 }
 
 type SessionSummary struct {
-	ID              string    `json:"id"`
-	GroupID         string    `json:"group_id"`
-	PlaybookID      string    `json:"playbook_id"`
-	Title           string    `json:"title"`
-	StartsAt        time.Time `json:"starts_at"`
+	ID         string    `json:"id"`
+	GroupID    string    `json:"group_id"`
+	PlaybookID string    `json:"playbook_id"`
+	Title      string    `json:"title"`
+	StartsAt   time.Time `json:"starts_at"`
+	// ScheduleStatus が proposed の間、StartsAt は仮の候補。confirmed で決まった日時になる。
+	ScheduleStatus  string    `json:"schedule_status"`
+	PeriodStart     string    `json:"period_start"`
+	PeriodEnd       string    `json:"period_end"`
 	DurationMinutes int       `json:"duration_minutes"`
 	Revision        int64     `json:"revision"`
 	Status          string    `json:"status"`
@@ -195,9 +199,15 @@ type CreateGroupInput struct {
 }
 
 type CreateSessionInput struct {
-	PlaybookID      string          `json:"playbook_id"`
-	Title           string          `json:"title"`
-	StartsAt        string          `json:"starts_at"`
+	PlaybookID string `json:"playbook_id"`
+	// Title は空なら「第N回」を自動で付ける。
+	Title string `json:"title"`
+	// StartsAt は日時を人が決める場合だけ入れる（RFC 3339）。
+	// 空のときは PeriodStart / PeriodEnd が必須で、日時はエージェントが提案して合意で決める。
+	StartsAt string `json:"starts_at"`
+	// PeriodStart / PeriodEnd は「この期間のどこかで開きたい」範囲（YYYY-MM-DD）。
+	PeriodStart     string          `json:"period_start"`
+	PeriodEnd       string          `json:"period_end"`
 	DurationMinutes int             `json:"duration_minutes"`
 	Data            json.RawMessage `json:"data"`
 }

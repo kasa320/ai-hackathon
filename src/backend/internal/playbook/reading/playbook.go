@@ -26,6 +26,7 @@ func (Playbook) Descriptor() coord.Descriptor {
 // aiContext は AI に渡す判断材料。共有可能な構造化情報だけを含む。
 type aiContext struct {
 	StartsAt        string            `json:"starts_at"`
+	Schedule        aiSchedule        `json:"schedule"`
 	DurationMinutes int               `json:"duration_minutes"`
 	Book            string            `json:"book_title"`
 	Sections        []Section         `json:"sections"`
@@ -34,6 +35,17 @@ type aiContext struct {
 	Members         []aiMember        `json:"members"`
 	CurrentPlan     *PlanData         `json:"current_confirmed_plan"`
 	Case            coord.CaseContext `json:"case"`
+}
+
+// aiSchedule は開催日時の決まり具合。proposed の間は案で日時を決める。
+type aiSchedule struct {
+	Status      string `json:"status"`
+	PeriodStart string `json:"period_start,omitempty"`
+	PeriodEnd   string `json:"period_end,omitempty"`
+	// Candidates は誰も「出られない」と答えていない日の候補（先頭から近い順、19:00 JST）。
+	Candidates []string `json:"candidate_datetimes,omitempty"`
+	// Today は判断時点の日付（JST）。過去の日を選ばないために渡す。
+	Today string `json:"today,omitempty"`
 }
 
 type aiMember struct {
@@ -55,6 +67,7 @@ func (Playbook) BuildContext(_ context.Context, s coord.Snapshot) (json.RawMessa
 	}
 	c := aiContext{
 		StartsAt:        s.StartsAt.UTC().Format("2006-01-02T15:04:05Z"),
+		Schedule:        buildSchedule(s),
 		DurationMinutes: s.DurationMinutes,
 		Book:            sd.BookTitle,
 		Sections:        sd.Sections,
@@ -89,6 +102,8 @@ func (Playbook) PlanSchema() json.RawMessage {
   "additionalProperties": false,
   "required": ["covered_section_ids", "deferred_section_ids", "agenda"],
   "properties": {
+    "starts_at": {"type": "string", "description": "開催日時（RFC 3339、例 2026-10-02T19:00:00+09:00）。schedule.status が proposed のときだけ入れる。決まっている回では省く"},
+    "frequency": {"type": "string", "description": "期間全体の進め方を1行で（例：週1回60分・全8回）。説明用"},
     "covered_section_ids": {"type": "array", "items": {"type": "string"}, "description": "今回扱う節ID"},
     "deferred_section_ids": {"type": "array", "items": {"type": "string"}, "description": "次回へ持ち越す節ID"},
     "agenda": {

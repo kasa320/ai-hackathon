@@ -16,7 +16,7 @@ const loginUrl = api.loginUrl("/setup.html");
 const STEPS = [
   ["01", "形式と参加者"],
   ["02", "教材と範囲"],
-  ["03", "次回の日時"],
+  ["03", "いつまでに開くか"],
 ];
 
 const state = {
@@ -32,7 +32,8 @@ const state = {
   completed: new Set(),
   target: new Set(),
   title: "",
-  startsAt: "",
+  periodStart: "",
+  periodEnd: "",
   duration: 60,
 };
 
@@ -414,11 +415,11 @@ function addSectionButton(rerender, box) {
   );
 }
 
-// ---- 03 次回の日時 ----------------------------------------------------------
+// ---- 03 いつまでに開くか ----------------------------------------------------
 
 function renderSessionStep() {
-  const title = el("input", { type: "text", value: state.title, placeholder: "第1回" });
-  const when = el("input", { type: "datetime-local", value: state.startsAt });
+  const from = el("input", { type: "date", value: state.periodStart, min: today() });
+  const to = el("input", { type: "date", value: state.periodEnd, min: today() });
   const duration = el("input", { type: "number", min: "15", max: "180", step: "5", value: String(state.duration) });
 
   mount(
@@ -426,15 +427,16 @@ function renderSessionStep() {
     el(
       "fieldset",
       { class: "fieldset" },
-      el("legend", {}, "次回"),
+      el("legend", {}, "いつまでに開くか"),
+      el("p", { class: "help" }, "日時はここで決めません。この期間の中から、全員の都合に合う日時をエージェントが提案します。"),
       el(
         "div",
-        { class: "grid grid--2" },
-        el("label", { class: "field" }, el("span", {}, "回の名前"), title),
-        el("label", { class: "field" }, el("span", {}, "持ち時間（15〜180分）"), duration),
+        { class: "grid grid--2", style: "margin-top:16px" },
+        el("label", { class: "field" }, el("span", {}, "開始日"), from),
+        el("label", { class: "field" }, el("span", {}, "終了目安日"), to),
       ),
-      el("label", { class: "field", style: "margin-top:16px" }, el("span", {}, "開始日時"), when),
-      el("p", { class: "help" }, "登録できるのは1時間より先の日時です。登録すると、参加者全員に参加条件の確認が送られます。"),
+      el("label", { class: "field", style: "margin-top:16px" }, el("span", {}, "1回の長さ（15〜180分）"), duration),
+      el("p", { class: "help" }, "登録すると、参加者全員に「準備状況と出られない日」の確認が送られます。返事がそろうと、日時と進行の案が出ます。"),
     ),
     el(
       "fieldset",
@@ -450,6 +452,7 @@ function renderSessionStep() {
         el("tr", {}, el("th", {}, "今回の範囲"), el("td", {}, sectionNames(state.target))),
         el("tr", {}, el("th", {}, "前回まで"), el("td", {}, state.completed.size ? sectionNames(state.completed) : "なし")),
         el("tr", {}, el("th", {}, "目次の出どころ"), el("td", {}, { web: "Webから取得", image: "画像から読み取り", manual: "手入力" }[state.tocSource.kind])),
+        el("tr", {}, el("th", {}, "開催日時"), el("td", {}, "この期間からエージェントが提案します")),
       ),
     ),
     el(
@@ -463,8 +466,8 @@ function renderSessionStep() {
           class: "btn",
           type: "button",
           onClick: () => {
-            state.title = title.value.trim();
-            state.startsAt = when.value;
+            state.periodStart = from.value;
+            state.periodEnd = to.value;
             state.duration = Number(duration.value);
             createSession();
           },
@@ -479,20 +482,26 @@ function sectionNames(ids) {
   return state.sections.filter((s) => ids.has(s.id)).map((s) => s.title).join("、") || "—";
 }
 
-async function createSession() {
-  if (!state.title) return flash($("flash"), { title: "回の名前を入れてください", tone: "warn" });
-  if (!state.startsAt) return flash($("flash"), { title: "開始日時を入れてください", tone: "warn" });
+/** 今日（ブラウザーの時刻）を YYYY-MM-DD で返す。日付入力の下限に使う。 */
+function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
-  // datetime-local はタイムゾーンを持たないので、ブラウザーの時刻として送る。
-  const startsAt = new Date(state.startsAt);
-  if (Number.isNaN(startsAt.getTime())) return flash($("flash"), { title: "開始日時の形式が正しくありません", tone: "warn" });
+async function createSession() {
+  if (!state.periodStart) return flash($("flash"), { title: "開始日を入れてください", tone: "warn" });
+  if (!state.periodEnd) return flash($("flash"), { title: "終了目安日を入れてください", tone: "warn" });
+  if (state.periodEnd < state.periodStart) {
+    return flash($("flash"), { title: "終了目安日は開始日以降にしてください", tone: "warn" });
+  }
 
   clearFlash($("flash"));
   try {
+    // 回の名前と開始日時は送らない。名前は通し番号、日時は案で決まる。
     const created = await api.createSession(state.group.id, {
       playbook_id: state.playbookId,
-      title: state.title,
-      starts_at: startsAt.toISOString(),
+      period_start: state.periodStart,
+      period_end: state.periodEnd,
       duration_minutes: state.duration,
       data: {
         book_title: state.book.title,

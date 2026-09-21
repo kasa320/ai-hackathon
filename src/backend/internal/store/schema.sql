@@ -51,12 +51,17 @@ CREATE TABLE IF NOT EXISTS members (
 CREATE INDEX IF NOT EXISTS members_user ON members(user_id);
 CREATE INDEX IF NOT EXISTS members_discord ON members(discord_user_id);
 
+-- starts_at は常に値を持つ。期間だけで登録した回では、確定するまで仮の候補が入る
+-- （schedule_status='proposed'）。日時が確定すると 'confirmed' になる。
 CREATE TABLE IF NOT EXISTS sessions (
     id                    TEXT PRIMARY KEY,
     group_id              TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
     playbook_id           TEXT NOT NULL,
     title                 TEXT NOT NULL,
     starts_at             TEXT NOT NULL,
+    period_start          TEXT NOT NULL DEFAULT '',
+    period_end            TEXT NOT NULL DEFAULT '',
+    schedule_status       TEXT NOT NULL DEFAULT 'confirmed' CHECK (schedule_status IN ('proposed', 'confirmed')),
     duration_minutes      INTEGER NOT NULL,
     revision              INTEGER NOT NULL,
     status                TEXT NOT NULL CHECK (status IN ('draft', 'confirmed', 'needs_attention')),

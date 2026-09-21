@@ -33,6 +33,19 @@ export function renderTopbar(node, { me, current }) {
   );
 }
 
+/**
+ * 開催日時の表示。日時がまだ決まっていない回では、仮の候補を確定した日時のように見せない。
+ * 期間だけが決まっている状態は「調整中」と書く。
+ */
+export function whenLabel(session, format) {
+  if (session.schedule_status === "proposed") {
+    return session.period_start && session.period_end
+      ? `日時調整中（${session.period_start.slice(5).replace("-", "/")}〜${session.period_end.slice(5).replace("-", "/")}）`
+      : "日時調整中";
+  }
+  return format(session.starts_at);
+}
+
 export function initial(name) {
   return (name ?? "?").trim().slice(0, 1) || "?";
 }

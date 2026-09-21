@@ -138,8 +138,10 @@ func (Playbook) ValidatePreparation(_ context.Context, s coord.Snapshot, attenda
 	}
 	d.PreparedSectionIDs = nonNil(d.PreparedSectionIDs)
 	d.ExplainableSectionIDs = nonNil(d.ExplainableSectionIDs)
+	d.UnavailableDates = nonNil(d.UnavailableDates)
 
 	v := &coord.ValidationError{}
+	d.UnavailableDates = validateDates(v, "unavailable_dates", d.UnavailableDates)
 	known := sd.sectionSet()
 	checkIDList(v, "prepared_section_ids", d.PreparedSectionIDs, known)
 	checkIDList(v, "explainable_section_ids", d.ExplainableSectionIDs, known)
@@ -235,13 +237,15 @@ func (Playbook) ValidatePartialPreparation(_ context.Context, s coord.Snapshot, 
 
 // ApplyWithdrawal は辞退時の変換（docs/data-structure.md）。準備済みの節は維持する。
 func (Playbook) ApplyWithdrawal(_ context.Context, _ coord.Snapshot, _ string, current json.RawMessage) (json.RawMessage, error) {
-	d := PreparationData{PreparedSectionIDs: []string{}}
+	d := PreparationData{PreparedSectionIDs: []string{}, UnavailableDates: []string{}}
 	if len(current) > 0 {
 		var cur PreparationData
 		if err := json.Unmarshal(current, &cur); err != nil {
 			return nil, fmt.Errorf("reading: 参加条件を読めません: %w", err)
 		}
 		d.PreparedSectionIDs = nonNil(cur.PreparedSectionIDs)
+		// 出られない日は担当の辞退では変わらない。本人が答えた予定なので引き継ぐ。
+		d.UnavailableDates = nonNil(cur.UnavailableDates)
 	}
 	d.ExplainableSectionIDs = []string{}
 	return mustJSON(d), nil
@@ -301,6 +305,7 @@ func (pb Playbook) ValidatePlan(_ context.Context, s coord.Snapshot, prop coord.
 		return err
 	}
 	v := &coord.ValidationError{}
+	validateSchedule(v, s, p)
 
 	known := sd.sectionSet()
 	checkIDList(v, "covered_section_ids", p.CoveredSectionIDs, known)
@@ -453,6 +458,13 @@ func (Playbook) ApprovalRequirements(_ context.Context, s coord.Snapshot, prop c
 	switch prop.ChangeKind {
 	case coord.ChangeInitial:
 		req.Approvals = append(req.Approvals, coord.ApprovalRequirement{Kind: coord.ApprovalOwner})
+		if s.ScheduleStatus == coord.ScheduleProposed {
+			// 日時も決める案は管理者だけで通さない。出席予定者にも諮る。
+			req.Approvals = append(req.Approvals, coord.ApprovalRequirement{
+				Kind:              coord.ApprovalMajority,
+				EligibleMemberIDs: nonNil(s.Attending()),
+			})
+		}
 	case coord.ChangeReplan:
 		cur := s.CurrentPlan()
 		if cur == nil {

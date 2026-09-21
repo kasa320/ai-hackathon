@@ -110,7 +110,7 @@ func TestApplyWithdrawalKeepsPreparedSections(t *testing.T) {
 	}
 	var d reading.PreparationData
 	_ = json.Unmarshal(out, &d)
-	want := reading.PreparationData{WillingToPresent: false, PreparedSectionIDs: []string{"sec_1", "sec_2", "sec_3"}, ExplainableSectionIDs: []string{}, MaxPresentationMinutes: 0}
+	want := reading.PreparationData{WillingToPresent: false, PreparedSectionIDs: []string{"sec_1", "sec_2", "sec_3"}, ExplainableSectionIDs: []string{}, MaxPresentationMinutes: 0, UnavailableDates: []string{}}
 	if !reflect.DeepEqual(d, want) {
 		t.Fatalf("got %+v, want %+v", d, want)
 	}
@@ -125,7 +125,7 @@ func TestApplyWithdrawalKeepsPreparedSections(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(out) != `{"willing_to_present":false,"prepared_section_ids":[],"explainable_section_ids":[],"max_presentation_minutes":0}` {
+	if string(out) != `{"willing_to_present":false,"prepared_section_ids":[],"explainable_section_ids":[],"max_presentation_minutes":0,"unavailable_dates":[]}` {
 		t.Fatalf("未回答からの既定値が違う: %s", out)
 	}
 }

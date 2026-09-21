@@ -11,6 +11,7 @@
 - 更新系は「受け付けた」で202を返し、AIの処理・確定・通知はバックエンドのイベント処理が進める。結果は `GET /api/sessions/{id}` のポーリングで確認する。
 - 競合は版番号で防ぐ。参加条件の更新・辞退・代案は `expected_revision`、案への回答は `proposal_id` と `proposal_version` を送る。古ければ `409`。
 - グループに属さない利用者には、対象の存在も含めて `404` を返す。
+- 開催回は「日時を人が決める」「期間だけ渡してエージェントに決めさせる」の2通りで登録できる。後者は `schedule_status="proposed"` で始まり、`starts_at` は**仮の候補**（確定した日時ではない）。案が同意を集めて確定した時点で `starts_at` が決まり、`schedule_status="confirmed"` になる。画面はこの間、日時を決まったものとして表示しない。
 
 ## 汎用API
 
@@ -26,7 +27,7 @@
 | `POST /api/groups` | ログイン済み | 201 | 固定メンバーでグループ作成。招待はDiscord IDで登録する |
 | `GET /api/groups/{group_id}` | メンバー | 200 | メンバー一覧と自分の役割 |
 | `GET /api/groups/{group_id}/sessions` | メンバー | 200 | 開催回の一覧 |
-| `POST /api/groups/{group_id}/sessions` | 管理者 | 201 | 開催回を登録し、全員への参加条件の確認を開始する |
+| `POST /api/groups/{group_id}/sessions` | 管理者 | 201 | 開催回を登録し、全員への参加条件の確認を開始する。日時（`starts_at`）か期間（`period_start`・`period_end`）のどちらかを渡す |
 | `GET /api/sessions/{session_id}` | メンバー | 200 | **画面の主データ。** 計画・参加条件・案件の状況・自分宛てタスク・権限をまとめて返す |
 | `PUT /api/sessions/{session_id}/preparations/me` | メンバー本人 | 202 | 自分の参加条件を送信・更新する |
 | `POST /api/sessions/{session_id}/preparations/me/interpretations` | メンバー本人 | 200 | 自分の自由文から参加条件の下書きを作る。**保存はしない** |

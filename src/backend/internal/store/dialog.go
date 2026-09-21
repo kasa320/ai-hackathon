@@ -17,7 +17,8 @@ type PreparationTarget struct {
 // PreparationTargetsByUser は本人が所属し、まだ開催していない開催回を開催が近い順に返す。
 // 所属していない開催回は返さない（存在も知らせない）。
 func (t *Tx) PreparationTargetsByUser(ctx context.Context, userID string, now time.Time, limit int) ([]PreparationTarget, error) {
-	const cols = "s.id, s.group_id, s.playbook_id, s.title, s.starts_at, s.duration_minutes, s.revision, s.status, s.data, s.confirmed_proposal_id, s.created_at, s.updated_at"
+	const cols = "s.id, s.group_id, s.playbook_id, s.title, s.starts_at, s.period_start, s.period_end, s.schedule_status, " +
+		"s.duration_minutes, s.revision, s.status, s.data, s.confirmed_proposal_id, s.created_at, s.updated_at"
 	rows, err := t.query(ctx, `SELECT `+cols+`, m.id,
     EXISTS (SELECT 1 FROM tasks tk WHERE tk.session_id = s.id AND tk.member_id = m.id
             AND tk.kind = 'preparation' AND tk.status = 'open' AND tk.due_at > ?)

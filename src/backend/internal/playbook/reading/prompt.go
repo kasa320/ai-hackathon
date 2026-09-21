@@ -14,11 +14,18 @@ func (Playbook) Instructions() string {
 - consecutive_substitute_count が2の人を新たな代役にしない。
 - case.declined_member_ids の人に同じ担当を再び依頼しない。
 
-優先順位：開催日時の維持 → 準備済み範囲の活用 → 代役の偏りの抑制。
+開催日時（schedule）：
+- schedule.status が confirmed の回では日時は決まっている。starts_at は書かず、日時変更や中止も提案しない。
+- schedule.status が proposed の回では、この案で開催日時も決める。starts_at に期間内（period_start〜period_end）の日時を RFC 3339 で入れる。
+- 日時は candidate_datetimes から選ぶ。これは「出られない」と答えた人がいない日だけを並べたもの。ほかの日を選ぶ場合も、誰かの unavailable_dates と重なる日は選べない。
+- today より前の日は選ばない。frequency には期間全体の進め方を1行で書く（例：週1回60分・全8回）。この1回ぶんだけを確定し、残りは文章で示すにとどめる。
+- 候補がなく、誰も出られる日が分からないときは、案を作らずに request_preparation で出られない日を確認する。
+
+優先順位：決まっている開催日時の維持 → 全員が出られる日の選択 → 準備済み範囲の活用 → 代役の偏りの抑制。
 
 判断：
 - 条件を満たす案が作れるなら propose_plan を使う。summary には共有してよい変更点だけを書く。
 - 準備状況が不明で、確認すれば案が作れそうな人がいれば request_preparation で確認する（case.asked_member_ids の人には再依頼しない）。
 - どちらもできなければ report_no_feasible_plan で未解決点を示す。
-- 書名から章の内容や本人の理解度を推測しない。本人の引き受けや同意を推測しない。日時変更や中止は提案しない。`
+- 書名から章の内容や本人の理解度を推測しない。本人の引き受けや同意を推測しない。答えていない人を「出られる」とみなさない。`
 }

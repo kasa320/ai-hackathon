@@ -146,6 +146,7 @@ func (c *Coordinator) GetGroup(ctx context.Context, userID, groupID string) (api
 func summaryView(s store.Session) apitypes.SessionSummary {
 	return apitypes.SessionSummary{
 		ID: s.ID, GroupID: s.GroupID, PlaybookID: s.PlaybookID, Title: s.Title, StartsAt: s.StartsAt,
+		ScheduleStatus: scheduleStatus(s), PeriodStart: s.PeriodStart, PeriodEnd: s.PeriodEnd,
 		DurationMinutes: s.DurationMinutes, Revision: s.Revision, Status: s.Status, UpdatedAt: s.UpdatedAt,
 	}
 }
@@ -196,15 +197,34 @@ func (c *Coordinator) CreateSession(ctx context.Context, userID, groupID string,
 		}
 
 		var fields []apperr.Field
-		title, ok := validName(in.Title)
-		if !ok {
+		title := strings.TrimSpace(in.Title)
+		if title == "" {
+			// 入力を最小にする。名前を書かなければ通し番号を振る。
+			n, err := tx.CountSessions(ctx, g.ID)
+			if err != nil {
+				return store.Response{}, err
+			}
+			title = fmt.Sprintf("第%d回", n+1)
+		} else if _, ok := validName(title); !ok {
 			fields = append(fields, apperr.Field{Path: "title", Message: fmt.Sprintf("1〜%d文字で入力してください", MaxNameLen)})
 		}
-		startsAt, err := parseOffsetTime(in.StartsAt)
-		if err != nil {
-			fields = append(fields, apperr.Field{Path: "starts_at", Message: "タイムゾーン付きの日時（RFC 3339）で入力してください"})
-		} else if _, secured := dueAt(now, startsAt); !startsAt.After(now.Add(SessionMinLead)) || !secured {
-			fields = append(fields, apperr.Field{Path: "starts_at", Message: "回答期限を確保できるよう、1時間半以上先の日時を指定してください"})
+
+		// 日時は「人が決める」「期間だけ渡してエージェントに決めさせる」の2通り。
+		schedule := store.ScheduleConfirmed
+		var startsAt time.Time
+		var periodStart, periodEnd string
+		if in.StartsAt != "" {
+			startsAt, err = parseOffsetTime(in.StartsAt)
+			if err != nil {
+				fields = append(fields, apperr.Field{Path: "starts_at", Message: "タイムゾーン付きの日時（RFC 3339）で入力してください"})
+			} else if _, secured := dueAt(now, startsAt); !startsAt.After(now.Add(SessionMinLead)) || !secured {
+				fields = append(fields, apperr.Field{Path: "starts_at", Message: "回答期限を確保できるよう、1時間半以上先の日時を指定してください"})
+			}
+		} else {
+			schedule = store.ScheduleProposed
+			var perr []apperr.Field
+			periodStart, periodEnd, startsAt, perr = parsePeriod(in.PeriodStart, in.PeriodEnd, now)
+			fields = append(fields, perr...)
 		}
 		if in.DurationMinutes < MinDuration || in.DurationMinutes > MaxDuration {
 			fields = append(fields, apperr.Field{Path: "duration_minutes", Message: fmt.Sprintf("%d〜%d分で指定してください", MinDuration, MaxDuration)})
@@ -228,6 +248,7 @@ func (c *Coordinator) CreateSession(ctx context.Context, userID, groupID string,
 
 		sess := store.Session{
 			ID: store.NewID("ses"), GroupID: g.ID, PlaybookID: in.PlaybookID, Title: title, StartsAt: startsAt.UTC(),
+			PeriodStart: periodStart, PeriodEnd: periodEnd, ScheduleStatus: schedule,
 			DurationMinutes: in.DurationMinutes, Revision: 1, Status: sessionDraft, Data: data, CreatedAt: now, UpdatedAt: now,
 		}
 		var ids []string
@@ -237,17 +258,27 @@ func (c *Coordinator) CreateSession(ctx context.Context, userID, groupID string,
 		if err := tx.CreateSession(ctx, sess, ids); err != nil {
 			return store.Response{}, err
 		}
-		cs := store.Case{ID: store.NewID("case"), SessionID: sess.ID, Status: store.CaseCollecting, Summary: "参加条件を確認しています。", CreatedAt: now, UpdatedAt: now}
+		summary := "参加条件を確認しています。"
+		ask := "今回の準備状況を教えてください。"
+		if schedule == store.ScheduleProposed {
+			summary = "参加条件と、出られない日を確認しています。"
+			ask = "準備状況と、出られない日を教えてください。日時はこのあと提案します。"
+		}
+		cs := store.Case{ID: store.NewID("case"), SessionID: sess.ID, Status: store.CaseCollecting, Summary: summary, CreatedAt: now, UpdatedAt: now}
 		if err := tx.CreateCase(ctx, cs); err != nil {
 			return store.Response{}, err
 		}
 		due, _ := dueAt(now, sess.StartsAt)
 		for _, m := range members {
-			if err := c.createTask(ctx, tx, sess, cs, m, store.TaskPreparation, "今回の準備状況を教えてください。", nil, "system", due, now); err != nil {
+			if err := c.createTask(ctx, tx, sess, cs, m, store.TaskPreparation, ask, nil, "system", due, now); err != nil {
 				return store.Response{}, err
 			}
 		}
-		if err := c.activity(ctx, tx, sess, cs.ID, "input_received", "開催回が登録され、参加条件の確認を始めました。", "", now); err != nil {
+		opened := "開催回が登録され、参加条件の確認を始めました。"
+		if schedule == store.ScheduleProposed {
+			opened = fmt.Sprintf("開催回が登録されました（%s〜%s のどこかで開催）。参加条件と出られない日を集めています。", periodStart, periodEnd)
+		}
+		if err := c.activity(ctx, tx, sess, cs.ID, "input_received", opened, "", now); err != nil {
 			return store.Response{}, err
 		}
 		return store.Response{
@@ -260,6 +291,65 @@ func (c *Coordinator) CreateSession(ctx context.Context, userID, groupID string,
 		c.Wake()
 	}
 	return res, err
+}
+
+// periodMaxDays は「この期間で開きたい」と言える最長。長すぎる指定を先に弾く。
+const periodMaxDays = 366
+
+// scheduleStatus は保存値が空の古い行でも確定扱いになるようにして返す。
+func scheduleStatus(s store.Session) string {
+	if s.ScheduleStatus == "" {
+		return store.ScheduleConfirmed
+	}
+	return s.ScheduleStatus
+}
+
+// parsePeriod は「開始日・終了目安日」を検証し、日時が決まるまでの仮の候補を返す。
+// 仮の候補は回答期限を確保できる最初の日の19:00（JST）で、合意した日時が入るまでの置き場所。
+// 画面では schedule_status=proposed として「調整中」と示し、確定した日時として扱わない。
+func parsePeriod(startStr, endStr string, now time.Time) (string, string, time.Time, []apperr.Field) {
+	var fields []apperr.Field
+	start, errStart := time.ParseInLocation("2006-01-02", strings.TrimSpace(startStr), displayZone)
+	if errStart != nil {
+		fields = append(fields, apperr.Field{Path: "period_start", Message: "開始日を YYYY-MM-DD で入力してください"})
+	}
+	end, errEnd := time.ParseInLocation("2006-01-02", strings.TrimSpace(endStr), displayZone)
+	if errEnd != nil {
+		fields = append(fields, apperr.Field{Path: "period_end", Message: "終了目安日を YYYY-MM-DD で入力してください"})
+	}
+	if len(fields) > 0 {
+		return "", "", time.Time{}, fields
+	}
+	// 終了目安日は当日いっぱいを含める。
+	endOfDay := end.Add(24*time.Hour - time.Second)
+	switch {
+	case end.Before(start):
+		fields = append(fields, apperr.Field{Path: "period_end", Message: "開始日と同じ日か、それより後の日を指定してください"})
+	case end.After(start.AddDate(0, 0, periodMaxDays)):
+		fields = append(fields, apperr.Field{Path: "period_end", Message: "開始日から1年以内で指定してください"})
+	case !endOfDay.After(now.Add(SessionMinLead + MinResponseWindow)):
+		fields = append(fields, apperr.Field{Path: "period_end", Message: "回答を集める時間が残っていません。もう少し先の日付にしてください"})
+	}
+	if len(fields) > 0 {
+		return "", "", time.Time{}, fields
+	}
+	return start.Format("2006-01-02"), end.Format("2006-01-02"), provisionalStart(start, endOfDay, now), nil
+}
+
+// provisionalStart は期間の中で、回答期限を確保できる最初の日の19:00（JST）を返す。
+// どの日も条件を満たさなければ、期間の最後の時点に寄せる。
+func provisionalStart(start, endOfDay, now time.Time) time.Time {
+	day := start
+	if today := now.In(displayZone); day.Before(today) {
+		day = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, displayZone)
+	}
+	for ; !day.After(endOfDay); day = day.AddDate(0, 0, 1) {
+		at := time.Date(day.Year(), day.Month(), day.Day(), 19, 0, 0, 0, displayZone)
+		if _, secured := dueAt(now, at); at.After(now.Add(SessionMinLead)) && secured {
+			return at.UTC()
+		}
+	}
+	return endOfDay.UTC()
 }
 
 // parseOffsetTime は明示的なオフセット（Z を含む）付きの RFC 3339 日時だけを受け付ける。

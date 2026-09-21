@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/kasa320/ai-hackathon/src/backend/internal/coord"
 )
@@ -142,6 +143,17 @@ func (pb Playbook) DraftPlan(ctx context.Context, s coord.Snapshot) (coord.Draft
 
 	plan := PlanData{CoveredSectionIDs: covered, DeferredSectionIDs: nonNil(deferred)}
 	var parts []string
+	if s.ScheduleStatus == coord.ScheduleProposed {
+		days := candidateDays(s, 1)
+		if len(days) == 0 {
+			// 全員が出られる日が期間内に見つからない。多数決で押し切らず、管理者に返す。
+			return coord.Draft{Kind: coord.DraftNoFeasible,
+				Summary: fmt.Sprintf("%s〜%s の中に、全員が出られる日がありません。期間を広げるか、出られない日を見直してください。", s.PeriodStart, s.PeriodEnd)}, nil
+		}
+		plan.StartsAt = days[0].Format(time.RFC3339)
+		plan.Frequency = describeFrequency(s)
+		parts = append(parts, fmt.Sprintf("%sに開催", formatDay(days[0])))
+	}
 	used := 0
 	for _, sec := range covered {
 		c := assigned[sec]

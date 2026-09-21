@@ -7,7 +7,7 @@
 import { el, mount, formatDateTime } from "./dom.js";
 import { api, ApiError } from "./api.js";
 import { featureFor } from "./features/index.js";
-import { renderTopbar, renderPlanBar, renderDevBar, pluginTag, placeholder, tally } from "./ui.js";
+import { renderTopbar, renderPlanBar, renderDevBar, pluginTag, placeholder, tally, whenLabel } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -150,7 +150,7 @@ function renderHeadline({ session, detail, task }) {
       "div",
       { class: "headline__top" },
       pluginTag(session.playbook_id, feature?.name),
-      el("span", { class: "headline__when num" }, formatDateTime(session.starts_at)),
+      el("span", { class: "headline__when num" }, whenLabel(session, formatDateTime)),
       el("span", { class: "headline__state" }, detail.active_case ? CASE_LABEL[detail.active_case.status] : STATE_LABEL[session.status]),
     ),
     el(
@@ -242,7 +242,9 @@ function renderRow(session, detail) {
   return el(
     "a",
     { class: "row", href: `/session.html?id=${encodeURIComponent(session.id)}` },
-    el("time", { class: "row__date num", datetime: session.starts_at }, shortDate(session.starts_at)),
+    session.schedule_status === "proposed"
+      ? el("span", { class: "row__date" }, "調整中")
+      : el("time", { class: "row__date num", datetime: session.starts_at }, shortDate(session.starts_at)),
     el(
       "span",
       { class: "row__main" },

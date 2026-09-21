@@ -49,7 +49,43 @@ func open(ctx context.Context, dsn string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("スキーマの適用: %w", err)
 	}
+	if err := addMissingColumns(ctx, db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &Store{db: db}, nil
+}
+
+// addMissingColumns は既存のDBに後から足した列を補う。CREATE TABLE IF NOT EXISTS は
+// 既にある表を変えないため、列の追加だけここで行う。DBを作り直さずに起動できるようにする。
+func addMissingColumns(ctx context.Context, db *sql.DB) error {
+	type column struct{ table, name, def string }
+	for _, c := range []column{
+		{"sessions", "period_start", "TEXT NOT NULL DEFAULT ''"},
+		{"sessions", "period_end", "TEXT NOT NULL DEFAULT ''"},
+		{"sessions", "schedule_status", "TEXT NOT NULL DEFAULT 'confirmed'"},
+	} {
+		has, err := hasColumn(ctx, db, c.table, c.name)
+		if err != nil {
+			return err
+		}
+		if has {
+			continue
+		}
+		if _, err := db.ExecContext(ctx, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", c.table, c.name, c.def)); err != nil {
+			return fmt.Errorf("列 %s.%s の追加: %w", c.table, c.name, err)
+		}
+	}
+	return nil
+}
+
+func hasColumn(ctx context.Context, db *sql.DB, table, name string) (bool, error) {
+	rows, err := db.QueryContext(ctx, "SELECT 1 FROM pragma_table_info(?) WHERE name = ?", table, name)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	return rows.Next(), rows.Err()
 }
 
 func (s *Store) Ping(ctx context.Context) error {

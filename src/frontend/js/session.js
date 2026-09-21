@@ -12,7 +12,7 @@ import { createPoller } from "./poll.js";
 import { featureFor } from "./features/index.js";
 import {
   renderTopbar, renderPlanBar, planLegend, renderDevBar, pluginTag,
-  placeholder, flash, clearFlash, reportMutationError, createDialog, tally, initial, receipt,
+  placeholder, flash, clearFlash, reportMutationError, createDialog, tally, initial, receipt, whenLabel,
 } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
@@ -134,7 +134,7 @@ function renderHead() {
         { style: "display:flex;align-items:center;gap:12px;margin-bottom:8px" },
         pluginTag(detail.session.playbook_id, feature?.name),
         el("span", { class: "num", style: "color:var(--ink-2);font-size:.84rem" },
-          `${formatDateTime(detail.session.starts_at)}・${detail.session.duration_minutes}分`),
+          `${whenLabel(detail.session, formatDateTime)}・${detail.session.duration_minutes}分`),
       ),
       el("h1", {}, detail.session.title),
     ),
@@ -600,7 +600,7 @@ async function withdraw(scope) {
 /** 参加条件の入力。自由文で下書きを作れるが、保存は本人が確認してからになる。 */
 function openPreparation() {
   const current = detail.preparations.find((p) => p.member_id === detail.current_member_id)?.value ?? null;
-  const form = feature.createPreparationForm(detail.data, current, detail.session.duration_minutes);
+  const form = feature.createPreparationForm(detail.data, current, detail.session.duration_minutes, detail.session);
 
   const draftBox = el("div", {});
   const text = el("textarea", {
