@@ -70,6 +70,12 @@ func addMissingColumns(ctx context.Context, db *sql.DB) error {
 		{"sessions", "period_start", "TEXT NOT NULL DEFAULT ''"},
 		{"sessions", "period_end", "TEXT NOT NULL DEFAULT ''"},
 		{"sessions", "schedule_status", "TEXT NOT NULL DEFAULT 'confirmed'"},
+		// 費用と信頼性の実測用。既存の行は NULL のままで、0 や空文字として扱わない。
+		{"llm_calls", "purpose", "TEXT"},
+		{"llm_calls", "resolved_model", "TEXT"},
+		{"llm_calls", "fallback_level", "INTEGER"},
+		{"llm_calls", "request_id", "TEXT"},
+		{"llm_calls", "latency_ms", "INTEGER"},
 	} {
 		has, err := hasColumn(ctx, db, c.table, c.name)
 		if err != nil {

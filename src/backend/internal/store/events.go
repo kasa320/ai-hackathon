@@ -243,10 +243,20 @@ func (t *Tx) ActivityBySession(ctx context.Context, sessionID string, limit int)
 
 // LLMCall は LLM 呼び出し1回の記録。金額が分からなければ nil。
 type LLMCall struct {
-	ID              string
-	CaseID          string
-	LookupID        string
-	Model           string
+	ID       string
+	CaseID   string
+	LookupID string
+	// Model は要求したモデル。Named Router を使う場合はルーター名が入る。
+	Model string
+	// Purpose は呼び出し元（planner / interpreter / toc_search / toc_vision）。
+	Purpose string
+	// ResolvedModel は実際に応答したモデル。分からなければ空。
+	ResolvedModel string
+	// FallbackLevel は 0 が本命成功、1 以上で受け皿が発動したこと。分からなければ nil。
+	FallbackLevel *int
+	RequestID     string
+	// LatencyMS は OrcaRouter が計測した所要時間（ミリ秒）。分からなければ nil。
+	LatencyMS       *int
 	InputTokens     *int
 	OutputTokens    *int
 	Currency        string
@@ -263,8 +273,9 @@ func (t *Tx) AddLLMCall(ctx context.Context, c LLMCall) error {
 	if c.Currency == "" {
 		c.Currency = "unknown"
 	}
-	return t.exec(ctx, "INSERT INTO llm_calls (id, case_id, lookup_id, model, input_tokens, output_tokens, currency, estimated_amount, billed_amount, succeeded, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		c.ID, nullStr(c.CaseID), nullStr(c.LookupID), c.Model, c.InputTokens, c.OutputTokens, c.Currency, c.EstimatedAmount, c.BilledAmount, c.Succeeded, ts(c.CreatedAt))
+	return t.exec(ctx, "INSERT INTO llm_calls (id, case_id, lookup_id, model, purpose, resolved_model, fallback_level, request_id, latency_ms, input_tokens, output_tokens, currency, estimated_amount, billed_amount, succeeded, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		c.ID, nullStr(c.CaseID), nullStr(c.LookupID), c.Model, nullStr(c.Purpose), nullStr(c.ResolvedModel), c.FallbackLevel, nullStr(c.RequestID), c.LatencyMS,
+		c.InputTokens, c.OutputTokens, c.Currency, c.EstimatedAmount, c.BilledAmount, c.Succeeded, ts(c.CreatedAt))
 }
 
 // UpdateLLMCall は先に確保した記録へ結果を書き込む。呼び出し前に AddLLMCall で枠を取り、
@@ -276,8 +287,10 @@ func (t *Tx) UpdateLLMCall(ctx context.Context, c LLMCall) error {
 	if c.Currency == "" {
 		c.Currency = "unknown"
 	}
-	return t.exec(ctx, "UPDATE llm_calls SET model = ?, input_tokens = ?, output_tokens = ?, currency = ?, estimated_amount = ?, billed_amount = ?, succeeded = ? WHERE id = ?",
-		c.Model, c.InputTokens, c.OutputTokens, c.Currency, c.EstimatedAmount, c.BilledAmount, c.Succeeded, c.ID)
+	// purpose は枠を確保した時点で決まっているので上書きしない。
+	return t.exec(ctx, "UPDATE llm_calls SET model = ?, resolved_model = ?, fallback_level = ?, request_id = ?, latency_ms = ?, input_tokens = ?, output_tokens = ?, currency = ?, estimated_amount = ?, billed_amount = ?, succeeded = ? WHERE id = ?",
+		c.Model, nullStr(c.ResolvedModel), c.FallbackLevel, nullStr(c.RequestID), c.LatencyMS,
+		c.InputTokens, c.OutputTokens, c.Currency, c.EstimatedAmount, c.BilledAmount, c.Succeeded, c.ID)
 }
 
 // CountLLMCallsByCase は1つの案件で使った LLM 呼び出しの数を返す（自由文の解釈を含む）。
@@ -288,7 +301,7 @@ func (t *Tx) CountLLMCallsByCase(ctx context.Context, caseID string) (int, error
 }
 
 func (t *Tx) LLMCallsByCase(ctx context.Context, caseID string) ([]LLMCall, error) {
-	rows, err := t.query(ctx, "SELECT id, model, input_tokens, output_tokens, currency, estimated_amount, billed_amount, succeeded, created_at FROM llm_calls WHERE case_id = ? ORDER BY created_at", caseID)
+	rows, err := t.query(ctx, "SELECT id, model, purpose, resolved_model, fallback_level, request_id, latency_ms, input_tokens, output_tokens, currency, estimated_amount, billed_amount, succeeded, created_at FROM llm_calls WHERE case_id = ? ORDER BY created_at", caseID)
 	if err != nil {
 		return nil, err
 	}
@@ -296,11 +309,20 @@ func (t *Tx) LLMCallsByCase(ctx context.Context, caseID string) ([]LLMCall, erro
 	var out []LLMCall
 	for rows.Next() {
 		c := LLMCall{CaseID: caseID}
-		var in, outTok sql.NullInt64
-		var est, billed sql.NullString
+		var in, outTok, level, latency sql.NullInt64
+		var est, billed, purpose, resolved, reqID sql.NullString
 		var created string
-		if err := rows.Scan(&c.ID, &c.Model, &in, &outTok, &c.Currency, &est, &billed, &c.Succeeded, &created); err != nil {
+		if err := rows.Scan(&c.ID, &c.Model, &purpose, &resolved, &level, &reqID, &latency, &in, &outTok, &c.Currency, &est, &billed, &c.Succeeded, &created); err != nil {
 			return nil, err
+		}
+		c.Purpose, c.ResolvedModel, c.RequestID = purpose.String, resolved.String, reqID.String
+		if latency.Valid {
+			v := int(latency.Int64)
+			c.LatencyMS = &v
+		}
+		if level.Valid {
+			v := int(level.Int64)
+			c.FallbackLevel = &v
 		}
 		if in.Valid {
 			v := int(in.Int64)

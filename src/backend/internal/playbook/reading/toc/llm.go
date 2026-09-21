@@ -35,6 +35,7 @@ func (s *LLMSearcher) Search(ctx context.Context, b Book) (SearchResult, []coord
 	res, call, err := s.Client.Chat(ctx, agent.ChatRequest{Model: s.Model, Messages: []agent.Message{
 		{Role: "system", Content: searchPrompt}, {Role: "user", Content: user},
 	}})
+	call.Purpose = coord.PurposeTocSearch
 	calls := []coord.LLMCall{call}
 	if err != nil {
 		return SearchResult{}, calls, err
@@ -72,6 +73,7 @@ func (r *LLMImageReader) Read(ctx context.Context, images []Image) (ReadResult, 
 	res, call, err := r.Client.Chat(ctx, agent.ChatRequest{Model: r.Model, Messages: []agent.Message{
 		{Role: "system", Content: readPrompt}, {Role: "user", Content: content},
 	}})
+	call.Purpose = coord.PurposeTocVision
 	calls := []coord.LLMCall{call}
 	if err != nil {
 		return ReadResult{}, calls, err

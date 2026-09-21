@@ -104,6 +104,7 @@ func (p *LLMPlanner) Plan(ctx context.Context, req coord.PlanRequest) (coord.Out
 			return coord.Outcome{}, usage, coord.ErrBudgetExceeded
 		}
 		res, call, err := p.Client.Chat(ctx, ChatRequest{Model: p.Model, Messages: messages, Tools: toolList, ToolChoice: "required"})
+		call.Purpose = coord.PurposePlanner
 		usage.LLMCalls = append(usage.LLMCalls, call)
 		if err != nil && !errors.Is(err, ErrMalformedResponse) {
 			return coord.Outcome{}, usage, err
@@ -150,7 +151,7 @@ type faultPlanner struct {
 }
 
 func (f faultPlanner) Plan(ctx context.Context, req coord.PlanRequest) (coord.Outcome, coord.Usage, error) {
-	injected := coord.Usage{LLMCalls: []coord.LLMCall{{Model: "fault-injection", Currency: "unknown"}}}
+	injected := coord.Usage{LLMCalls: []coord.LLMCall{{Model: "fault-injection", Purpose: coord.PurposePlanner, Currency: "unknown"}}}
 	switch f.faults.Get("llm") {
 	case "error":
 		return coord.Outcome{}, injected, fmt.Errorf("%w: 障害注入", coord.ErrTransient)

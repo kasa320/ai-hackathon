@@ -210,7 +210,9 @@ func (s *Service) update(ctx context.Context, lookupID string, calls []coord.LLM
 	return s.st.Tx(ctx, func(tx *store.Tx) error {
 		now := s.now()
 		for _, c := range calls {
-			if err := tx.AddLLMCall(ctx, store.LLMCall{LookupID: lookupID, Model: c.Model, InputTokens: c.InputTokens, OutputTokens: c.OutputTokens,
+			if err := tx.AddLLMCall(ctx, store.LLMCall{LookupID: lookupID, Model: c.Model, Purpose: c.Purpose,
+				ResolvedModel: c.ResolvedModel, FallbackLevel: c.FallbackLevel, RequestID: c.RequestID, LatencyMS: c.LatencyMS,
+				InputTokens: c.InputTokens, OutputTokens: c.OutputTokens,
 				Currency: c.Currency, EstimatedAmount: c.EstimatedAmount, BilledAmount: c.BilledAmount, Succeeded: c.Succeeded, CreatedAt: now}); err != nil {
 				return err
 			}

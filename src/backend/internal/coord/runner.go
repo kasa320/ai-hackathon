@@ -125,7 +125,9 @@ func (c *Coordinator) handlePlan(ctx context.Context, e store.Event) error {
 		// 呼び出しの記録と回数は、結果を使うかどうかによらず必ず残す。
 		for _, call := range usage.LLMCalls {
 			if err := tx.AddLLMCall(ctx, store.LLMCall{
-				CaseID: cs.ID, Model: call.Model, InputTokens: call.InputTokens, OutputTokens: call.OutputTokens, Currency: call.Currency,
+				CaseID: cs.ID, Model: call.Model, Purpose: call.Purpose, ResolvedModel: call.ResolvedModel,
+				FallbackLevel: call.FallbackLevel, RequestID: call.RequestID, LatencyMS: call.LatencyMS,
+				InputTokens: call.InputTokens, OutputTokens: call.OutputTokens, Currency: call.Currency,
 				EstimatedAmount: call.EstimatedAmount, BilledAmount: call.BilledAmount, Succeeded: call.Succeeded, CreatedAt: now,
 			}); err != nil {
 				return err

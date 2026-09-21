@@ -35,9 +35,28 @@ type PlanRequest struct {
 	MaxLLMCalls int
 }
 
+// LLM 呼び出しの用途（llm_calls.purpose）。case_id・lookup_id だけでは
+// 計画と解釈、目次検索と目次画像を区別できないため、呼び出し元がこれを付ける。
+const (
+	PurposePlanner     = "planner"
+	PurposeInterpreter = "interpreter"
+	PurposeTocSearch   = "toc_search"
+	PurposeTocVision   = "toc_vision"
+)
+
 // LLMCall は LLM 呼び出し1回の記録。金額が分からなければ nil（0 として扱わない）。
 type LLMCall struct {
-	Model           string
+	// Model は要求したモデル。Named Router を使う場合はルーター名が入る。
+	Model string
+	// Purpose は呼び出し元（Purpose* のいずれか）。
+	Purpose string
+	// ResolvedModel は実際に応答したモデル。取得できなければ空にし、Model で代用しない。
+	ResolvedModel string
+	// FallbackLevel は 0 が本命成功、1 以上で受け皿が発動したこと。取得できなければ nil。
+	FallbackLevel *int
+	RequestID     string
+	// LatencyMS は OrcaRouter が計測した所要時間（ミリ秒）。取得できなければ nil。
+	LatencyMS       *int
 	InputTokens     *int
 	OutputTokens    *int
 	Currency        string

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -114,11 +115,13 @@ func (c *Client) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, coor
 		// 認証エラーなど、再試行しても直らない失敗。応答本文はログにも残さない。
 		return nil, call, fmt.Errorf("agent: LLM API status %d", res.StatusCode)
 	}
+	readRoutingHeaders(res.Header, &call)
 	var out ChatResponse
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return nil, call, fmt.Errorf("%w: 応答を読めません", ErrMalformedResponse)
 	}
 	call.Succeeded = true
+	c.fetchGeneration(ctx, &call)
 	if u := out.Usage; u != nil {
 		call.InputTokens, call.OutputTokens = u.PromptTokens, u.CompletionTokens
 		if u.Cost != nil {
@@ -134,3 +137,97 @@ func (c *Client) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, coor
 
 // ErrMalformedResponse は API の応答自体が読めないこと。
 var ErrMalformedResponse = errors.New("agent: malformed LLM response")
+
+// fetchGeneration は確定した費用と所要時間を GET /generation から取りに行く。
+// chat/completions の usage には cost が含まれない（2026-09-21 実測）ため、
+// 金額はこの呼び出しでしか分からない。
+//
+// 取得できなければ記録を変えずに戻る。費用不明を 0 や推定値で埋めないため、
+// 失敗しても呼び出し元にはエラーを返さない（本処理を止める理由にならない）。
+func (c *Client) fetchGeneration(ctx context.Context, call *coord.LLMCall) {
+	if call.RequestID == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/generation?id="+url.QueryEscape(call.RequestID), nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+c.APIKey)
+	res, err := c.HTTP.Do(req)
+	if err != nil {
+		return
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return
+	}
+	raw, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	if err != nil {
+		return
+	}
+	var out struct {
+		Data struct {
+			Model        string   `json:"model"`
+			TotalCost    *float64 `json:"total_cost"`
+			CostCurrency string   `json:"cost_currency"`
+			LatencyMS    *int     `json:"latency_ms"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return
+	}
+	d := out.Data
+	if d.TotalCost != nil {
+		s := strconv.FormatFloat(*d.TotalCost, 'f', -1, 64)
+		// 確定した請求額。見積（estimated_amount）とは別の列に入れる。
+		call.BilledAmount = &s
+		if d.CostCurrency != "" {
+			call.Currency = d.CostCurrency
+		}
+	}
+	if d.LatencyMS != nil {
+		call.LatencyMS = d.LatencyMS
+	}
+	// ヘッダーから解決モデルが取れなかった場合の補完。
+	if call.ResolvedModel == "" {
+		call.ResolvedModel = d.Model
+	}
+}
+
+// readRoutingHeaders は OrcaRouter が返す振り分け結果を記録に移す。
+// model にルーター名（orcarouter/...）を指定した場合、実際に答えたモデルはここでしか分からない。
+// ヘッダーが無いプロバイダもあるため、取れなければ空・nil のままにして Model で代用しない。
+func readRoutingHeaders(h http.Header, call *coord.LLMCall) {
+	call.RequestID = h.Get("X-Orca-Request-Id")
+	call.ResolvedModel = h.Get("X-Orca-Resolved-Model")
+	// 受け皿が発動したときは、実際に答えたモデルがこちらに入る。
+	if m := h.Get("X-Orca-Fallback-Model"); m != "" {
+		call.ResolvedModel = m
+	}
+	if v := h.Get("X-Orca-Fallback-Level"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			call.FallbackLevel = &n
+		}
+	}
+	// 実測では X-Orca-Fallback-Level は返らず、X-Orca-Route に
+	// 「model=...; by=balanced; class=chat; fallback=0」の形で入っていた（2026-09-21 確認）。
+	// 専用ヘッダーが無いときだけこちらから読む。
+	for _, part := range strings.Split(h.Get("X-Orca-Route"), ";") {
+		k, v, ok := strings.Cut(strings.TrimSpace(part), "=")
+		if !ok {
+			continue
+		}
+		switch k {
+		case "fallback":
+			if n, err := strconv.Atoi(v); err == nil && call.FallbackLevel == nil {
+				call.FallbackLevel = &n
+			}
+		case "model":
+			if call.ResolvedModel == "" {
+				call.ResolvedModel = v
+			}
+		}
+	}
+}

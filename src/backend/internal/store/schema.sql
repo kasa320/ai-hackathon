@@ -215,6 +215,18 @@ CREATE TABLE IF NOT EXISTS llm_calls (
     case_id          TEXT,
     lookup_id        TEXT,
     model            TEXT NOT NULL,
+    -- purpose は呼び出し元（planner / interpreter / toc_search / toc_vision）。
+    -- case_id・lookup_id だけでは計画と解釈、目次検索と目次画像を区別できないため持つ。
+    purpose          TEXT,
+    -- resolved_model は実際に応答したモデル（X-Orca-Resolved-Model / X-Orca-Fallback-Model）。
+    -- model はルーター名のことがあるため、実測はこちらで集計する。分からなければ NULL。
+    resolved_model   TEXT,
+    -- fallback_level は 0 が本命成功、1 以上は受け皿が発動したこと。分からなければ NULL。
+    fallback_level   INTEGER,
+    -- request_id は X-Orca-Request-Id。確定請求額と所要時間の取得に使う。
+    request_id       TEXT,
+    -- latency_ms は OrcaRouter が計測した所要時間。分からなければ NULL。
+    latency_ms       INTEGER,
     input_tokens     INTEGER,
     output_tokens    INTEGER,
     currency         TEXT NOT NULL,

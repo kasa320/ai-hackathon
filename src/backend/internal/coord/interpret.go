@@ -211,7 +211,8 @@ func (c *Coordinator) reserveInterpretCall(ctx context.Context, sessionID, caseI
 		id = store.NewID("llm")
 		// 費用が分かるまでは succeeded=0・金額 NULL。これを「未送信／無料」の証拠にしない。
 		return tx.AddLLMCall(ctx, store.LLMCall{
-			ID: id, CaseID: caseID, LookupID: lookupID, Model: model, Currency: "unknown", CreatedAt: c.now(),
+			ID: id, CaseID: caseID, LookupID: lookupID, Model: model, Purpose: PurposeInterpreter,
+			Currency: "unknown", CreatedAt: c.now(),
 		})
 	})
 	if err != nil {
@@ -226,7 +227,9 @@ func (c *Coordinator) recordInterpretCall(ctx context.Context, id string, call L
 	defer cancel()
 	err := c.st.Tx(ctx, func(tx *store.Tx) error {
 		return tx.UpdateLLMCall(ctx, store.LLMCall{
-			ID: id, Model: call.Model, InputTokens: call.InputTokens, OutputTokens: call.OutputTokens,
+			ID: id, Model: call.Model, ResolvedModel: call.ResolvedModel,
+			FallbackLevel: call.FallbackLevel, RequestID: call.RequestID, LatencyMS: call.LatencyMS,
+			InputTokens: call.InputTokens, OutputTokens: call.OutputTokens,
 			Currency: call.Currency, EstimatedAmount: call.EstimatedAmount, BilledAmount: call.BilledAmount, Succeeded: call.Succeeded,
 		})
 	})

@@ -5,3 +5,10 @@ bin/
 data/
 .tmp/
 .trash/
+
+# スポンサー資料（公開リポジトリに含めない）
+OrcaRouter様資料.pdf
+
+# 計測の中間生成物（DB・サーバーログ。CSV だけを残す）
+.agent/kodera/research/**/.work/
+__pycache__/

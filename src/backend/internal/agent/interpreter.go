@@ -109,6 +109,7 @@ func (p *LLMInterpreter) Interpret(ctx context.Context, req coord.InterpretReque
 			return coord.Interpretation{}, usage, err
 		}
 		res, call, err := p.Client.Chat(ctx, ChatRequest{Model: p.Model, Messages: messages, Tools: toolList, ToolChoice: "required"})
+		call.Purpose = coord.PurposeInterpreter
 		usage.LLMCalls = append(usage.LLMCalls, call)
 		req.RecordCall(ctx, callID, call)
 		if err != nil && !errors.Is(err, ErrMalformedResponse) {
@@ -183,7 +184,7 @@ func (f faultInterpreter) Interpret(ctx context.Context, req coord.InterpretRequ
 		return f.next.Interpret(ctx, req)
 	}
 	// 実際に呼んだのと同じだけ枠を使う（障害でも予算は戻らない）。
-	call := coord.LLMCall{Model: "fault-injection", Currency: "unknown"}
+	call := coord.LLMCall{Model: "fault-injection", Purpose: coord.PurposeInterpreter, Currency: "unknown"}
 	id, err := req.ReserveCall(ctx, call.Model)
 	if err != nil {
 		return coord.Interpretation{}, coord.Usage{}, err
