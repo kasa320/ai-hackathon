@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -33,6 +34,57 @@ func TestSchemaIsReapplicable(t *testing.T) {
 			t.Fatalf("%d回目の起動: %v", i+1, err)
 		}
 		st.Close()
+	}
+}
+
+func TestOpenAddsGroupLifecycleColumnsToLegacyDatabase(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy.db")
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`
+		CREATE TABLE users (
+			id TEXT PRIMARY KEY, discord_user_id TEXT NOT NULL UNIQUE,
+			display_name TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+		);
+		CREATE TABLE groups (
+			id TEXT PRIMARY KEY, name TEXT NOT NULL,
+			owner_user_id TEXT NOT NULL REFERENCES users(id), created_at TEXT NOT NULL
+		);
+		CREATE TABLE members (
+			id TEXT PRIMARY KEY, group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+			discord_user_id TEXT NOT NULL, user_id TEXT REFERENCES users(id),
+			display_name TEXT NOT NULL, role TEXT NOT NULL, seq INTEGER NOT NULL,
+			UNIQUE (group_id, discord_user_id)
+		);
+		INSERT INTO users VALUES ('usr_1', '111111111111111111', 'A', '2026-09-19T09:00:00Z', '2026-09-19T09:00:00Z');
+		INSERT INTO groups VALUES ('grp_1', '輪読', 'usr_1', '2026-09-19T09:00:00Z');
+		INSERT INTO members VALUES ('mem_1', 'grp_1', '111111111111111111', 'usr_1', 'A', 'owner', 0);
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := store.Open(ctx, path)
+	if err != nil {
+		t.Fatalf("旧DBを開けない: %v", err)
+	}
+	defer st.Close()
+	if err := st.Tx(ctx, func(tx *store.Tx) error {
+		groups, err := tx.GroupsForUser(ctx, "usr_1")
+		if err != nil {
+			return err
+		}
+		if len(groups) != 1 || groups[0].ID != "grp_1" {
+			t.Fatalf("groups = %+v", groups)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 

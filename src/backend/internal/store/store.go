@@ -67,6 +67,8 @@ func open(ctx context.Context, dsn string) (*Store, error) {
 func addMissingColumns(ctx context.Context, db *sql.DB) error {
 	type column struct{ table, name, def string }
 	for _, c := range []column{
+		{"groups", "deleted_at", "TEXT"},
+		{"members", "left_at", "TEXT"},
 		{"sessions", "period_start", "TEXT NOT NULL DEFAULT ''"},
 		{"sessions", "period_end", "TEXT NOT NULL DEFAULT ''"},
 		{"sessions", "schedule_status", "TEXT NOT NULL DEFAULT 'confirmed'"},
