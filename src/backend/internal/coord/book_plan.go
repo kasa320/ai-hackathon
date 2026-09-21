@@ -421,37 +421,50 @@ func (c *Coordinator) RequestAvailabilityUpdate(ctx context.Context, userID, gro
 		if e != nil {
 			return store.Response{}, e
 		}
-		members, e := tx.Members(ctx, groupID)
+		out, e := c.requestAvailabilityUpdateTx(ctx, tx, b, m.ID, now)
 		if e != nil {
 			return store.Response{}, e
 		}
-		day := now.In(displayZone).Format("2006-01-02")
-		var out apitypes.AvailabilityRequestResult
-		for _, member := range members {
-			if !member.Joined() {
-				out.SkippedCount++
-				continue
-			}
-			text := "普段の空き時間（曜日と時間帯）を登録してください。日程調整の候補づくりに使います。回答は他のグループ・ブックでも使われます。"
-			a, err := tx.WeeklyAvailability(ctx, member.UserID)
+		return store.Response{Status: http.StatusOK, Body: encode(out)}, nil
+	})
+}
+
+// requestAvailabilityUpdateTx はブック登録直後と管理者の再依頼で共用する。
+// 空き時間はユーザー共通なので、同じグループ・同じ日の複数ブックからの依頼は1通にまとめる。
+func (c *Coordinator) requestAvailabilityUpdateTx(ctx context.Context, tx *store.Tx, b store.ReadingBook, requestedBy string, now time.Time) (apitypes.AvailabilityRequestResult, error) {
+	members, err := tx.Members(ctx, b.GroupID)
+	if err != nil {
+		return apitypes.AvailabilityRequestResult{}, err
+	}
+	day := now.In(displayZone).Format("2006-01-02")
+	var out apitypes.AvailabilityRequestResult
+	for _, member := range members {
+		if member.LeftAt != nil || member.DiscordUserID == "" {
+			out.SkippedCount++
+			continue
+		}
+		text := "普段の空き時間（曜日と時間帯）を登録してください。日程調整の候補づくりに使います。回答は他のグループ・ブックでも使われます。"
+		if member.UserID != "" {
+			a, lookupErr := tx.WeeklyAvailability(ctx, member.UserID)
 			switch {
-			case errors.Is(err, store.ErrNotFound):
-			case err != nil:
-				return store.Response{}, err
+			case errors.Is(lookupErr, store.ErrNotFound):
+			case lookupErr != nil:
+				return out, lookupErr
 			case now.Sub(a.UpdatedAt) < availabilityStaleAfter:
 				out.SkippedCount++
 				continue
 			default:
 				text = "登録済みの普段の空き時間が古くなっています。今も合っているか再確認し、変わっていれば更新してください。"
 			}
-			if err := c.enqueueBookDM(ctx, tx, b, NotifyAvailabilityRequest, fmt.Sprintf("availability:%s:%s", b.ID, day), text, []store.Member{member}, now); err != nil {
-				return store.Response{}, err
-			}
-			out.RequestedCount++
 		}
-		if e := bookLog(ctx, tx, b, "", m.ID, "availability_requested", fmt.Sprintf("空き時間の登録・再確認を%d人へ依頼しました。", out.RequestedCount), now); e != nil {
-			return store.Response{}, e
+		key := fmt.Sprintf("availability:%s:%s", b.GroupID, day)
+		if err := c.enqueueBookDM(ctx, tx, b, NotifyAvailabilityRequest, key, text, []store.Member{member}, now); err != nil {
+			return out, err
 		}
-		return store.Response{Status: http.StatusOK, Body: encode(out)}, nil
-	})
+		out.RequestedCount++
+	}
+	if err := bookLog(ctx, tx, b, "", requestedBy, "availability_requested", fmt.Sprintf("空き時間の登録・再確認を%d人へ依頼しました。", out.RequestedCount), now); err != nil {
+		return out, err
+	}
+	return out, nil
 }

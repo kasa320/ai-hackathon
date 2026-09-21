@@ -356,7 +356,7 @@ func bookLog(ctx context.Context, tx *store.Tx, b store.ReadingBook, slotID, mem
 }
 
 // CreateReadingBook はブックを1冊登録する。全枠（章割り・開催目安）を作り、AIの全体計画を待つ状態にする。
-// 実セッション・参加条件のタスク・通知は作らない。1冊ごとに独立した再送可能な登録で、
+// 実セッションと参加条件のタスクは作らず、週間空き時間が未登録または古いメンバーにだけ確認を依頼する。1冊ごとに独立した再送可能な登録で、
 // 複数のブックを同じグループへ登録して同時に進められる。既存のブックの割り当ては変更しない。
 func (c *Coordinator) CreateReadingBook(ctx context.Context, userID, groupID string, in apitypes.CreateReadingBookInput, idem *store.IdemKey) (store.Response, error) {
 	now := c.now()
@@ -388,6 +388,9 @@ func (c *Coordinator) CreateReadingBook(ctx context.Context, userID, groupID str
 			return store.Response{}, e
 		}
 		if e := bookLog(ctx, tx, b, "", m.ID, "book_registered", fmt.Sprintf("ブックを登録し、全%d回の枠を作りました。全体計画の作成を待っています。", d.Count), now); e != nil {
+			return store.Response{}, e
+		}
+		if _, e := c.requestAvailabilityUpdateTx(ctx, tx, b, m.ID, now); e != nil {
 			return store.Response{}, e
 		}
 		slots, e := tx.ReadingBookSlots(ctx, b.ID)

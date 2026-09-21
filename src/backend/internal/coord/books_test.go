@@ -184,7 +184,7 @@ func (h *harness) taskCount() int {
 	return n
 }
 
-func TestBookRegistrationCreatesSlotsButNoSessionTasksOrNotifications(t *testing.T) {
+func TestBookRegistrationCreatesSlotsAndRequestsAvailabilityButNoSessionTasks(t *testing.T) {
 	h := newHarness(t, nil)
 	b := h.createBook(bookInput("設計の本", 6, 3))
 	if b.PlanStatus != "planning" || b.PlannedSessionCount != 3 || b.DurationMinutes != 60 || b.AdjustmentLeadDays != 7 || b.PeriodStart != "2026-10-01" || b.PeriodEnd != "2026-10-21" {
@@ -203,11 +203,23 @@ func TestBookRegistrationCreatesSlotsButNoSessionTasksOrNotifications(t *testing
 			t.Fatalf("枠%dの開催目安・範囲 = %+v", i+1, s)
 		}
 	}
-	// 登録しただけでは、実セッション・回答タスク・通知（開催回のものも個人DMも）は何も作られない。
+	// 登録直後に空き時間の確認だけを依頼するが、実セッション・回答タスク・開催回通知は作られない。
 	h.process()
 	_ = h.st.Tx(ctx, func(tx *store.Tx) error { return nil })
 	if n := h.sessionCount(); n != 0 || h.taskCount() != 0 || h.sessionNotificationCount() != 0 {
 		t.Fatalf("登録だけで実セッション等ができた: sessions=%d tasks=%d", n, h.taskCount())
+	}
+	if got := h.kinds()["availability_requested"]; got != 4 {
+		t.Fatalf("空き時間の確認通知 = %d, want 4", got)
+	}
+}
+
+func TestBookRegistrationDeduplicatesAvailabilityRequestsAcrossBooksOnSameDay(t *testing.T) {
+	h := newHarness(t, nil)
+	h.createBook(bookInput("設計の本", 6, 3))
+	h.createBook(bookInput("次の本", 6, 3))
+	if got := h.kinds()["availability_requested"]; got != 4 {
+		t.Fatalf("同じ日の空き時間確認通知 = %d, want 4", got)
 	}
 }
 
@@ -313,7 +325,7 @@ func TestBookPlanCoversEverySectionInOrderAndAssignsEverySlot(t *testing.T) {
 	for _, n := range h.groupNotifs() {
 		kinds[n.Kind]++
 	}
-	if kinds["book_plan_proposed"] != 4 || len(kinds) != 1 {
+	if kinds["book_plan_proposed"] != 4 || kinds["availability_requested"] != 4 || len(kinds) != 2 {
 		t.Fatalf("通知 = %v", kinds)
 	}
 	if h.sessionCount() != 0 {
@@ -683,7 +695,7 @@ func TestStaleBookPlanIsDiscardedWhenBookChangedDuringAIRun(t *testing.T) {
 			t.Fatalf("古い計画の担当が保存された: %+v", s)
 		}
 	}
-	if len(h.groupNotifs()) != 0 {
+	if h.kinds()["book_plan_proposed"] != 0 {
 		t.Fatalf("古い計画の承認依頼が送られた: %v", h.kinds())
 	}
 }

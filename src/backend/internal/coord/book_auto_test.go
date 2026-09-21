@@ -467,7 +467,7 @@ func TestBookAvailabilityRequestsAreDeduplicated(t *testing.T) {
 	if _, err := h.c.RequestAvailabilityUpdate(ctx, h.users["A"], h.group, b.ID, nil); err != nil {
 		t.Fatal(err)
 	}
-	if h.kinds()["availability_requested"] != 3 {
+	if h.kinds()["availability_requested"] != 4 {
 		t.Fatalf("通知 = %v", h.kinds())
 	}
 	// 30日を過ぎた登録は再確認を依頼する。
@@ -475,7 +475,7 @@ func TestBookAvailabilityRequestsAreDeduplicated(t *testing.T) {
 	if _, err := h.c.RequestAvailabilityUpdate(ctx, h.users["A"], h.group, b.ID, nil); err != nil {
 		t.Fatal(err)
 	}
-	if h.kinds()["availability_requested"] != 7 {
+	if h.kinds()["availability_requested"] != 8 {
 		t.Fatalf("再確認の通知 = %v", h.kinds())
 	}
 }
