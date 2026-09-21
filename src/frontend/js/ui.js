@@ -94,6 +94,12 @@ export function whenLabel(session, format) {
   return format(session.starts_at);
 }
 
+/**
+ * 日付入力の上限。上限がないとブラウザーは年を6桁まで受け付け、4桁打っても月の欄へ進まない。
+ * 上限を付けると年が4桁になり、月・日と同じように自動で次の欄へ進む。
+ */
+export const DATE_MAX = "9999-12-31";
+
 export function initial(name) {
   return (name ?? "?").trim().slice(0, 1) || "?";
 }

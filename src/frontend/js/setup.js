@@ -8,7 +8,7 @@
 import { el, mount } from "./dom.js";
 import { api, ApiError } from "./api.js";
 import { featureFor } from "./features/index.js";
-import { renderTopbar, renderDevBar, flash, clearFlash, reportMutationError, placeholder } from "./ui.js";
+import { renderTopbar, renderDevBar, flash, clearFlash, reportMutationError, placeholder, DATE_MAX } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
 const loginUrl = api.loginUrl("/setup.html");
@@ -375,8 +375,8 @@ function addSectionButton(rerender, box) {
 // ---- 03 いつまでに開くか ----------------------------------------------------
 
 function renderSessionStep() {
-  const from = el("input", { type: "date", value: state.periodStart, min: today() });
-  const to = el("input", { type: "date", value: state.periodEnd, min: state.periodStart || today() });
+  const from = el("input", { type: "date", value: state.periodStart, min: today(), max: DATE_MAX });
+  const to = el("input", { type: "date", value: state.periodEnd, min: state.periodStart || today(), max: DATE_MAX });
   const duration = el("input", { type: "number", min: "15", max: "180", step: "5", value: String(state.duration) });
   const periodSummary = el("span", {}, `${from.value || "—"}〜${to.value || "—"}`);
   const durationSummary = el("span", {}, `${duration.value}分`);
@@ -384,11 +384,15 @@ function renderSessionStep() {
     state.periodStart = from.value;
     state.periodEnd = to.value;
     state.duration = Number(duration.value);
-    to.min = from.value || today();
     periodSummary.textContent = `${from.value || "—"}〜${to.value || "—"}`;
     durationSummary.textContent = `${duration.value || "—"}分`;
   };
-  from.addEventListener("input", syncSummary);
+  from.addEventListener("input", () => {
+    // 下限は開始日が変わったときだけ直す。入力中の欄の属性を書き換えると、打ちかけの数字が消える
+    const min = from.value || today();
+    if (to.min !== min) to.min = min;
+    syncSummary();
+  });
   to.addEventListener("input", syncSummary);
   duration.addEventListener("input", syncSummary);
 
