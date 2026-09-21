@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/styles.css">
+  <meta name="description" content="日程調整に使う、普段の週間の空き時間を登録します。">
+  <title>普段の空き時間 — Marunage</title>
+</head>
+<body data-page="weekly">
+  <div class="devbar" id="devbar" hidden></div>
+  <header class="topbar" id="topbar"></header>
+  <main class="shell shell--narrow">
+    <a class="back" href="/">グループ一覧へ戻る</a>
+    <div id="flash" hidden></div>
+    <div id="weekly"></div>
+  </main>
+  <script type="module" src="./js/weekly.js"></script>
+</body>
+</html>
