@@ -24,7 +24,7 @@ const interpretInstructions = `あなたは、本人の発言から決められ�
 - 体調や家庭の事情などの私的な内容は、どの項目にも書き写さないでください。
 - unclear には、まだ確定していない項目の名前をすべて入れてください。「現在の値」で確定している項目は、今回の発言で触れられていなくてもそのままの値で残します。
 - 「質問中の項目」があるときは、「はい」「できます」のような短い返答はその項目への答えとして扱ってください。
-- 参加条件の項目では扱えない依頼（日程の変更、途中参加・途中退出、他の人の代わりの回答）は、値を作らず out_of_scope に分類を入れてください。out_of_scope を入れたターンの値はすべて捨てられます。`
+- 参加条件の項目では扱えない依頼（日程の変更、途中参加・途中退出、他の人の代わりの回答）は、値を作らず out_of_scope に分類を入れてください。扱える発言では out_of_scope="none" にしてください。範囲外の分類を入れたターンの値はすべて捨てられます。`
 
 // LLMInterpreter は LLM に自由文から項目の値だけを取り出させる coord.Interpreter。
 type LLMInterpreter struct {
@@ -43,7 +43,7 @@ func interpretTools(pb coord.PreparationInterpreter) []Tool {
 		`"data":` + string(pb.PreparationSchema()) + `,` +
 		`"unclear":{"type":"array","items":{"type":"string","enum":[` + slots + `]},"description":"まだ確定していない項目名"},` +
 		`"needs_followup":{"type":"boolean","description":"本人に確認すべき項目が残っているか"},` +
-		`"out_of_scope":{"type":["string","null"],"enum":[` + kinds + `,null],"description":"参加条件の項目では扱えない依頼の分類。扱えるなら null"}}}`
+		`"out_of_scope":{"type":"string","enum":["none",` + kinds + `],"description":"参加条件の項目では扱えない依頼の分類。扱えるなら none"}}}`
 	return []Tool{{Type: "function", Function: ToolFunction{
 		Name:        "record_preparation",
 		Description: "発言から読み取れた参加条件の項目だけを提出する。保存・同意・通知は行われない。",
@@ -57,7 +57,7 @@ func parseInterpretCall(tc ToolCall) (coord.Interpretation, error) {
 		Data          json.RawMessage `json:"data"`
 		Unclear       []string        `json:"unclear"`
 		NeedsFollowup bool            `json:"needs_followup"`
-		OutOfScope    *string         `json:"out_of_scope"`
+		OutOfScope    string          `json:"out_of_scope"`
 	}
 	if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
 		return coord.Interpretation{}, fmt.Errorf("引数が JSON として読めません: %v", err)
@@ -66,8 +66,10 @@ func parseInterpretCall(tc ToolCall) (coord.Interpretation, error) {
 		return coord.Interpretation{}, fmt.Errorf("未知のツールです: %s", tc.Function.Name)
 	}
 	out := coord.Interpretation{Attendance: args.Attendance, Data: args.Data, Unclear: args.Unclear, NeedsFollowup: args.NeedsFollowup}
-	if args.OutOfScope != nil {
-		out.OutOfScope = *args.OutOfScope
+	// nullable enum はモデルによって null を文字列 "None" として返すことがあるため、
+	// ツール契約では明示的な文字列 none を使う。大文字小文字は吸収する。
+	if !strings.EqualFold(args.OutOfScope, "none") && !strings.EqualFold(args.OutOfScope, "null") {
+		out.OutOfScope = args.OutOfScope
 	}
 	// 扱えない依頼のときは値を使わないので、data がなくてもよい。
 	if len(args.Data) == 0 && out.OutOfScope == "" {
