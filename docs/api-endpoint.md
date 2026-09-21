@@ -6,11 +6,11 @@
 
 - 同一オリジンのJSON API。`Content-Type: application/json`、JSONは `snake_case`、本文は最大64 KiB、未知のフィールドは拒否する。
 - 認証はセッションCookie（`session`、HttpOnly、ログインから7日）。本人IDや権限をリクエスト本文で指定しない。
-- 認証済みのPOST・PUTには `X-CSRF-Token`（`GET /api/me` で取得）が必須。サーバー側でOriginも検証する。
-- 業務更新のPOST・PUTには `Idempotency-Key` が必須。同じキー・同じ本文の再送には最初の成功応答を返す。違う操作での再利用は `409 idempotency_key_reused`。
+- 認証済みのPOST・PUT・DELETEには `X-CSRF-Token`（`GET /api/me` で取得）が必須。サーバー側でOriginも検証する。
+- 業務更新のPOST・PUT・DELETEには `Idempotency-Key` が必須。同じキー・同じ本文の再送には最初の成功応答を返す。違う操作での再利用は `409 idempotency_key_reused`。
 - 更新系は「受け付けた」で202を返し、AIの処理・確定・通知はバックエンドのイベント処理が進める。結果は `GET /api/sessions/{id}` のポーリングで確認する。
 - 競合は版番号で防ぐ。参加条件の更新・辞退・代案は `expected_revision`、案への回答は `proposal_id` と `proposal_version` を送る。古ければ `409`。
-- グループに属さない利用者には、対象の存在も含めて `404` を返す。
+- グループに属さない利用者には、対象の存在も含めて `404` を返す。脱退したメンバーと削除済みグループも同じ扱いで、グループ・開催回・履歴は見えなくなる。
 - 開催回は「日時を人が決める」「期間だけ渡してエージェントに決めさせる」の2通りで登録できる。後者は `schedule_status="proposed"` で始まり、`starts_at` は**仮の候補**（確定した日時ではない）。案が同意を集めて確定した時点で `starts_at` が決まり、`schedule_status="confirmed"` になる。画面はこの間、日時を決まったものとして表示しない。
 
 ## 汎用API
@@ -26,6 +26,8 @@
 | `GET /api/groups` | ログイン済み | 200 | 自分が参加するグループ一覧 |
 | `POST /api/groups` | ログイン済み | 201 | 固定メンバーでグループ作成。招待はDiscord IDで登録する |
 | `GET /api/groups/{group_id}` | メンバー | 200 | メンバー一覧と自分の役割 |
+| `POST /api/groups/{group_id}/leave` | メンバー本人（管理者以外） | 200 | 自分がグループを脱退する。本文は `{}` |
+| `DELETE /api/groups/{group_id}` | 管理者 | 200 | グループを論理削除する。本文は `{}` |
 | `GET /api/groups/{group_id}/sessions` | メンバー | 200 | 開催回の一覧 |
 | `POST /api/groups/{group_id}/sessions` | 管理者 | 201 | 開催回を登録し、全員への参加条件の確認を開始する。日時（`starts_at`）か期間（`period_start`・`period_end`）のどちらかを渡す |
 | `GET /api/sessions/{session_id}` | メンバー | 200 | **画面の主データ。** 計画・参加条件・案件の状況・自分宛てタスク・権限をまとめて返す |
@@ -37,6 +39,16 @@
 | `GET /api/sessions/{session_id}/activity` | 管理者 | 200 | 実行履歴・LLM費用・通知の状況 |
 
 「AIを実行する」「強制的に確定する」「他人として同意する」「通知を送る」APIは設けていない。案の作成・確定・通知・再試行はすべてバックエンド内のイベント処理が行う。
+
+### グループの脱退・削除について
+
+どちらも `GroupLifecycleResult`（[data-structure.md](data-structure.md)）を200で返す。入力は空のJSON `{}` で、本人IDや確認用の文字列は受け取らない。
+
+- `POST .../leave` は一般メンバー本人だけ。管理者は脱退できず `403 forbidden` を返す。グループを離すなら削除を使う。
+- `DELETE /api/groups/{group_id}` は管理者だけ。一般メンバーは `403 forbidden`。
+- 確定済みの回が開催中（`開始日時 <= 現在 < 開始日時 + 所要時間`）の間は、どちらも `409 invalid_state`。誤操作防止は管理者限定と確認ダイアログで行い、グループ名の入力は求めない。
+- 脱退・削除は論理削除で、過去の履歴は内部に残る。脱退者は開始前の回で欠席になり、残ったメンバーで再調整が始まる。本人宛ての未処理タスクと未送信の通知は終了する。
+- 通知は対象者それぞれのDiscord個人DMだけに送る（脱退は脱退者を除く在籍者、削除は削除直前の全メンバー）。DMが失敗しても共通チャンネルへは送らず、脱退・削除自体は取り消さない。
 
 ### 自由文の解釈について
 

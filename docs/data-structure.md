@@ -163,6 +163,15 @@ type ApprovalResponse    = { decision: "approve" | "reject"; proposal_id: ID; pr
 
 // POST /api/sessions/{id}/proposals（管理者、needs_owner のときだけ）
 type SubmitProposal = { expected_revision: Revision; data: PlanData };
+
+// POST /api/groups/{group_id}/leave（本人）と DELETE /api/groups/{group_id}（管理者）
+// 入力は空のJSON {}。本人IDも確認用の文字列も受け取らない。
+type GroupLifecycleResult = {
+  group_id: ID;
+  status: "left" | "deleted";
+  affected_session_count: number;   // 脱退：欠席にして再調整した開始前の回／削除：対象グループの全開催回
+  notification_count: number;       // 送信を登録した個人DMの件数
+};
 ```
 
 ## 実行履歴

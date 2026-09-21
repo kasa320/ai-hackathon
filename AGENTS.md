@@ -7,7 +7,7 @@
 - 調査、アイデア、意思決定、ピッチ準備の記録は `.agent/kasa/` に置く。構成と記録ルールは `.agent/kasa/README.md` を参照する。
 - 採用題材は輪読運営。既存会の辞退・準備状況の変化から、再計画・本人の引き受け・同意・保存・通知までをMVPとする。LifeOps等は過去の候補として記録を残す。
 - 実際の利用事例には固定の幹事がおらず、メンバー同士がLINEで調整していた。試作の接点はWeb＋Discord。評価は `.agent/decisions/evaluation.md` に従い、参加者全体の調整負担を測る。
-- 当面、仕様・設計・評価資料は `.agent/` 内に置く。`docs/` の追加・更新はユーザーが再開を指示するまで行わない。
+- 仕様・設計・評価資料は `.agent/` 内に置く。`docs/` の凍結は 2026-09-21 にユーザーの指示で解除した。公開APIやDBの契約（`docs/api-endpoint.md`、`docs/data-structure.md`、`docs/database.md`）は、実装を変更したらその変更内で更新する。
 - 用途固有の型・判断指示・検証・承認条件は `internal/playbook/<用途>/` に分離する。共通側は `coord.Playbook` に依存し、用途別パッケージの登録は起動処理で行う。構成は `.agent/decisions/architecture.md` を参照する。
 - フロント・バックエンド間の公開APIは [docs/api-endpoint.md](docs/api-endpoint.md)（エンドポイント）と [docs/data-structure.md](docs/data-structure.md)（型）を契約とする。内部型で公開契約を上書きせず、変更時は仕様とモックを揃える。
 - 実装に着手する前に、対象ユーザー、MVPの単一デモフロー、外部連携の範囲、承認が必要な操作、成功指標を明文化する。

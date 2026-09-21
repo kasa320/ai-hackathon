@@ -53,6 +53,7 @@ OAuth の state。1回使うと削除する。
 | `name` | グループ名 | `技術書輪読（デモ）` |
 | `owner_user_id` | 作成者（管理者） | `usr_6cab143281b58c82e75b4ccd` |
 | `created_at` | 作成日時 | `2026-09-20T06:28:09.265000000Z` |
+| `deleted_at` | 削除日時。**値があるグループは論理削除済み**で、通常のAPI・画面から見えない | `null` |
 
 ## members
 
@@ -67,6 +68,7 @@ OAuth の state。1回使うと削除する。
 | `display_name` | 表示名（本人ログイン後は本人の名前に置き換わる） | `A` |
 | `role` | `owner` / `member` | `owner` |
 | `seq` | グループ内の並び順 | `0` |
+| `left_at` | 脱退日時。**値があるメンバーは脱退済み**で、今後の調整・通知・閲覧から外れる | `null` |
 
 ## sessions
 
@@ -249,9 +251,26 @@ Discord への送信待ち行列。
 | `dedupe_key` | UNIQUE。**同じ通知を二重に積まないための鍵** | `task:task_100957da2b22d23ce13bf1c5` |
 | `content` | 送信本文 | `<@100000000000000003> 【第2回】今回担当できる範囲と時間を確認させてください。（回答期限：9/21 15:28）\nhttp://localhost:8099/session.html?id=ses_…` |
 | `mentions` | メンションを許可する Discord ID の配列（JSON） | `["100000000000000003"]` |
-| `status` | `pending` / `sending` / `sent` / `failed` / `unknown`（成否不明） | `sent` |
+| `status` | `pending` / `sending` / `sent` / `failed` / `unknown`（成否不明） / `cancelled`（脱退・グループ削除で不要になり送らない） | `sent` |
 | `error_code` | 失敗の理由 | `null` |
 | `created_at` / `updated_at` | 作成・更新日時 | `2026-09-20T06:28:23.128000000Z` |
+| `seq` | 送信順 | `1` |
+
+## group_notifications
+
+開催回に属さないグループ操作（脱退・グループ削除）の個人DM。受信者ごとに1行を作り、成否を個別に残す。共通チャンネルへのフォールバックは行わない。
+
+| カラム | 意味 | サンプル |
+| --- | --- | --- |
+| `id` | 通知ID | `gntf_…` |
+| `group_id` | 対象グループ（削除済みでも残る） | `grp_c87e49a07149914a2946e5bd` |
+| `kind` | `member_left` / `group_deleted` | `member_left` |
+| `recipient_discord_user_id` | 送信先のDiscord ID（DM専用） | `100000000000000002` |
+| `dedupe_key` | UNIQUE。`<kind>:<member_id または group_id>:<受信者>` で二重送信を防ぐ | `member_left:mem_…:100000000000000002` |
+| `content` | 送信本文 | `【技術書輪読（デモ）】Bさんがグループを脱退しました。` |
+| `status` | `pending` / `sending` / `sent` / `failed` / `unknown`（成否不明） | `sent` |
+| `error_code` | 失敗の理由 | `null` |
+| `created_at` / `updated_at` | 作成・更新日時 | `2026-09-21T06:21:55.000000000Z` |
 | `seq` | 送信順 | `1` |
 
 ## activity
