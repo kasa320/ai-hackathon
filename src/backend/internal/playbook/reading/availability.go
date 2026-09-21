@@ -111,34 +111,39 @@ func validateAvailability(v *coord.ValidationError, a *ScheduleAvailability) {
 
 type minuteWindow struct{ start, end int }
 
-func availableWindows(d PreparationData, day time.Time, duration int) []minuteWindow {
+func availableWindows(d PreparationData, standing *coord.StandingAvailability, day time.Time, duration int) []minuteWindow {
 	a := d.Schedule
-	if a == nil || a.Status != "provided" || (a.MaxDurationMinutes > 0 && a.MaxDurationMinutes < duration) {
-		return nil
-	}
 	date := day.Format(dateLayout)
 	for _, busy := range d.UnavailableDates {
 		if busy == date {
-			return nil
+			return nil // 今回だけの参加不可は、普段の空き時間よりも優先する
 		}
 	}
 	var ws []minuteWindow
-	add := func(start, end string) {
-		x, okX := clockMinute(start, false)
-		y, okY := clockMinute(end, true)
-		if okX && okY && x < y {
-			ws = append(ws, minuteWindow{x, y})
+	switch {
+	case a == nil && standing != nil:
+		// この回で時間帯を答えていない人は、本人が登録した普段の空き時間を使う。未登録なら候補にならない。
+		ws = standingWindows(standing, day)
+	case a == nil || a.Status != "provided" || (a.MaxDurationMinutes > 0 && a.MaxDurationMinutes < duration):
+		return nil
+	default:
+		add := func(start, end string) {
+			x, okX := clockMinute(start, false)
+			y, okY := clockMinute(end, true)
+			if okX && okY && x < y {
+				ws = append(ws, minuteWindow{x, y})
+			}
 		}
-	}
-	for _, w := range a.DateWindows {
-		if w.Date == date {
-			add(w.Start, w.End)
-		}
-	}
-	if len(ws) == 0 {
-		for _, w := range a.WeeklyWindows {
-			if w.Weekday == int(day.Weekday()) {
+		for _, w := range a.DateWindows {
+			if w.Date == date {
 				add(w.Start, w.End)
+			}
+		}
+		if len(ws) == 0 {
+			for _, w := range a.WeeklyWindows {
+				if w.Weekday == int(day.Weekday()) {
+					add(w.Start, w.End)
+				}
 			}
 		}
 	}
@@ -154,6 +159,64 @@ func availableWindows(d PreparationData, day time.Time, duration int) []minuteWi
 	return merged
 }
 
+// standingWindows は本人のタイムゾーンで登録された週間の空き時間を、JSTの指定日の0時からの分に直す。
+// タイムゾーンの日付のずれと夏時間は、実際の日時に直してから重なりを取ることで扱う。
+func standingWindows(sa *coord.StandingAvailability, day time.Time) []minuteWindow {
+	loc, err := time.LoadLocation(sa.Timezone)
+	if err != nil {
+		return nil
+	}
+	from := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, jst)
+	to := from.AddDate(0, 0, 1)
+	first := from.In(loc)
+	var out []minuteWindow
+	for offset := -1; offset <= 2; offset++ {
+		local := time.Date(first.Year(), first.Month(), first.Day()+offset, 0, 0, 0, 0, loc)
+		weekday := int(local.Weekday()) // 日曜0
+		if weekday == 0 {
+			weekday = 7
+		}
+		for _, w := range sa.Windows {
+			if w.Weekday != weekday {
+				continue
+			}
+			start := time.Date(local.Year(), local.Month(), local.Day(), w.StartMinute/60, w.StartMinute%60, 0, 0, loc)
+			end := time.Date(local.Year(), local.Month(), local.Day(), w.EndMinute/60, w.EndMinute%60, 0, 0, loc)
+			if start.Before(from) {
+				start = from
+			}
+			if end.After(to) {
+				end = to
+			}
+			if start.Before(end) {
+				out = append(out, minuteWindow{int(start.Sub(from) / time.Minute), int(end.Sub(from) / time.Minute)})
+			}
+		}
+	}
+	return out
+}
+
+// standingOf は本人が登録した普段の空き時間。未登録なら nil。
+func standingOf(s coord.Snapshot, memberID string) *coord.StandingAvailability {
+	for _, m := range s.Members {
+		if m.ID == memberID {
+			return m.Standing
+		}
+	}
+	return nil
+}
+
+// busyConflict は開催候補が、メンバーの別の確定済み予定と重なるかを返す。
+func busyConflict(s coord.Snapshot, at time.Time) bool {
+	end := at.Add(time.Duration(s.DurationMinutes) * time.Minute)
+	for _, b := range s.BusyIntervals {
+		if at.Before(b.EndsAt) && b.StartsAt.Before(end) {
+			return true
+		}
+	}
+	return false
+}
+
 // commonWindows includes every fixed session member, including absent/unanswered members.
 func commonWindows(s coord.Snapshot, day time.Time) []minuteWindow {
 	if len(s.Members) == 0 {
@@ -167,7 +230,7 @@ func commonWindows(s coord.Snapshot, day time.Time) []minuteWindow {
 		}
 		var next []minuteWindow
 		for _, a := range common {
-			for _, b := range availableWindows(d, day, s.DurationMinutes) {
+			for _, b := range availableWindows(d, standingOf(s, m.ID), day, s.DurationMinutes) {
 				w := minuteWindow{max(a.start, b.start), min(a.end, b.end)}
 				if w.end-w.start >= s.DurationMinutes {
 					next = append(next, w)

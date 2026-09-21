@@ -331,6 +331,9 @@ func (pb Playbook) ValidatePlan(_ context.Context, s coord.Snapshot, prop coord.
 			continue
 		}
 		pid := *item.PresenterMemberID
+		if sd.AssigneeMemberID != "" && pid != sd.AssigneeMemberID {
+			v.Add(path+".presenter_member_id", "この回の担当は全体計画で本人が承認した人に固定されています。他の人を担当にできません")
+		}
 		prep, pd := preparationData(s, pid)
 		switch {
 		case prep == nil || prep.Attendance != coord.AttendanceAttending:

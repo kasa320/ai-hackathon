@@ -38,7 +38,7 @@ func validName(s string) (string, bool) {
 }
 
 func groupView(members []store.Member, g store.Group, current store.Member) apitypes.Group {
-	out := apitypes.Group{ID: g.ID, Name: g.Name, CurrentMemberID: current.ID, Members: []apitypes.Member{}}
+	out := apitypes.Group{ID: g.ID, Name: g.Name, PlaybookID: g.PlaybookID, CurrentMemberID: current.ID, Members: []apitypes.Member{}}
 	for _, m := range members {
 		out.Members = append(out.Members, memberView(m))
 	}
@@ -61,6 +61,14 @@ func (c *Coordinator) CreateGroup(ctx context.Context, userID string, in apitype
 		name, ok := validName(in.Name)
 		if !ok {
 			fields = append(fields, apperr.Field{Path: "name", Message: fmt.Sprintf("1〜%d文字で入力してください", MaxNameLen)})
+		}
+		// 種別を省略した従来の呼び出しは reading として扱う。未対応の種別は作成させない。
+		playbookID := in.PlaybookID
+		if playbookID == "" {
+			playbookID = store.DefaultPlaybookID
+		}
+		if _, err := c.playbook(playbookID); err != nil {
+			fields = append(fields, apperr.Field{Path: "playbook_id", Message: "対応していない種別です。現在は reading だけを指定できます"})
 		}
 		if n := len(in.Invitees); n < MinGroupSize-1 || n > MaxGroupSize-1 {
 			fields = append(fields, apperr.Field{Path: "invitees", Message: fmt.Sprintf("招待するメンバーは%d〜%d人にしてください", MinGroupSize-1, MaxGroupSize-1)})
@@ -87,7 +95,7 @@ func (c *Coordinator) CreateGroup(ctx context.Context, userID string, in apitype
 			return store.Response{}, apperr.Validation(fields...)
 		}
 
-		g := store.Group{ID: store.NewID("grp"), Name: name, OwnerUserID: user.ID, CreatedAt: now}
+		g := store.Group{ID: store.NewID("grp"), Name: name, OwnerUserID: user.ID, PlaybookID: playbookID, CreatedAt: now}
 		if err := tx.CreateGroup(ctx, g); err != nil {
 			return store.Response{}, err
 		}
@@ -115,13 +123,40 @@ func (c *Coordinator) CreateGroup(ctx context.Context, userID string, in apitype
 	})
 }
 
+// UpdateGroup は管理者だけがグループ名を変更できる。種別（playbook_id）は作成後に変更できない。
+// 名前の変更は何度繰り返しても同じ結果になるため、再送キーは要求しない。
+func (c *Coordinator) UpdateGroup(ctx context.Context, userID, groupID string, in apitypes.UpdateGroupInput) (apitypes.Group, error) {
+	var out apitypes.Group
+	err := c.st.Tx(ctx, func(tx *store.Tx) error {
+		g, m, err := c.groupAccess(ctx, tx, userID, groupID)
+		if err != nil {
+			return err
+		}
+		if m.Role != RoleOwner {
+			return apperr.ForbiddenErr()
+		}
+		name, ok := validName(in.Name)
+		if !ok {
+			return apperr.Validation(apperr.Field{Path: "name", Message: fmt.Sprintf("1〜%d文字で入力してください", MaxNameLen)})
+		}
+		if err := tx.RenameGroup(ctx, g.ID, name); err != nil {
+			return err
+		}
+		g.Name = name
+		members, err := tx.Members(ctx, groupID)
+		out = groupView(members, g, m)
+		return err
+	})
+	return out, err
+}
+
 // ListGroups は本人の所属グループを作成日時の降順で返す。
 func (c *Coordinator) ListGroups(ctx context.Context, userID string) (apitypes.GroupList, error) {
 	out := apitypes.GroupList{Items: []apitypes.GroupListItem{}}
 	err := c.st.Tx(ctx, func(tx *store.Tx) error {
 		groups, err := tx.GroupsForUser(ctx, userID)
 		for _, g := range groups {
-			out.Items = append(out.Items, apitypes.GroupListItem{ID: g.ID, Name: g.Name, CurrentMemberID: g.MemberID, Role: g.Role, MemberCount: g.MemberCount})
+			out.Items = append(out.Items, apitypes.GroupListItem{ID: g.ID, Name: g.Name, PlaybookID: g.PlaybookID, CurrentMemberID: g.MemberID, Role: g.Role, MemberCount: g.MemberCount})
 		}
 		return err
 	})
@@ -195,7 +230,8 @@ func (c *Coordinator) CreateSession(ctx context.Context, userID, groupID string,
 			return store.Response{}, apperr.New(apperr.MembersNotJoined, "まだログインしていないメンバーがいます。").With("member_ids", notJoined)
 		}
 		pb, err := c.playbook(in.PlaybookID)
-		if err != nil {
+		if err != nil || in.PlaybookID != g.PlaybookID {
+			// グループには単一の種別があり、別の種別の開催回は登録できない。
 			return store.Response{}, apperr.New(apperr.UnsupportedPlaybook, "対応していない用途です。")
 		}
 

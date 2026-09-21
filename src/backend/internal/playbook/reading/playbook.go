@@ -25,16 +25,18 @@ func (Playbook) Descriptor() coord.Descriptor {
 
 // aiContext は AI に渡す判断材料。共有可能な構造化情報だけを含む。
 type aiContext struct {
-	StartsAt        string            `json:"starts_at"`
-	Schedule        aiSchedule        `json:"schedule"`
-	DurationMinutes int               `json:"duration_minutes"`
-	Book            string            `json:"book_title"`
-	Sections        []Section         `json:"sections"`
-	Completed       []string          `json:"completed_section_ids"`
-	Target          []string          `json:"target_section_ids"`
-	Members         []aiMember        `json:"members"`
-	CurrentPlan     *PlanData         `json:"current_confirmed_plan"`
-	Case            coord.CaseContext `json:"case"`
+	StartsAt        string     `json:"starts_at"`
+	Schedule        aiSchedule `json:"schedule"`
+	DurationMinutes int        `json:"duration_minutes"`
+	Book            string     `json:"book_title"`
+	Sections        []Section  `json:"sections"`
+	Completed       []string   `json:"completed_section_ids"`
+	Target          []string   `json:"target_section_ids"`
+	// AssignedPresenter は全体計画で本人が承認した、この回の担当者。ある場合、発表の担当は必ずこの人にする。
+	AssignedPresenter string            `json:"assigned_presenter_member_id,omitempty"`
+	Members           []aiMember        `json:"members"`
+	CurrentPlan       *PlanData         `json:"current_confirmed_plan"`
+	Case              coord.CaseContext `json:"case"`
 }
 
 // aiSchedule は開催日時の決まり具合。proposed の間は案で日時を決める。
@@ -67,14 +69,15 @@ func (Playbook) BuildContext(_ context.Context, s coord.Snapshot) (json.RawMessa
 		return nil, err
 	}
 	c := aiContext{
-		StartsAt:        s.StartsAt.UTC().Format("2006-01-02T15:04:05Z"),
-		Schedule:        buildSchedule(s),
-		DurationMinutes: s.DurationMinutes,
-		Book:            sd.BookTitle,
-		Sections:        sd.Sections,
-		Completed:       sd.CompletedSectionIDs,
-		Target:          sd.TargetSectionIDs,
-		Case:            s.Case,
+		StartsAt:          s.StartsAt.UTC().Format("2006-01-02T15:04:05Z"),
+		Schedule:          buildSchedule(s),
+		DurationMinutes:   s.DurationMinutes,
+		Book:              sd.BookTitle,
+		Sections:          sd.Sections,
+		Completed:         sd.CompletedSectionIDs,
+		Target:            sd.TargetSectionIDs,
+		AssignedPresenter: sd.AssigneeMemberID,
+		Case:              s.Case,
 	}
 	var current idSet
 	if cur := s.CurrentPlan(); cur != nil {

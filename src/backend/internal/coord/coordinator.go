@@ -51,6 +51,8 @@ type Options struct {
 	RunLock *sync.Mutex
 	// Interpreter は自由文から参加条件を取り出す処理。nil なら自由文の解釈を提供しない。
 	Interpreter Interpreter
+	// BookAgent はブックの全体計画と担当変更の候補を作る処理。nil なら規則だけで作る（DraftBookAgent）。
+	BookAgent BookAgent
 }
 
 // Coordinator は用途共通の調整処理。状態遷移・本人と版の検証・同意管理・イベント処理を担う。
@@ -61,6 +63,7 @@ type Coordinator struct {
 	clock       clock.Clock
 	planner     Planner
 	interpreter Interpreter
+	bookAgent   BookAgent
 	opts        Options
 	log         *slog.Logger
 	wake        chan struct{}
@@ -74,7 +77,11 @@ func NewCoordinator(reg *Service, st *store.Store, clk clock.Clock, planner Plan
 	if log == nil {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
-	return &Coordinator{reg: reg, st: st, clock: clk, planner: planner, interpreter: opts.Interpreter, opts: opts, log: log, wake: make(chan struct{}, 1)}
+	agent := opts.BookAgent
+	if agent == nil {
+		agent = DraftBookAgent{}
+	}
+	return &Coordinator{reg: reg, st: st, clock: clk, planner: planner, interpreter: opts.Interpreter, bookAgent: agent, opts: opts, log: log, wake: make(chan struct{}, 1)}
 }
 
 // Playbooks は登録済み用途の一覧。
@@ -240,7 +247,13 @@ func (c *Coordinator) snapshot(ctx context.Context, tx *store.Tx, sess store.Ses
 		if m.LeftAt != nil {
 			continue
 		}
-		s.Members = append(s.Members, SnapshotMember{ID: m.ID, DisplayName: m.DisplayName, Role: m.Role})
+		sm := SnapshotMember{ID: m.ID, DisplayName: m.DisplayName, Role: m.Role}
+		if m.UserID != "" {
+			if sm.Standing, err = c.standingAvailability(ctx, tx, m.UserID); err != nil {
+				return s, err
+			}
+		}
+		s.Members = append(s.Members, sm)
 		if m.Role == "owner" {
 			s.OwnerMemberID = m.ID
 		}
@@ -253,6 +266,16 @@ func (c *Coordinator) snapshot(ctx context.Context, tx *store.Tx, sess store.Ses
 	s.ConfirmedPlans, err = c.confirmedPlans(ctx, tx, sess.ID)
 	if err != nil {
 		return s, err
+	}
+	if sess.ScheduleStatus == ScheduleProposed {
+		// 日時を決める回だけ、メンバーの別の確定済み予定を確認する。
+		busy, err := tx.ConfirmedBusyForSession(ctx, sess.ID, s.Now.Add(-24*time.Hour))
+		if err != nil {
+			return s, err
+		}
+		for _, b := range busy {
+			s.BusyIntervals = append(s.BusyIntervals, BusyInterval{StartsAt: b.StartsAt, EndsAt: b.StartsAt.Add(time.Duration(b.DurationMinutes) * time.Minute)})
+		}
 	}
 	// 同じグループの過去の開催回（新しい順）。代役の偏りの判定に使う。
 	all, err := tx.SessionsByGroup(ctx, sess.GroupID)

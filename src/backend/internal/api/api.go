@@ -56,10 +56,13 @@ func (s *Server) Handler(frontendDir string, mount ...func(mux *http.ServeMux)) 
 	mux.HandleFunc("GET /api/auth/callback", s.callback)
 	mux.HandleFunc("GET /api/me", s.authed(s.me))
 	mux.HandleFunc("POST /api/auth/logout", s.authed(s.logout))
+	mux.HandleFunc("GET /api/me/weekly-availability", s.authed(s.getWeeklyAvailability))
+	mux.HandleFunc("PUT /api/me/weekly-availability", s.authed(s.putWeeklyAvailability))
 
 	mux.HandleFunc("GET /api/groups", s.authed(s.listGroups))
 	mux.HandleFunc("POST /api/groups", s.authed(s.createGroup))
 	mux.HandleFunc("GET /api/groups/{group_id}", s.authed(s.getGroup))
+	mux.HandleFunc("PATCH /api/groups/{group_id}", s.authed(s.updateGroup))
 	mux.HandleFunc("POST /api/groups/{group_id}/leave", s.authed(s.leaveGroup))
 	mux.HandleFunc("DELETE /api/groups/{group_id}", s.authed(s.deleteGroup))
 	mux.HandleFunc("GET /api/groups/{group_id}/sessions", s.authed(s.listSessions))
@@ -67,6 +70,11 @@ func (s *Server) Handler(frontendDir string, mount ...func(mux *http.ServeMux)) 
 	mux.HandleFunc("GET /api/groups/{group_id}/reading/books", s.authed(s.listReadingBooks))
 	mux.HandleFunc("POST /api/groups/{group_id}/reading/books", s.authed(s.createReadingBook))
 	mux.HandleFunc("GET /api/groups/{group_id}/reading/books/{book_id}", s.authed(s.readingBookDetail))
+	mux.HandleFunc("PATCH /api/groups/{group_id}/reading/books/{book_id}", s.authed(s.updateReadingBook))
+	mux.HandleFunc("POST /api/groups/{group_id}/reading/books/{book_id}/plan/regenerate", s.authed(s.regenerateBookPlan))
+	mux.HandleFunc("PUT /api/groups/{group_id}/reading/books/{book_id}/assignments/me", s.authed(s.respondBookAssignment))
+	mux.HandleFunc("PUT /api/groups/{group_id}/reading/books/{book_id}/slots/{slot_id}/assignee-confirmation", s.authed(s.respondAssigneeConfirmation))
+	mux.HandleFunc("POST /api/groups/{group_id}/reading/books/{book_id}/availability-requests", s.authed(s.requestAvailability))
 	mux.HandleFunc("POST /api/groups/{group_id}/reading/books/{book_id}/sessions", s.authed(s.startReadingBookSession))
 	mux.HandleFunc("POST /api/groups/{group_id}/reading/books/{book_id}/sessions/{slot_id}/complete", s.authed(s.completeReadingBookSession))
 	mux.HandleFunc("GET /api/sessions/{session_id}", s.authed(s.getSession))
@@ -95,7 +103,7 @@ func (s *Server) Handler(frontendDir string, mount ...func(mux *http.ServeMux)) 
 // apiFallback は未定義の API に JSON の 404、メソッド違いに 405 を返す。
 func (s *Server) apiFallback(mux *http.ServeMux, w http.ResponseWriter, r *http.Request) {
 	var allow []string
-	for _, m := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete} {
+	for _, m := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
 		probe := r.Clone(r.Context())
 		probe.Method = m
 		if _, pattern := mux.Handler(probe); pattern != "" && pattern != "/api/" && pattern != "/" {
@@ -275,6 +283,31 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request, sess auth.Sessio
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (s *Server) getWeeklyAvailability(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	out, err := s.Coord.WeeklyAvailability(r.Context(), sess.User.ID)
+	if err != nil {
+		httpx.WriteError(w, r, s.Log, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+// putWeeklyAvailability は本人の空き時間を全置換する。置き換えは何度送っても同じ結果になるため、
+// Idempotency-Key は要求しない。対象は常にログイン中の本人で、利用者IDを入力から受け取らない。
+func (s *Server) putWeeklyAvailability(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	var in apitypes.PutWeeklyAvailabilityInput
+	if _, err := httpx.ReadJSON(w, r, &in); err != nil {
+		httpx.WriteError(w, r, s.Log, err)
+		return
+	}
+	out, err := s.Coord.PutWeeklyAvailability(r.Context(), sess.User.ID, in)
+	if err != nil {
+		httpx.WriteError(w, r, s.Log, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
 func (s *Server) listGroups(w http.ResponseWriter, r *http.Request, sess auth.Session) {
 	out, err := s.Coord.ListGroups(r.Context(), sess.User.ID)
 	if err != nil {
@@ -292,6 +325,20 @@ func (s *Server) createGroup(w http.ResponseWriter, r *http.Request, sess auth.S
 
 func (s *Server) getGroup(w http.ResponseWriter, r *http.Request, sess auth.Session) {
 	out, err := s.Coord.GetGroup(r.Context(), sess.User.ID, r.PathValue("group_id"))
+	if err != nil {
+		httpx.WriteError(w, r, s.Log, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) updateGroup(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	var in apitypes.UpdateGroupInput
+	if _, err := httpx.ReadJSON(w, r, &in); err != nil {
+		httpx.WriteError(w, r, s.Log, err)
+		return
+	}
+	out, err := s.Coord.UpdateGroup(r.Context(), sess.User.ID, r.PathValue("group_id"), in)
 	if err != nil {
 		httpx.WriteError(w, r, s.Log, err)
 		return
@@ -350,6 +397,43 @@ func (s *Server) readingBookDetail(w http.ResponseWriter, r *http.Request, sess 
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
+}
+func (s *Server) updateReadingBook(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	gid, bid := r.PathValue("group_id"), r.PathValue("book_id")
+	access := func() error { _, err := s.Coord.CheckGroupAccess(r.Context(), sess.User.ID, gid, true); return err }
+	mutation(s, w, r, sess, access, func(in apitypes.UpdateReadingBookInput, key *store.IdemKey) (store.Response, error) {
+		return s.Coord.UpdateReadingBook(r.Context(), sess.User.ID, gid, bid, in, key)
+	})
+}
+func (s *Server) regenerateBookPlan(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	gid, bid := r.PathValue("group_id"), r.PathValue("book_id")
+	access := func() error { _, err := s.Coord.CheckGroupAccess(r.Context(), sess.User.ID, gid, true); return err }
+	mutation(s, w, r, sess, access, func(in apitypes.RegenerateBookPlanInput, key *store.IdemKey) (store.Response, error) {
+		return s.Coord.RegenerateBookPlan(r.Context(), sess.User.ID, gid, bid, in, key)
+	})
+}
+
+// respondBookAssignment は本人の担当への回答。対象は常に認証済みの本人で、メンバーIDを入力から受け取らない。
+func (s *Server) respondBookAssignment(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	gid, bid := r.PathValue("group_id"), r.PathValue("book_id")
+	access := func() error { _, err := s.Coord.CheckGroupAccess(r.Context(), sess.User.ID, gid, false); return err }
+	mutation(s, w, r, sess, access, func(in apitypes.BookAssignmentInput, key *store.IdemKey) (store.Response, error) {
+		return s.Coord.RespondBookAssignment(r.Context(), sess.User.ID, gid, bid, in, key)
+	})
+}
+func (s *Server) respondAssigneeConfirmation(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	gid, bid, sid := r.PathValue("group_id"), r.PathValue("book_id"), r.PathValue("slot_id")
+	access := func() error { _, err := s.Coord.CheckGroupAccess(r.Context(), sess.User.ID, gid, false); return err }
+	mutation(s, w, r, sess, access, func(in apitypes.AssigneeConfirmationInput, key *store.IdemKey) (store.Response, error) {
+		return s.Coord.RespondAssigneeConfirmation(r.Context(), sess.User.ID, gid, bid, sid, in, key)
+	})
+}
+func (s *Server) requestAvailability(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	gid, bid := r.PathValue("group_id"), r.PathValue("book_id")
+	access := func() error { _, err := s.Coord.CheckGroupAccess(r.Context(), sess.User.ID, gid, true); return err }
+	mutation(s, w, r, sess, access, func(_ struct{}, key *store.IdemKey) (store.Response, error) {
+		return s.Coord.RequestAvailabilityUpdate(r.Context(), sess.User.ID, gid, bid, key)
+	})
 }
 func (s *Server) startReadingBookSession(w http.ResponseWriter, r *http.Request, sess auth.Session) {
 	gid, bid := r.PathValue("group_id"), r.PathValue("book_id")

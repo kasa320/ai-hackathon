@@ -8,6 +8,7 @@ func (Playbook) Instructions() string {
 必須条件：
 - 担当者（presenter_member_id）は参加予定（attendance=attending）で、preparation.declined_presentation が true でない人だけ。
 - 範囲（target_section_ids）は順番どおりのまとまりに分け、まとまりごとに1人の担当者を付ける。担当はなるべく多くの人に分け、past_presentation_count が少ない人を優先する。今の確定計画の担当者（presenter_in_current_plan）は、辞退していなければ同じ範囲を維持する。
+- assigned_presenter_member_id がある回は、全体計画で担当者本人が承認済み。presenter_member_id は必ずその人にし、他の人を担当にしない（その人が参加できない場合は report_no_feasible_plan で管理者へ戻す）。
 - presentation には必ず担当者を付ける。review・discussion・joint_reading の担当者は任意（付けた場合は本人の引き受けが必要）。
 - covered_section_ids と deferred_section_ids は重ならず、合わせて target_section_ids と一致させる。
 - 進行表の節は covered_section_ids か completed_section_ids の範囲内。各 covered の節を少なくとも1つの進行項目に含める。
@@ -19,6 +20,7 @@ func (Playbook) Instructions() string {
 - schedule.status が confirmed の回では日時は決まっている。starts_at は書かず、日時変更や中止も提案しない。
 - schedule.status が proposed の回では、この案で開催日時も決める。starts_at に期間内（period_start〜period_end）の日時を RFC 3339 で入れる。
 - 日時は candidate_datetimes から選ぶ。開催回の全員が明示した時間帯を満たす候補だけが入る。未回答・未定・欠席の人を除いて確定しない。
+- 候補は、各自の週間の空き時間（普段の空き時間）と今回だけの参加不可、同じ人が別のブック・グループで確定済みの予定を除いたものだけが入る。それ以外の日時は選ばない。
 - today より前の日は選ばない。frequency には期間全体の進め方を1行で書く（例：週1回60分・全8回）。この1回ぶんだけを確定し、残りは文章で示すにとどめる。
 - 候補がなく、予定が未回答・未定の人がいるときは、その人だけにrequest_preparationで参加可能時間を確認する。一度確認した人へ繰り返し依頼しない。回答済みでも共通時間がないときはreport_no_feasible_planで期間・所要時間・時間帯の見直しを案内する。会全体の条件を勝手に変更しない。
 

@@ -82,6 +82,14 @@ func TestOpenAddsGroupLifecycleColumnsToLegacyDatabase(t *testing.T) {
 		if len(groups) != 1 || groups[0].ID != "grp_1" {
 			t.Fatalf("groups = %+v", groups)
 		}
+		// 種別を持たない既存グループは reading として読める。
+		if groups[0].PlaybookID != "reading" {
+			t.Fatalf("旧グループの種別 = %q", groups[0].PlaybookID)
+		}
+		g, err := tx.Group(ctx, "grp_1")
+		if err != nil || g.PlaybookID != "reading" {
+			t.Fatalf("Group = %+v, %v", g, err)
+		}
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -355,4 +363,84 @@ func TestLLMCallReserveAndUpdate(t *testing.T) {
 		}
 		return nil
 	})
+}
+
+// 自動進行の前に作られたDBを、削除せずに移行できる：列の追加、旧ブックの legacy 扱い、
+// 通知の種別制約の緩和（既存の行は保持）。
+func TestOpenMigratesLegacyBooksAndNotificationKinds(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy-books.db")
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`
+		CREATE TABLE users (id TEXT PRIMARY KEY, discord_user_id TEXT NOT NULL UNIQUE, display_name TEXT NOT NULL, created_at TEXT NOT NULL);
+		CREATE TABLE groups (id TEXT PRIMARY KEY, name TEXT NOT NULL, owner_user_id TEXT NOT NULL REFERENCES users(id), created_at TEXT NOT NULL, deleted_at TEXT);
+		CREATE TABLE reading_books (
+			id TEXT PRIMARY KEY, group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE, title TEXT NOT NULL, isbn TEXT,
+			toc_source TEXT NOT NULL, sections TEXT NOT NULL,
+			planned_session_count INTEGER NOT NULL CHECK (planned_session_count BETWEEN 1 AND 52),
+			session_creation_mode TEXT NOT NULL CHECK (session_creation_mode IN ('sequential', 'all')),
+			status TEXT NOT NULL CHECK (status IN ('in_progress', 'completed')),
+			completed_section_ids TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+		);
+		CREATE TABLE reading_book_slots (
+			id TEXT PRIMARY KEY, book_id TEXT NOT NULL REFERENCES reading_books(id) ON DELETE CASCADE,
+			sequence_number INTEGER NOT NULL, status TEXT NOT NULL CHECK (status IN ('planned', 'active', 'completed')),
+			session_id TEXT UNIQUE, covered_section_ids TEXT NOT NULL DEFAULT '[]', UNIQUE (book_id, sequence_number)
+		);
+		CREATE TABLE group_notifications (
+			id TEXT PRIMARY KEY, group_id TEXT NOT NULL REFERENCES groups(id),
+			kind TEXT NOT NULL CHECK (kind IN ('member_left', 'group_deleted')),
+			recipient_discord_user_id TEXT NOT NULL, dedupe_key TEXT NOT NULL UNIQUE, content TEXT NOT NULL,
+			status TEXT NOT NULL CHECK (status IN ('pending', 'sending', 'sent', 'failed', 'unknown')),
+			error_code TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, seq INTEGER NOT NULL
+		);
+		INSERT INTO users VALUES ('usr_1', '111111111111111111', 'A', '2026-09-19T09:00:00Z');
+		INSERT INTO groups VALUES ('grp_1', '輪読', 'usr_1', '2026-09-19T09:00:00Z', NULL);
+		INSERT INTO reading_books VALUES ('book_old', 'grp_1', '旧ブック', NULL, '{"kind":"manual","urls":[]}', '[{"id":"s1","title":"1"}]', 2, 'sequential', 'in_progress', '[]', '2026-09-19T09:00:00Z', '2026-09-19T09:00:00Z');
+		INSERT INTO reading_book_slots VALUES ('slot_old', 'book_old', 1, 'active', NULL, '[]');
+		INSERT INTO group_notifications VALUES ('gntf_old', 'grp_1', 'member_left', '222222222222222222', 'k1', '脱退', 'sent', NULL, '2026-09-19T09:00:00Z', '2026-09-19T09:00:00Z', 1);
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	for i := 0; i < 2; i++ { // 2回目の起動でも壊れない
+		st, err := store.Open(ctx, path)
+		if err != nil {
+			t.Fatalf("%d回目: 旧DBを開けない: %v", i+1, err)
+		}
+		if err := st.Tx(ctx, func(tx *store.Tx) error {
+			b, err := tx.ReadingBook(ctx, "book_old")
+			if err != nil {
+				return err
+			}
+			// 旧ブックは自動進行の対象外（legacy）で、既存の値は保たれる。
+			if b.PlanStatus != store.BookPlanLegacy || b.PlanVersion != 0 || b.AdjustmentLeadDays != 7 || b.Title != "旧ブック" || b.SessionCreationMode != "sequential" {
+				t.Fatalf("旧ブック = %+v", b)
+			}
+			slots, err := tx.ReadingBookSlots(ctx, "book_old")
+			if err != nil || len(slots) != 1 || slots[0].AssignmentStatus != store.AssignUnassigned || slots[0].AssigneeMemberID != "" || slots[0].Status != "active" {
+				t.Fatalf("旧枠 = %+v, %v", slots, err)
+			}
+			if approved, err := tx.ApprovedBooks(ctx); err != nil || len(approved) != 0 {
+				t.Fatalf("旧ブックが自動進行の対象になった: %+v, %v", approved, err)
+			}
+			// 既存の通知は保たれ、新しい種別を登録できる。
+			ns, err := tx.GroupNotifications(ctx, "grp_1")
+			if err != nil {
+				return err
+			}
+			if len(ns) < 1 || ns[0].ID != "gntf_old" || ns[0].Status != "sent" {
+				t.Fatalf("既存の通知 = %+v", ns)
+			}
+			return tx.EnqueueGroupNotification(ctx, store.GroupNotification{ID: "gntf_new" + string(rune('0'+i)), GroupID: "grp_1", Kind: "book_plan_proposed",
+				RecipientDiscordUserID: "222222222222222222", DedupeKey: "book_plan:x:" + string(rune('0'+i)), Content: "x", CreatedAt: time.Date(2026, 9, 19, 9, 0, 0, 0, time.UTC)})
+		}); err != nil {
+			t.Fatal(err)
+		}
+		st.Close()
+	}
 }
