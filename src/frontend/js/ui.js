@@ -368,7 +368,7 @@ export function createDialog({ title, body, submitLabel, onSubmit, extra = null 
 
 /**
  * デモ用の帯。DEV_MODE のときだけ出す。本番では health.dev_mode が false なので描画しない。
- * 時計を進める・人物を切り替える・障害を入れるのはここからだけ。
+ * 時計を進める・人物を切り替える・初期シナリオを選ぶ操作をまとめる。
  */
 export async function renderDevBar(node, client, { onChange } = {}) {
   let health;
@@ -389,12 +389,40 @@ export async function renderDevBar(node, client, { onChange } = {}) {
     ["100000000000000004", "D"],
   ];
 
-  const run = async (fn) => {
+  const clock = el("span", { class: "devbar__clock" }, "時刻を取得中…");
+  const feedback = el("span", { class: "devbar__feedback", role: "status", "aria-live": "polite" });
+  const controls = [];
+
+  const showStatus = (status) => {
+    const now = new Date(status.now);
+    const formatted = new Intl.DateTimeFormat("ja-JP", {
+      timeZone: "Asia/Tokyo",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(now);
+    const offsetHours = Math.round(status.clock_offset_seconds / 3600);
+    clock.textContent = `現在 ${formatted} JST（+${offsetHours}時間）`;
+  };
+
+  const run = async (fn, success = "更新しました") => {
+    for (const control of controls) control.disabled = true;
+    feedback.classList.remove("devbar__feedback--error");
+    feedback.textContent = "処理中…";
     try {
-      await fn();
+      const result = await fn();
+      if (result?.now) showStatus(result);
+      const processed = result?.processed_count;
+      feedback.textContent = processed === undefined ? success : `${success}（状態遷移 ${processed}件）`;
       await onChange?.();
     } catch (err) {
       console.error(err);
+      feedback.classList.add("devbar__feedback--error");
+      feedback.textContent = err?.message || "操作に失敗しました";
+    } finally {
+      for (const control of controls) control.disabled = false;
     }
   };
 
@@ -402,7 +430,9 @@ export async function renderDevBar(node, client, { onChange } = {}) {
     "select",
     {
       "aria-label": "人物を切り替える",
-      onChange: (event) => run(() => client.dev.login(event.target.value)),
+      onChange: (event) => {
+        if (event.target.value) run(() => client.dev.login(event.target.value), "人物を切り替えました");
+      },
     },
     el("option", { value: "" }, "人物を切り替える"),
     people.map(([id, name]) => el("option", { value: id }, name)),
@@ -411,35 +441,57 @@ export async function renderDevBar(node, client, { onChange } = {}) {
   const scenario = el(
     "select",
     { "aria-label": "初期データ" },
-    el("option", { value: "replan_demo" }, "replan_demo"),
-    el("option", { value: "initial_demo" }, "initial_demo"),
+    el("option", { value: "book_plan_demo" }, "計画の担当承認待ち（2冊）"),
+    el("option", { value: "book_schedule_demo" }, "日程調整の開始直前（2冊）"),
+    el("option", { value: "assignee_confirmation_demo" }, "開催3日前の担当確認直前"),
+    el("option", { value: "replan_demo" }, "旧デモ：担当辞退と再計画"),
+    el("option", { value: "initial_demo" }, "旧デモ：開催回登録直後"),
   );
+
+  const advanceButton = (seconds, label) => el(
+    "button",
+    { type: "button", onClick: () => run(() => client.dev.advanceClock(seconds), `${label}進めました`) },
+    label,
+  );
+  const oneHour = advanceButton(3600, "1時間");
+  const oneDay = advanceButton(86400, "1日");
+  const oneWeek = advanceButton(604800, "7日");
+  const seed = el(
+    "button",
+    {
+      type: "button",
+      onClick: () => {
+        if (confirm("DBを初期化して初期データを入れ直します。よろしいですか？")) {
+          run(async () => {
+            await client.dev.seed(scenario.value);
+            location.href = "/";
+          }, "初期データを投入しました");
+        }
+      },
+    },
+    "投入",
+  );
+  controls.push(who, scenario, oneHour, oneDay, oneWeek, seed);
 
   mount(
     node,
     el("b", {}, "デモモード"),
-    el("span", {}, "時計と人物を操作できます。本番では出ません。"),
+    clock,
     who,
-    el("button", { type: "button", onClick: () => run(() => client.dev.advanceClock(3600)) }, "1時間進める"),
-    el("button", { type: "button", onClick: () => run(() => client.dev.advanceClock(43200)) }, "12時間進める"),
+    oneHour,
+    oneDay,
+    oneWeek,
     el("span", { class: "devbar__end" }, "初期データ"),
     scenario,
-    el(
-      "button",
-      {
-        type: "button",
-        onClick: () => {
-          if (confirm("DBを初期化して初期データを入れ直します。よろしいですか？")) {
-            run(async () => {
-              await client.dev.seed(scenario.value);
-              location.href = "/";
-            });
-          }
-        },
-      },
-      "投入",
-    ),
+    seed,
+    feedback,
   );
   node.hidden = false;
+  try {
+    showStatus(await client.dev.status());
+  } catch (err) {
+    feedback.classList.add("devbar__feedback--error");
+    feedback.textContent = err?.message || "時刻の取得に失敗しました";
+  }
   return health;
 }

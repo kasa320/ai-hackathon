@@ -143,7 +143,7 @@ func run(log *slog.Logger) error {
 		// 開発モードでだけ /api/dev/* を登録する。無効時は存在しない扱い（404）。
 		mounts = append(mounts, devapi.Mount(devapi.Deps{
 			Store: st, Clock: clk, Auth: authManager, Faults: faults, AllowedOrigins: []string{cfg.PublicBaseURL}, Log: log,
-			Seeder: devapi.NewSeeder(registry, st, clk, cfg.PublicBaseURL, runLock), Wake: coordinator.Wake,
+			Seeder: devapi.NewSeeder(registry, st, clk, cfg.PublicBaseURL, runLock), Wake: coordinator.Wake, ProcessDue: coordinator.ProcessDue,
 		}))
 	}
 	srv := &http.Server{

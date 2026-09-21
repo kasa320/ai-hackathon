@@ -381,8 +381,11 @@ dialog::backdrop { background: rgba(35, 42, 49, .35); }
 .devbar span { color: rgba(255, 255, 255, .72); }
 .devbar button, .devbar select { padding: 3px 9px; border: 1px solid rgba(255, 255, 255, .28); border-radius: var(--r-ctrl); background: transparent; color: #fff; font-size: .76rem; cursor: pointer; }
 .devbar button:hover { background: rgba(255, 255, 255, .12); }
+.devbar button:disabled, .devbar select:disabled { cursor: wait; opacity: .55; }
 .devbar select option { color: var(--ink); }
 .devbar .devbar__end { margin-left: auto; }
+.devbar .devbar__clock { color: #fff; font-variant-numeric: tabular-nums; }
+.devbar .devbar__feedback--error { color: #ffb9b9; }
 
 /* 画面上部に出す一時的な知らせ。成功は青、失敗と競合は暖色。 */
 .flash { position: sticky; top: 60px; z-index: 15; display: flex; align-items: flex-start; gap: var(--s3); margin: var(--s4) 0 0; padding: var(--s3) var(--s4); border-radius: var(--r-ctrl); background: var(--blue-soft); font-size: .86rem; }

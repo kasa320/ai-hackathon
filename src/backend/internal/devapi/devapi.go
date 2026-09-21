@@ -31,6 +31,8 @@ type Deps struct {
 	Log            *slog.Logger
 	// Wake は時計を進めた後にイベント処理を起こす。
 	Wake func()
+	// ProcessDue は時計を進めた時刻までの業務処理を同期実行する。デモ画面が状態更新前に再読込しないために使う。
+	ProcessDue func(context.Context) (int, error)
 }
 
 // Mount は開発用 API を mux に登録する関数を返す。
@@ -61,6 +63,11 @@ type statusResponse struct {
 	Faults             map[string]*string `json:"faults"`
 }
 
+type advanceResponse struct {
+	statusResponse
+	ProcessedCount int `json:"processed_count"`
+}
+
 func (d Deps) statusBody() statusResponse {
 	return statusResponse{Now: d.Clock.Now().UTC().Truncate(time.Second), ClockOffsetSeconds: int64(d.Clock.Offset().Seconds()), Faults: d.Faults.Snapshot()}
 }
@@ -83,10 +90,19 @@ func (d Deps) advance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.Clock.Advance(dur)
+	processed := 0
+	if d.ProcessDue != nil {
+		var err error
+		processed, err = d.ProcessDue(context.WithoutCancel(r.Context()))
+		if err != nil {
+			httpx.WriteError(w, r, d.Log, err)
+			return
+		}
+	}
 	if d.Wake != nil {
 		d.Wake()
 	}
-	httpx.WriteJSON(w, http.StatusOK, d.statusBody())
+	httpx.WriteJSON(w, http.StatusOK, advanceResponse{statusResponse: d.statusBody(), ProcessedCount: processed})
 }
 
 func (d Deps) login(w http.ResponseWriter, r *http.Request) {

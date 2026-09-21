@@ -3,6 +3,7 @@ package devapi_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -47,7 +48,7 @@ func handler(t *testing.T, dev bool) (http.Handler, *clock.Offset) {
 	var mounts []func(*http.ServeMux)
 	if dev {
 		mounts = append(mounts, devapi.Mount(devapi.Deps{Store: st, Clock: clk, Auth: am, Faults: faults, AllowedOrigins: []string{"http://app.test"}, Log: log,
-			Seeder: devapi.NewSeeder(reg, st, clk, "http://app.test", lock), Wake: c.Wake}))
+			Seeder: devapi.NewSeeder(reg, st, clk, "http://app.test", lock), Wake: c.Wake, ProcessDue: c.ProcessDue}))
 	}
 	return srv.Handler(t.TempDir(), mounts...), clk
 }
@@ -135,5 +136,71 @@ func TestFaultsAndOrigin(t *testing.T) {
 	h.ServeHTTP(rec, r)
 	if rec.Code != 403 {
 		t.Fatalf("別オリジンからの開発用 API は拒否: %d", rec.Code)
+	}
+}
+
+func TestCurrentBookFlowScenariosAndSynchronousClock(t *testing.T) {
+	for _, scenario := range []string{"book_plan_demo", "book_schedule_demo", "assignee_confirmation_demo"} {
+		t.Run(scenario, func(t *testing.T) {
+			h, clk := handler(t, true)
+			w := call(h, "POST", "/api/dev/seed", `{"scenario":"`+scenario+`"}`, nil)
+			if w.Code != http.StatusOK {
+				t.Fatalf("seed: %d %s", w.Code, w.Body.String())
+			}
+			var seed devapi.SeedResult
+			if err := json.Unmarshal(w.Body.Bytes(), &seed); err != nil {
+				t.Fatal(err)
+			}
+			if seed.GroupID == "" || len(seed.BookIDs) == 0 || len(seed.SlotIDs) == 0 {
+				t.Fatalf("新しいフローのIDがない: %+v", seed)
+			}
+			login := call(h, "POST", "/api/dev/login", `{"discord_user_id":"100000000000000001"}`, nil)
+			if login.Code != http.StatusOK {
+				t.Fatalf("login: %d %s", login.Code, login.Body.String())
+			}
+			cookies := login.Result().Cookies()
+			bookPath := "/api/groups/" + seed.GroupID + "/reading/books/" + seed.BookIDs[0]
+			book := call(h, "GET", bookPath, "", cookies)
+			var detail apitypes.ReadingBookDetail
+			if book.Code != http.StatusOK {
+				t.Fatalf("book: %d %s", book.Code, book.Body.String())
+			}
+			_ = json.Unmarshal(book.Body.Bytes(), &detail)
+
+			switch scenario {
+			case "book_plan_demo":
+				if len(seed.BookIDs) != 2 || detail.Book.PlanStatus != "awaiting_approval" || detail.Sessions[0].AssignmentStatus != "pending" {
+					t.Fatalf("担当計画待ちではない: %+v %+v", seed, detail.Book)
+				}
+			case "book_schedule_demo":
+				if seed.NextTransitionAt == nil || detail.Book.PlanStatus != "approved" || detail.Sessions[0].Session != nil {
+					t.Fatalf("調整開始待ちではない: %+v %+v", seed, detail.Book)
+				}
+				seconds := int64(seed.NextTransitionAt.Sub(clk.Now()).Seconds())
+				advance := call(h, "POST", "/api/dev/clock/advance", fmt.Sprintf(`{"seconds":%d}`, seconds), nil)
+				if advance.Code != http.StatusOK || !strings.Contains(advance.Body.String(), `"processed_count":2`) {
+					t.Fatalf("同期処理: %d %s", advance.Code, advance.Body.String())
+				}
+				book = call(h, "GET", bookPath, "", cookies)
+				_ = json.Unmarshal(book.Body.Bytes(), &detail)
+				if detail.Sessions[0].Session == nil || detail.Sessions[0].SchedulingStatus != "scheduling" {
+					t.Fatalf("時計を進めても調整が始まらない: %+v", detail.Sessions[0])
+				}
+			case "assignee_confirmation_demo":
+				if seed.NextTransitionAt == nil || seed.SessionID == "" || detail.Sessions[0].SchedulingStatus != "scheduled" || detail.Sessions[0].AssigneeConfirmationStatus != nil {
+					t.Fatalf("直前確認待ちではない: %+v %+v", seed, detail.Sessions[0])
+				}
+				seconds := int64(seed.NextTransitionAt.Sub(clk.Now()).Seconds())
+				advance := call(h, "POST", "/api/dev/clock/advance", fmt.Sprintf(`{"seconds":%d}`, seconds), nil)
+				if advance.Code != http.StatusOK {
+					t.Fatalf("advance: %d %s", advance.Code, advance.Body.String())
+				}
+				book = call(h, "GET", bookPath, "", cookies)
+				_ = json.Unmarshal(book.Body.Bytes(), &detail)
+				if detail.Sessions[0].AssigneeConfirmationStatus == nil || *detail.Sessions[0].AssigneeConfirmationStatus != "open" {
+					t.Fatalf("3日前の確認が始まらない: %+v", detail.Sessions[0])
+				}
+			}
+		})
 	}
 }

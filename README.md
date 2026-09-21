@@ -100,13 +100,21 @@ Discordに「参加条件」と送ると、参加できる日時を会話で入�
 `DEV_MODE=1` で起動すると、Discord の設定なしで人物を切り替えて操作できます。
 
 ```sh
-curl -X POST localhost:24680/api/dev/seed  -H 'Content-Type: application/json' -d '{"scenario":"replan_demo"}'   # 初期データ（B担当で確定済み）
+curl -X POST localhost:24680/api/dev/seed  -H 'Content-Type: application/json' -d '{"scenario":"book_schedule_demo"}' # 2冊の計画承認済み・日程調整の開始直前
 curl -X POST localhost:24680/api/dev/login -H 'Content-Type: application/json' -d '{"discord_user_id":"100000000000000002"}' -c b.jar  # B としてログイン
 curl -X POST localhost:24680/api/dev/clock/advance -H 'Content-Type: application/json' -d '{"seconds":86400}'   # 時計を24時間進める
 curl -X PUT  localhost:24680/api/dev/faults -H 'Content-Type: application/json' -d '{"llm":"error","notify":null}' # 障害注入
 ```
 
-シナリオは `replan_demo`（辞退→AIの確認→再計画→同意→確定を実演する）と `initial_demo`（開催回登録の直後）。デモ用の利用者 A〜D の Discord ID は `100000000000000001`〜`…004`（架空）。
+画面上部のデモバーでも、現在のデモ時刻の確認、人物の切り替え、1時間・1日・7日の時計進行、初期データの再投入ができます。時計を進めるAPIは、その時刻までに必要な状態遷移を同期実行してから応答し、`processed_count` に処理件数を返します。
+
+現在のブック運営フロー用シナリオは次の3つです。
+
+- `book_plan_demo`：2冊を同時登録し、全体計画の担当者承認を待っている状態
+- `book_schedule_demo`：2冊の全体計画が承認済みで、翌日の日程調整開始を待っている状態
+- `assignee_confirmation_demo`：第1回の日程が確定済みで、開催3日前の担当者確認を待っている状態
+
+旧フローの確認用に `replan_demo`（開催回単位の担当辞退と再計画）と `initial_demo`（開催回登録直後）も残しています。デモ用の利用者 A〜D の Discord ID は `100000000000000001`〜`…004`（架空）。初期データの投入はDBを初期化するため、必要なデータが残っていないことを確認してから実行してください。
 
 ### テスト
 
