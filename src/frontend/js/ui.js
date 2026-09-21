@@ -193,11 +193,13 @@ export function pluginTag(playbookId, name) {
 }
 
 /**
- * ダイアログ。開いたら最初の入力へ焦点を移し、閉じても入力は捨てない
- * （競合で閉じたあと、同じ内容で送り直せるようにするため）。
+ * ダイアログ。送信中は二重操作を防ぎ、失敗時は入力を残す。
  */
 export function createDialog({ title, body, submitLabel, onSubmit, extra = null }) {
-  const errorBox = el("p", { class: "field__error", hidden: true });
+  const opener = document.activeElement;
+  let pending = false;
+  let restore = [];
+  const errorBox = el("p", { class: "field__error", hidden: true, role: "alert" });
   const receiptBox = el("div", {});
 
   const dialog = el(
@@ -207,16 +209,25 @@ export function createDialog({ title, body, submitLabel, onSubmit, extra = null 
       "form",
       {
         method: "dialog",
-        onSubmit: (event) => {
+        onSubmit: async (event) => {
           event.preventDefault();
-          onSubmit({ showError, showReceipt, close });
+          if (pending) return;
+          setPending(true);
+          try {
+            await onSubmit({ showError, showReceipt, close });
+          } catch (err) {
+            showReceipt(null);
+            showError(err.message ?? "送信できませんでした。もう一度お試しください。");
+          } finally {
+            setPending(false);
+          }
         },
       },
       el(
         "div",
         { class: "dialog__head" },
         el("h2", {}, title),
-        el("button", { type: "button", "aria-label": "閉じる", onClick: () => close() }, "×"),
+        el("button", { type: "button", "aria-label": "閉じる", onClick: () => { if (!pending) close(); } }, "×"),
       ),
       el("div", { class: "dialog__body" }, body, errorBox, receiptBox),
       el(
@@ -240,12 +251,35 @@ export function createDialog({ title, body, submitLabel, onSubmit, extra = null 
   function close() {
     dialog.close();
     dialog.remove();
+    if (opener?.isConnected) opener.focus();
   }
+
+  function setPending(value, label = "送信しています…") {
+    if (pending === value) return;
+    pending = value;
+    dialog.setAttribute("aria-busy", String(value));
+    const submit = dialog.querySelector('[type="submit"]');
+    if (value) {
+      restore = [...dialog.querySelectorAll("input,select,textarea,button")].map((node) => [node, node.disabled]);
+      for (const [node] of restore) node.disabled = true;
+      submit.textContent = label;
+    } else {
+      for (const [node, disabled] of restore) node.disabled = disabled;
+      restore = [];
+      submit.textContent = submitLabel;
+    }
+  }
+
+  dialog.addEventListener("cancel", (event) => { if (pending) event.preventDefault(); });
+  dialog.addEventListener("close", () => {
+    dialog.remove();
+    if (opener?.isConnected) opener.focus();
+  });
 
   document.body.append(dialog);
   dialog.showModal();
   dialog.querySelector("input, select, textarea")?.focus();
-  return { dialog, close, showError, showReceipt };
+  return { dialog, close, showError, showReceipt, setPending };
 }
 
 /**

@@ -20,11 +20,13 @@ export function createPoller({ fetcher, onData, onError }) {
     inFlight = true;
     try {
       const data = await fetcher();
+      if (stopped) return;
       intervalMs = BASE_MS;
       onData(data);
     } catch (err) {
+      if (stopped) return;
       if (STOP_ON.has(err.status)) {
-        stopped = true;
+        stop();
         onError?.(err, { fatal: true });
         return;
       }
@@ -49,16 +51,19 @@ export function createPoller({ fetcher, onData, onError }) {
   }
 
   document.addEventListener("visibilitychange", onVisibility);
-  window.addEventListener("pagehide", () => stop());
+  window.addEventListener("pagehide", stop);
+
+  function stop() {
+    stopped = true;
+    clearTimeout(timer);
+    document.removeEventListener("visibilitychange", onVisibility);
+    window.removeEventListener("pagehide", stop);
+  }
 
   return {
     start() { tick(); },
     /** 更新の成功直後に呼ぶ。一度すぐ取り直す。 */
     refreshNow() { clearTimeout(timer); intervalMs = BASE_MS; tick(); },
-    stop() {
-      stopped = true;
-      clearTimeout(timer);
-      document.removeEventListener("visibilitychange", onVisibility);
-    },
+    stop,
   };
 }
