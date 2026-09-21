@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./css/styles.css">
-  <meta name="description" content="適当なチャットを投げるだけ。マルナゲが全員に予定を聞いて日時を決め、輪読なら読む範囲と発表者、会議なら議題と時間配分まで割り当てます。">
+  <meta name="description" content="ひと言を投げるだけ。マルナゲが予定を聞き、輪読会の日時と当日の進め方を決めます。">
   <title>会 — Marunage</title>
 </head>
 <body data-page="home">
@@ -25,11 +25,9 @@
     <div class="hero__in">
       <span class="hero__kicker">マルナゲ／幹事エージェント</span>
       <h1>日程調整は、<br>丸投げでいい。</h1>
-      <p class="hero__lead">「来週あたりで輪読やりたい」。その一言を投げるだけ。マルナゲが全員に予定と都合を聞き、日時を決め、当日の担当と進め方まで組み立てて配ります。</p>
-      <p class="hero__sub">輪読なら読む範囲と発表者、会議なら議題と時間配分。何をする会かに合わせて、割り当てまで作ります。</p>
+      <p class="hero__lead">ひと言を投げるだけ。予定を聞き、日時と当日の進め方を決めます。</p>
       <div class="hero__actions">
         <a class="btn" id="login" href="/api/auth/discord">Discord ではじめる</a>
-        <span class="hero__note" id="hero-note">聞かれるのはあなたの分だけ。返事は Discord の個人チャットでできます。</span>
       </div>
     </div>
   </section>
@@ -45,7 +43,7 @@
           <span class="headline__state">60分・4人の輪読会</span>
         </div>
 
-        <p class="change">「来週あたりで輪読やりたい、1時間くらいで」。これだけを受け取ったマルナゲは、足りない条件を本人に聞きに行きます。<b>いつなら出られるか、どこまで読めたか、何分なら説明できるか</b>。集まった答えだけで、この進行表を組みます。</p>
+        <p class="change">参加できる日、読んだ範囲、説明できる時間を集めて進行表を作ります。</p>
 
         <div class="plan plan--enter" style="margin-top:24px">
           <div class="plan__bar" role="img" aria-label="組み上がった進行表。復習20分、説明15分、議論25分。">
@@ -56,54 +54,6 @@
           <p class="plan__scale num"><span>0</span><span>20</span><span>35</span><span>60分</span></p>
         </div>
 
-        <p class="change">担当が準備できなくなっても同じです。「前半だけ15分なら」と答えた人がいれば、範囲を縮めて復習に振り替えた案を作り直し、引き受けと同意を集め直します。扱えなかった範囲は次回へ引き継ぎます。</p>
-      </section>
-
-      <section class="section">
-        <div class="section__head"><h2>テーマに合わせて、割り当てまで変える</h2></div>
-        <div class="panels">
-          <article class="panel">
-            <h3>輪読</h3>
-            <strong>読む範囲と発表者、復習と議論の時間</strong>
-            <p>読めた範囲と説明できる分数から組みます。いま使えるのはこの形です。</p>
-          </article>
-          <article class="panel">
-            <h3>会議</h3>
-            <strong>議題と時間配分、進行の担当</strong>
-            <p>決めたいことと持ち時間から組む形。用途を足して増やせる作りにしています。</p>
-          </article>
-          <article class="panel">
-            <h3>勉強会</h3>
-            <strong>発表順と持ち時間</strong>
-            <p>同じく用途として追加できます。日程調整と通知の部分は共通です。</p>
-          </article>
-        </div>
-      </section>
-
-      <section class="section">
-        <div class="section__head"><h2>任せる範囲</h2></div>
-        <div class="panels">
-          <article class="panel">
-            <h3>条件を集める</h3>
-            <strong>参加できるか、どこまで読めたか、何分説明できるか</strong>
-            <p>答えた内容だけを使います。書名から章の中身を推測しません。都合がつかない理由は集めません。</p>
-          </article>
-          <article class="panel">
-            <h3>組み立てる</h3>
-            <strong>日時を決め、範囲と担当と進行を割り当てる</strong>
-            <p>持ち時間を超える案や、本人が説明できない範囲を割り当てる案は作りません。</p>
-          </article>
-          <article class="panel">
-            <h3>合意を残す</h3>
-            <strong>担当は本人が引き受け、範囲の変更は過半数の同意</strong>
-            <p>同意の記録をAIが代わりに作ることはできません。返事のない人を賛成として数えません。</p>
-          </article>
-        </div>
-      </section>
-
-      <section class="section">
-        <div class="section__head"><h2>決まらなかったとき</h2></div>
-        <p style="margin-top:24px;max-width:60ch;color:var(--ink-2);font-size:.92rem">条件を満たす案が作れない、回答の期限が過ぎた、モデルが失敗した。このいずれでも計画を勝手に確定させず、理由を添えて管理者の判断に戻します。通知は「送信待ち・送信済み・失敗・成否不明」を分けて記録し、送信済みは既読を意味しません。</p>
       </section>
     </div>
 

@@ -118,7 +118,7 @@ function render() {
   renderAgent();
   renderNotifications();
   renderMyActions();
-  renderSharedNote();
+  renderAsideVisibility();
   watchOwnAnswer();
   if (detail.permissions.can_view_activity) loadActivity();
 }
@@ -197,7 +197,7 @@ function headlineTitle() {
   if (c?.status === "needs_owner") {
     return detail.permissions.can_submit_proposal ? "実施できる代案を選んでください" : "管理者の判断を待っています";
   }
-  if (c?.status === "confirmed" || detail.session.status === "confirmed") return "計画は確定しました。いますることはありません";
+  if (c?.status === "confirmed" || detail.session.status === "confirmed") return "計画は確定しました";
   if (detail.session.status === "needs_attention") return "この回は組み直しが必要です";
   return "今は待っていて大丈夫です";
 }
@@ -205,7 +205,7 @@ function headlineTitle() {
 function headlineText(task) {
   if (task) {
     const left = remaining(task.due_at, detail.server_now);
-    return `${task.title}　回答の期限は${formatDateTime(task.due_at)}（残り${left}）です。`;
+    return `期限：${formatDateTime(task.due_at)}（残り${left}）`;
   }
   const c = detail.active_case;
   if (c?.status === "needs_owner") {
@@ -270,7 +270,7 @@ function renderProposals() {
   if (detail.confirmed_plan && detail.confirmed_plan.id !== detail.current_proposal?.id) list.push(detail.confirmed_plan);
 
   if (!list.length) {
-    mount($("proposals"), el("div", { style: "margin-top:24px" }, placeholder("案はまだありません", "全員の参加条件が揃うと、エージェントが案を作ります。")));
+    mount($("proposals"), el("div", { style: "margin-top:24px" }, placeholder("案はまだありません", "参加条件を集めています。")));
     return;
   }
 
@@ -300,9 +300,6 @@ function renderProposal(proposal) {
       feature ? feature.renderAgendaTable(proposal.data, detail.data, detail.members) : null,
       renderConsent(proposal),
     ),
-    void_
-      ? el("div", { class: "proposal__foot" }, el("p", {}, "この案への同意と引き受けは、新しい案には引き継がれません。"))
-      : null,
   );
 }
 
@@ -318,7 +315,7 @@ function renderConsent(proposal) {
         {},
         el("h3", {}, label),
         el("strong", {}, `${approval.eligible_member_ids.length}人のうち ${approval.approved_member_ids.length}人が同意しました`),
-        el("small", {}, `必要な人数は ${approval.required_count}人です。返事のない人は同意として数えません。`),
+        el("small", {}, `必要 ${approval.required_count}人`),
         el(
           "div",
           { class: "people" },
@@ -337,7 +334,6 @@ function renderConsent(proposal) {
         {},
         el("h3", {}, "担当者の引き受け"),
         el("strong", {}, `${proposal.assignments.filter((a) => a.status === "accepted").length}／${proposal.assignments.length}人が引き受けました`),
-        el("small", {}, "引き受けは本人だけができます。集団の同意では代われません。"),
         el(
           "div",
           { class: "people-row", style: "margin-top:8px" },
@@ -374,19 +370,21 @@ function renderAnswers() {
 function renderAgent() {
   const c = detail.active_case;
   const stopped = c?.status === "needs_owner";
-  $("agent").parentElement.className = stopped ? "panel--stopped" : "";
+  const section = $("agent-section");
+  section.hidden = !stopped;
+  section.className = stopped ? "panel--stopped" : "";
+  if (!stopped) {
+    mount($("agent"));
+    return;
+  }
 
   mount(
     $("agent"),
     el(
       "p",
       {},
-      el("strong", {}, stopped ? "停止しました" : c ? CASE_LABEL[c.status] : "動いている調整はありません"),
-      stopped
-        ? `停止理由は「${REASON_LABEL[c.reason_code] ?? c.reason_code}」です。自動での再試行は予定していません。`
-        : c?.next_retry_at
-          ? `${formatDateTime(c.next_retry_at)}に再試行します。`
-          : "回答が届くか期限になると再開します。",
+      el("strong", {}, "調整を停止しました"),
+      REASON_LABEL[c.reason_code] ?? c.summary,
     ),
   );
 }
@@ -394,11 +392,16 @@ function renderAgent() {
 function renderNotifications() {
   const n = detail.notification_summary;
   const rows = [
-    ["sent", n.sent_count],
-    ["pending", n.pending_count],
     ["failed", n.failed_count],
     ["unknown", n.unknown_count],
   ].filter(([, count]) => count > 0);
+
+  const section = $("notifications-section");
+  section.hidden = rows.length === 0;
+  if (!rows.length) {
+    mount($("notifications"));
+    return;
+  }
 
   mount(
     $("notifications"),
@@ -421,12 +424,7 @@ function renderNotifications() {
             );
           }),
         )
-      : el("p", {}, "まだ通知はありません。"),
-    el(
-      "p",
-      { class: "help" },
-      "本人あての依頼と催促は Discord の DM に送り、DM を開けないことがはっきりした場合だけチャンネルに送ります。確定の連絡は全員が見るチャンネルに送ります。",
-    ),
+      : null,
   );
 }
 
@@ -445,15 +443,19 @@ function renderMyActions() {
     buttons.push(el("button", { class: "btn btn--quiet", type: "button", disabled: busy, onClick: () => withdraw("attendance") }, "欠席と伝える"));
   }
 
+  $("my-actions-section").hidden = buttons.length === 0;
   mount(
     $("my-actions"),
     buttons.length
       ? el("div", { style: "display:grid;gap:8px;margin-top:12px" }, buttons)
-      : el("p", {}, "いま変更できることはありません。"),
-    p.can_update_preparation
-      ? el("p", { class: "help" }, "Discord の DM でも同じ4項目を変えられます。足りない項目をBotが1つずつ聞き、最後に出る確認ボタンを押したときだけ保存されます。")
       : null,
   );
+}
+
+function renderAsideVisibility() {
+  const aside = $("aside");
+  aside.hidden = [...aside.children].every((section) => section.hidden);
+  aside.parentElement.classList.toggle("split--single", aside.hidden);
 }
 
 /**
@@ -479,12 +481,6 @@ function watchOwnAnswer() {
   prepDialog?.showError("別の入口で回答が更新されました。いったん閉じて開き直すと、最新の内容から直せます。");
 }
 
-function renderSharedNote() {
-  $("shared-note").textContent = feature
-    ? "参加可否、準備できた範囲、説明できる範囲、説明できる時間の4項目を、この会の参加者に共有します。辞退の理由は記録も共有もしません。"
-    : "共有されるのは構造化された回答だけです。";
-}
-
 async function loadActivity() {
   let data;
   try {
@@ -499,33 +495,37 @@ async function loadActivity() {
 
   mount(
     $("activity"),
-    el("div", { class: "section__head" }, el("h2", {}, "実行記録")),
     el(
-      "div",
-      { class: "metrics" },
-      metric(String(s.llm_call_count), "AIの呼び出し", "失敗した呼び出しも数えます。"),
-      metric(String(s.tool_call_count), "ツールの実行", "案の作成や確認依頼の回数です。"),
-      metric(cost, "費用", "分からない費用は0円として扱いません。"),
-    ),
-    data.items.length
-      ? el(
-          "table",
-          { class: "ledger" },
-          el("thead", {}, el("tr", {}, el("th", {}, "とき"), el("th", {}, "できごと"))),
-          el(
-            "tbody",
-            {},
-            data.items.map((item) =>
-              el(
-                "tr",
-                {},
-                el("td", {}, el("time", { class: "num" }, formatDateTime(item.occurred_at))),
-                el("td", {}, activityEntry(item.summary)),
+      "details",
+      { class: "activity-details" },
+      el("summary", {}, "実行記録"),
+      el(
+        "div",
+        { class: "metrics" },
+        metric(String(s.llm_call_count), "AIの呼び出し", "失敗した呼び出しも含む"),
+        metric(String(s.tool_call_count), "ツールの実行", "案の作成と確認依頼"),
+        metric(cost, "費用", "不明な費用は不明のまま表示"),
+      ),
+      data.items.length
+        ? el(
+            "table",
+            { class: "ledger" },
+            el("thead", {}, el("tr", {}, el("th", {}, "とき"), el("th", {}, "できごと"))),
+            el(
+              "tbody",
+              {},
+              data.items.map((item) =>
+                el(
+                  "tr",
+                  {},
+                  el("td", {}, el("time", { class: "num" }, formatDateTime(item.occurred_at))),
+                  el("td", {}, activityEntry(item.summary)),
+                ),
               ),
             ),
-          ),
-        )
-      : el("p", { class: "help", style: "margin-top:16px" }, "まだ記録はありません。"),
+          )
+        : el("p", { class: "help", style: "margin-top:16px" }, "まだ記録はありません。"),
+    ),
   );
   $("activity").hidden = false;
 }
@@ -644,8 +644,7 @@ function openPreparation() {
         "div",
         { style: "margin-top:12px" },
         el("label", { class: "field" }, el("span", {}, "いまの状況を書いてください"), text),
-        el("p", { class: "help" }, "読み取った内容は下の項目に入るだけで、保存はされません。あなたが確認して送信したものだけが記録されます。文章そのものは保存しません。"),
-        el("p", { class: "help" }, "読み取りに使えるAIの回数はこの会ごとに決まっていて、Discord での対話と共通です。上限に達したときは下の項目で直接答えてください。"),
+        el("p", { class: "help" }, "入力欄を埋めるために使います。送信するまで保存されません。"),
         el("p", { style: "margin-top:12px" }, interpret),
         draftBox,
       ),
@@ -657,7 +656,7 @@ function openPreparation() {
   const dialog = createDialog({
     title: "参加条件を答える",
     body,
-    submitLabel: "この内容を送信する",
+    submitLabel: "回答を送る",
     onSubmit: async ({ showError, showReceipt, close }) => {
       const preparation = form.read();
       const errors = feature.validate(preparation, detail.session.duration_minutes);

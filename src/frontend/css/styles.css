@@ -98,15 +98,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* 頭のすぐ下は、節の間隔ではなく shell の余白で受ける */
 #guest > .section:first-child { margin-top: 0; }
 
-/* ログイン後：頭は残すが低くして、会の情報を折り返しの中に入れる */
-body[data-auth="in"] .hero { min-height: 260px; }
-body[data-auth="in"] .hero__in { padding: var(--s6) 0 var(--s5); }
-body[data-auth="in"] .hero h1 { font-size: clamp(26px, 3.2vw, 36px); }
-body[data-auth="in"] .hero__lead, body[data-auth="in"] .hero__sub { display: none; }
-body[data-auth="in"] .hero__actions { margin-top: var(--s4); }
-/* 帯が居座る分だけ、飛び先を下げる */
-#member { scroll-margin-top: 76px; }
-
 @media (prefers-reduced-motion: no-preference) {
   html { scroll-behavior: smooth; }
 }
@@ -263,6 +254,9 @@ a.row:hover { background: var(--panel); }
 .submit { display: flex; align-items: center; gap: var(--s5); flex-wrap: wrap; padding-top: var(--s5); border-top: 1px solid var(--line); }
 .submit p { max-width: 46ch; color: var(--ink-2); font-size: .84rem; }
 .submit .btn { margin-left: auto; }
+.form-details { margin-top: var(--s4); color: var(--ink-2); font-size: .82rem; }
+.form-details summary { width: fit-content; color: var(--blue); cursor: pointer; }
+.form-details p { margin-top: var(--s2); }
 
 /* ---------- ダイアログ ---------- */
 dialog { width: min(520px, calc(100% - 32px)); padding: 0; border: 0; border-radius: var(--r-card); box-shadow: 0 24px 60px rgba(35, 42, 49, .22); }
@@ -286,6 +280,7 @@ dialog::backdrop { background: rgba(35, 42, 49, .35); }
 .metric b { display: block; font-size: 1.6rem; font-weight: 700; letter-spacing: -.02em; }
 .metric span { color: var(--ink-2); font-size: .8rem; }
 .metric small { display: block; margin-top: var(--s2); color: var(--ink-3); font-size: .74rem; }
+.activity-details > summary { padding-bottom: var(--s3); border-bottom: 1px solid var(--ink); font-size: 1.05rem; font-weight: 700; cursor: pointer; }
 
 .note { margin-top: var(--s7); padding: var(--s4) var(--s5); border-left: 2px solid var(--ink); background: var(--panel); font-size: .84rem; }
 .note strong { font-weight: 700; }
@@ -307,6 +302,7 @@ dialog::backdrop { background: rgba(35, 42, 49, .35); }
 
 /* ---------- 2カラム（詳細画面） ---------- */
 .split { display: grid; gap: var(--s6) var(--s7); grid-template-columns: minmax(0, 1fr) 272px; margin-top: var(--s6); align-items: start; }
+.split--single { grid-template-columns: minmax(0, 1fr); }
 .aside { display: grid; gap: var(--s5); }
 .aside section h3 { padding-bottom: var(--s2); border-bottom: 1px solid var(--line); font-size: .78rem; font-weight: 700; color: var(--ink-2); }
 .aside p { margin-top: var(--s3); font-size: .82rem; color: var(--ink-2); }

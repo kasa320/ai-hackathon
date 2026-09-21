@@ -46,22 +46,14 @@ async function boot() {
 
   renderTopbar($("topbar"), { me, current: "home" });
 
-  $("hero").hidden = false;
-
   if (!me) {
+    $("hero").hidden = false;
     $("login").href = api.loginUrl("/");
     $("guest").hidden = false;
     return;
   }
 
-  // ログイン後もホームの頭は残す（ロゴから戻るとここに着く）。ただし低くして、
-  // 会の情報がすぐ下に出るようにし、入口のボタンは次にやることへ差し替える。
   document.body.dataset.auth = "in";
-  const cta = $("login");
-  cta.textContent = "自分の会を見る";
-  cta.href = "#member";
-  $("hero-note").textContent = `${me.user.display_name} さんとして見ています。新しい会は「会を登録」から作れます。`;
-
   $("member").hidden = false;
   await renderMember();
 }
@@ -210,7 +202,7 @@ function nothingToDo() {
       "div",
       { class: "headline__body" },
       el("h1", {}, "いまあなたが答えることはありません"),
-      el("p", { class: "headline__sub" }, "誰かの回答が届くか期限になると、エージェントが自動で再開します。停止はしていません。"),
+      el("p", { class: "headline__sub" }, "回答が必要になったら通知します。"),
     ),
   );
 }
@@ -284,41 +276,35 @@ function renderAgentPanels(detail) {
   const c = detail.active_case;
   const stopped = c?.status === "needs_owner";
 
+  const problems = [];
+  if (stopped) {
+    problems.push(
+      el(
+        "article",
+        { class: "panel panel--stopped" },
+        el("h3", {}, "調整を停止しました"),
+        el("strong", {}, c.summary),
+        el("p", {}, "管理者が代案を出すか、参加条件が変わると再開します。"),
+      ),
+    );
+  }
+  if (n.failed_count + n.unknown_count > 0) {
+    problems.push(
+      el(
+        "article",
+        { class: "panel panel--stopped" },
+        el("h3", {}, "通知を確認してください"),
+        el("strong", { class: "num" }, `失敗 ${n.failed_count}件・成否不明 ${n.unknown_count}件`),
+        el("p", {}, "成否不明は、届いていないとは限りません。"),
+      ),
+    );
+  }
+  if (!problems.length) return null;
+
   return el(
     "section",
     { class: "section" },
-    el("div", { class: "section__head" }, el("h2", {}, "エージェントの状況")),
-    el(
-      "div",
-      { class: "panels" },
-      el(
-        "article",
-        { class: `panel${stopped ? " panel--stopped" : ""}` },
-        el("h3", {}, stopped ? "停止しました" : "次に動く条件"),
-        el("strong", {}, c ? c.summary : "動いている調整はありません"),
-        el(
-          "p",
-          {},
-          stopped
-            ? "自動での再試行は予定していません。管理者が代案を出すか、参加条件が変わると再開します。"
-            : c?.next_retry_at
-              ? `${formatDateTime(c.next_retry_at)}に再試行します。`
-              : "回答が届くか期限になると再開します。停止はしていません。",
-        ),
-      ),
-      el(
-        "article",
-        { class: "panel" },
-        el("h3", {}, "通知"),
-        el("strong", { class: "num" }, `送信済み ${n.sent_count}件／送信待ち ${n.pending_count}件`),
-        el(
-          "p",
-          {},
-          n.failed_count + n.unknown_count > 0
-            ? `失敗 ${n.failed_count}件・成否不明 ${n.unknown_count}件。成否不明は「届いていない」とは限りません。`
-            : "送信済みは Discord が成功を返した状態です。読まれたかどうかは分かりません。",
-        ),
-      ),
-    ),
+    el("div", { class: "section__head" }, el("h2", {}, "確認が必要です")),
+    el("div", { class: "panels" }, problems),
   );
 }

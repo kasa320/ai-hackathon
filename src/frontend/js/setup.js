@@ -1,27 +1,26 @@
 // 会の登録（/setup.html）。
 //
-// 入力の順番を「形式 → 参加者 → 教材 → 次回」に固定する。形式を先に選ばせるのは、
-// 共通の仕組みと用途固有の入力の境界を見せるため。
+// 入力の順番を「参加者 → 教材 → 次回」に固定する。
+// 現在使える用途は輪読だけなので、形式は選ばせない。
 // 参加者は Discord ユーザーIDで招待する。IDを登録しただけでは権限は渡らず、
 // 本人が Discord でログインした時点で所属が有効になる。
 
 import { el, mount } from "./dom.js";
 import { api, ApiError } from "./api.js";
 import { featureFor } from "./features/index.js";
-import { renderTopbar, renderDevBar, flash, clearFlash, reportMutationError, placeholder, pluginTag } from "./ui.js";
+import { renderTopbar, renderDevBar, flash, clearFlash, reportMutationError, placeholder } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
 const loginUrl = api.loginUrl("/setup.html");
 
 const STEPS = [
-  ["01", "形式と参加者"],
-  ["02", "教材と範囲"],
-  ["03", "いつまでに開くか"],
+  ["01", "参加者"],
+  ["02", "本と範囲"],
+  ["03", "日程"],
 ];
 
 const state = {
   step: 0,
-  playbooks: [],
   playbookId: "reading",
   group: null, // 作成済みのグループ（作り直さないよう保持する）
   groupName: "",
@@ -55,11 +54,6 @@ async function boot() {
   }
   renderTopbar($("topbar"), { me, current: "setup" });
 
-  try {
-    state.playbooks = (await api.playbooks()).playbooks;
-  } catch {
-    state.playbooks = [{ id: "reading", name: "輪読" }];
-  }
   render();
 }
 
@@ -140,41 +134,14 @@ function renderGroupStep() {
     el(
       "fieldset",
       { class: "fieldset" },
-      el("legend", {}, "形式"),
-      el(
-        "div",
-        { class: "checks" },
-        state.playbooks.map((p) =>
-          el(
-            "label",
-            {},
-            el("input", {
-              type: "radio",
-              name: "playbook",
-              value: p.id,
-              checked: state.playbookId === p.id,
-              onChange: () => (state.playbookId = p.id),
-            }),
-            el(
-              "span",
-              {},
-              p.name,
-              el("small", {}, p.id === "reading" ? "本を分担して読む会。教材の範囲と説明の担当を調整します。" : ""),
-            ),
-          ),
-        ),
-      ),
-      el("p", { class: "help" }, "いま動くのは輪読だけです。共通の仕組み（参加者・案・同意・通知）は形式によらず同じです。"),
-    ),
-    el(
-      "fieldset",
-      { class: "fieldset" },
       el("legend", {}, "参加者"),
       el("label", { class: "field", style: "margin-top:16px" }, el("span", {}, "会の名前"), name),
-      el("p", { class: "help", style: "margin-top:16px" },
-        "参加者の Discord ユーザーIDを登録します。IDを登録しただけでは、その人として操作する権限は渡りません。本人が Discord でログインした時点で参加が有効になります。"),
-      el("p", { class: "help" },
-        "IDは Discord の設定で開発者モードを有効にし、相手を右クリックして「ユーザーIDをコピー」で取れます。"),
+      el(
+        "details",
+        { class: "form-details" },
+        el("summary", {}, "Discord IDの確認方法"),
+        el("p", {}, "Discordの設定で開発者モードを有効にし、相手を右クリックして「ユーザーIDをコピー」を選びます。"),
+      ),
       rows,
       el(
         "p",
@@ -196,7 +163,6 @@ function renderGroupStep() {
     el(
       "div",
       { class: "submit" },
-      el("p", {}, state.group ? "この会は作成済みです。次へ進んで教材を入れてください。" : "あなたは管理者として登録されます。人数は自分を含めて2〜10人です。"),
       el(
         "button",
         {
@@ -208,7 +174,7 @@ function renderGroupStep() {
             await createGroup();
           },
         },
-        state.group ? "次へ" : "この内容で会を作る",
+        "次へ",
       ),
     ),
   );
@@ -247,14 +213,13 @@ function renderMaterialStep() {
     if (state.sections.length === 0) {
       mount(
         box,
-        el("p", { class: "help" }, "目次を取得するか、「範囲を足す」で1つずつ書いてください。"),
         addSectionButton(renderSections, box),
       );
       return;
     }
     mount(
       box,
-      el("p", { class: "help" }, "今回扱う範囲と、前回までに読んだ範囲を選びます。どちらでもない範囲は将来の回に残ります。"),
+      el("p", { class: "help" }, "今回扱う範囲を選んでください。"),
       el(
         "div",
         { class: "toc-list" },
@@ -284,7 +249,7 @@ function renderMaterialStep() {
                   renderSections();
                 },
               }),
-              "前回まで",
+              "読了済み",
             ),
             el(
               "label",
@@ -334,12 +299,12 @@ function renderMaterialStep() {
       state.book.isbn = book?.isbn ?? null;
       state.completed = new Set();
       state.target = new Set(sections.map((s) => s.id));
-      mount(tocBox, el("p", { class: "help" }, "目次を取り込みました。下で範囲を選んでください。"));
+      mount(tocBox, el("p", { class: "help" }, "目次を取り込みました。"));
       renderSections();
     },
     onManual: () => {
       state.tocSource = { kind: "manual", urls: [] };
-      mount(tocBox, el("p", { class: "help" }, "手入力にしました。下で範囲を足してください。"));
+      mount(tocBox);
       renderSections();
     },
   });
@@ -359,7 +324,6 @@ function renderMaterialStep() {
     el(
       "div",
       { class: "submit" },
-      el("p", {}, "取得した目次は候補です。ここで確認して直したものだけが記録されます。"),
       el("button", { class: "btn btn--quiet", type: "button", onClick: () => go(0) }, "戻る"),
       el(
         "button",
@@ -421,22 +385,29 @@ function renderSessionStep() {
   const from = el("input", { type: "date", value: state.periodStart, min: today() });
   const to = el("input", { type: "date", value: state.periodEnd, min: today() });
   const duration = el("input", { type: "number", min: "15", max: "180", step: "5", value: String(state.duration) });
+  const periodSummary = el("span", {}, `${from.value || "—"}〜${to.value || "—"}`);
+  const durationSummary = el("span", {}, `${duration.value}分`);
+  const syncSummary = () => {
+    periodSummary.textContent = `${from.value || "—"}〜${to.value || "—"}`;
+    durationSummary.textContent = `${duration.value || "—"}分`;
+  };
+  from.addEventListener("input", syncSummary);
+  to.addEventListener("input", syncSummary);
+  duration.addEventListener("input", syncSummary);
 
   mount(
     $("form"),
     el(
       "fieldset",
       { class: "fieldset" },
-      el("legend", {}, "いつまでに開くか"),
-      el("p", { class: "help" }, "日時はここで決めません。この期間の中から、全員の都合に合う日時をエージェントが提案します。"),
+      el("legend", {}, "開催期間"),
       el(
         "div",
         { class: "grid grid--2", style: "margin-top:16px" },
         el("label", { class: "field" }, el("span", {}, "開始日"), from),
-        el("label", { class: "field" }, el("span", {}, "終了目安日"), to),
+        el("label", { class: "field" }, el("span", {}, "終了日"), to),
       ),
-      el("label", { class: "field", style: "margin-top:16px" }, el("span", {}, "1回の長さ（15〜180分）"), duration),
-      el("p", { class: "help" }, "登録すると、参加者全員に「準備状況と出られない日」の確認が送られます。返事がそろうと、日時と進行の案が出ます。"),
+      el("label", { class: "field", style: "margin-top:16px" }, el("span", {}, "会の長さ（15〜180分）"), duration),
     ),
     el(
       "fieldset",
@@ -445,20 +416,18 @@ function renderSessionStep() {
       el(
         "table",
         { class: "table" },
-        el("tr", {}, el("th", {}, "形式"), el("td", {}, pluginTag(state.playbookId, featureFor(state.playbookId)?.name))),
         el("tr", {}, el("th", {}, "会"), el("td", {}, state.groupName)),
         el("tr", {}, el("th", {}, "参加者"), el("td", {}, `あなたを含めて ${state.invitees.filter((i) => i.discord_user_id).length + 1}人`)),
         el("tr", {}, el("th", {}, "本"), el("td", {}, state.book.title)),
         el("tr", {}, el("th", {}, "今回の範囲"), el("td", {}, sectionNames(state.target))),
-        el("tr", {}, el("th", {}, "前回まで"), el("td", {}, state.completed.size ? sectionNames(state.completed) : "なし")),
-        el("tr", {}, el("th", {}, "目次の出どころ"), el("td", {}, { web: "Webから取得", image: "画像から読み取り", manual: "手入力" }[state.tocSource.kind])),
-        el("tr", {}, el("th", {}, "開催日時"), el("td", {}, "この期間からエージェントが提案します")),
+        el("tr", {}, el("th", {}, "読了済み"), el("td", {}, state.completed.size ? sectionNames(state.completed) : "なし")),
+        el("tr", {}, el("th", {}, "期間"), el("td", {}, periodSummary)),
+        el("tr", {}, el("th", {}, "長さ"), el("td", {}, durationSummary)),
       ),
     ),
     el(
       "div",
       { class: "submit" },
-      el("p", {}, "登録した時点では計画はまだありません。全員の参加条件が揃うと、エージェントが最初の案を作ります。"),
       el("button", { class: "btn btn--quiet", type: "button", onClick: () => go(1) }, "戻る"),
       el(
         "button",
@@ -472,7 +441,7 @@ function renderSessionStep() {
             createSession();
           },
         },
-        "この内容で登録する",
+        "登録して確認を送る",
       ),
     ),
   );

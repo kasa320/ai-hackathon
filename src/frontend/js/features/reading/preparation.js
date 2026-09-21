@@ -104,11 +104,10 @@ export function createPreparationForm(sessionData, current, durationMinutes, ses
     el(
       "fieldset",
       { class: "fieldset", style: "font-size:.82rem;color:var(--ink-2)" },
-      el("legend", { style: "border:0;padding:0;font-size:.82rem;font-weight:400" }, "3　説明できる範囲"),
+      el("legend", { style: "border:0;padding:0;font-size:.82rem;font-weight:400" }, "説明できる範囲"),
       explainable,
-      el("p", { class: "help" }, "読んできた範囲の中から選びます。"),
     ),
-    el("label", { class: "field", style: "margin-top:16px" }, el("span", {}, `4　説明できる時間（1〜${durationMinutes}分）`), minutes),
+    el("label", { class: "field", style: "margin-top:16px" }, el("span", {}, `説明できる時間（1〜${durationMinutes}分）`), minutes),
   );
 
   const dates = el("div", { class: "toc-list", style: "max-height:220px" });
@@ -137,7 +136,7 @@ export function createPreparationForm(sessionData, current, durationMinutes, ses
       ),
     );
     dates.replaceChildren(
-      ...(rows.length ? rows : [el("p", { class: "help", style: "margin:0" }, "出られない日がなければ、このままで大丈夫です。")]),
+      ...rows,
       el(
         "div",
         { style: "margin-top:8px" },
@@ -158,42 +157,47 @@ export function createPreparationForm(sessionData, current, durationMinutes, ses
   const datesField = el(
     "fieldset",
     { class: "fieldset", style: "font-size:.82rem;color:var(--ink-2)" },
-    el("legend", { style: "border:0;padding:0;font-size:.82rem;font-weight:400" }, "　出られない日"),
-    el("p", { class: "help", style: "margin-top:0" }, "この日は無理、という日だけ入れてください。空けられる日を書き出す必要はありません。"),
+    el("legend", { style: "border:0;padding:0;font-size:.82rem;font-weight:400" }, "出られない日（任意）"),
     dates,
   );
   datesField.hidden = !askDates;
+
+  const checked = (box) => [...box.querySelectorAll("input:checked")].map((i) => i.value);
 
   function sync() {
     const attending = attendance.value === "attending";
     willingField.hidden = !attending;
     presentFields.hidden = !attending || willing.value !== "true";
+
+    const preparedIds = new Set(checked(prepared));
+    for (const input of explainable.querySelectorAll("input")) {
+      input.disabled = !preparedIds.has(input.value);
+      if (input.disabled) input.checked = false;
+    }
   }
 
-  const willingField = el("label", { class: "field" }, el("span", {}, "2　説明を担当できますか"), willing);
+  const willingField = el("label", { class: "field" }, el("span", {}, "説明を担当できますか"), willing);
   attendance.addEventListener("change", sync);
   willing.addEventListener("change", sync);
+  prepared.addEventListener("change", sync);
 
   const node = el(
     "div",
     {},
-    el("p", { style: "font-size:.82rem;color:var(--ink-2)" }, "回答は4項目だけです。都合がつかない理由は入力しません。"),
-    el("label", { class: "field" }, el("span", {}, "1　参加できますか"), attendance),
+    el("label", { class: "field" }, el("span", {}, "参加できますか"), attendance),
     willingField,
     el(
       "fieldset",
       { class: "fieldset", style: "font-size:.82rem;color:var(--ink-2)" },
-      el("legend", { style: "border:0;padding:0;font-size:.82rem;font-weight:400" }, "　準備できた範囲"),
+      el("legend", { style: "border:0;padding:0;font-size:.82rem;font-weight:400" }, "準備できた範囲"),
       prepared,
     ),
     presentFields,
     datesField,
-    el("p", { class: "help" }, "入力した内容はこの会の参加者に共有されます。辞退の理由は記録も共有もしません。"),
+    el("p", { class: "help" }, "回答は参加者に共有されます。欠席・辞退の理由は記録しません。"),
   );
 
   sync();
-
-  const checked = (box) => [...box.querySelectorAll("input:checked")].map((i) => i.value);
 
   return {
     node,

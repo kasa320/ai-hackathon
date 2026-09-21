@@ -44,7 +44,6 @@ export function createTocPicker(client, groupId, { onPick, onManual }) {
         "div",
         {},
         el("label", { class: "field" }, el("span", {}, "ISBN（13桁）"), input),
-        el("p", { class: "help" }, "出版社のページなどから目次を探し、取得元と照合できたものだけを候補にします。書名から推測はしません。"),
         message ? el("p", { class: "field__error", style: "margin-top:8px" }, message) : null,
         el(
           "div",
@@ -71,7 +70,7 @@ export function createTocPicker(client, groupId, { onPick, onManual }) {
   }
 
   function renderWaiting(status) {
-    mount(node, placeholder(STATUS_TEXT[status] ?? "取得しています…", "3秒ごとに状況を確かめています。"));
+    mount(node, placeholder(STATUS_TEXT[status] ?? "取得しています…", ""));
   }
 
   function poll() {
@@ -124,7 +123,7 @@ export function createTocPicker(client, groupId, { onPick, onManual }) {
         ),
         bookLine(),
         el("label", { class: "field", style: "margin-top:16px" }, el("span", {}, "目次ページの写真（1〜5枚、1枚4MBまで）"), input),
-        el("p", { class: "help" }, "写っている文字だけを書き写します。読めない箇所は推測せず、読めないものとして数えます。画像は保存しません。"),
+        el("p", { class: "help" }, "画像は保存しません。"),
         el(
           "div",
           { style: "display:flex;gap:12px;margin-top:16px" },
@@ -214,7 +213,6 @@ export function createTocPicker(client, groupId, { onPick, onManual }) {
           ),
           lookup.unreadable_count > 0 ? el("span", {}, `読めなかった箇所 ${lookup.unreadable_count}件`) : null,
         ),
-        el("p", { class: "help", style: "margin-top:12px" }, "今回以降に扱う範囲だけを残してください。あとから直せます。"),
         checks,
         el(
           "div",
