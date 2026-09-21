@@ -72,7 +72,7 @@ func taskBot(t *testing.T) (*Bot, *userSession, string, *discordTransport) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		data := json.RawMessage(`{"willing_to_present":true,"prepared_section_ids":["s1"],"explainable_section_ids":["s1"],"max_presentation_minutes":30,"unavailable_dates":[],"schedule":{"status":"provided","weekly_windows":[{"weekday":3,"start":"20:00","end":"22:00"}],"date_windows":[],"max_duration_minutes":60}}`)
+		data := json.RawMessage(`{"declined_presentation":false,"unavailable_dates":[],"schedule":{"status":"provided","weekly_windows":[{"weekday":3,"start":"20:00","end":"22:00"}],"date_windows":[],"max_duration_minutes":60}}`)
 		_, err = co.PutPreparation(ctx, u.ID, created.Session.ID, apitypes.PutPreparationInput{ExpectedRevision: &d.Session.Revision, Preparation: &apitypes.Preparation{Attendance: "attending", Data: data}}, nil)
 		if err != nil {
 			t.Fatal(err)

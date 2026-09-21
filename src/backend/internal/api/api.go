@@ -70,6 +70,7 @@ func (s *Server) Handler(frontendDir string, mount ...func(mux *http.ServeMux)) 
 	mux.HandleFunc("POST /api/sessions/{session_id}/withdrawals", s.authed(s.withdraw))
 	mux.HandleFunc("POST /api/tasks/{task_id}/responses", s.authed(s.respondTask))
 	mux.HandleFunc("POST /api/sessions/{session_id}/proposals", s.authed(s.submitProposal))
+	mux.HandleFunc("DELETE /api/sessions/{session_id}", s.authed(s.deleteSession))
 	mux.HandleFunc("GET /api/sessions/{session_id}/activity", s.authed(s.activity))
 
 	for _, ext := range s.Extensions {
@@ -150,6 +151,7 @@ func (s *Server) authed(h authedHandler) http.HandlerFunc {
 			httpx.WriteError(w, r, s.Log, err)
 			return
 		}
+		s.Auth.RefreshCookie(w, sess)
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			if !httpx.CheckOrigin(r, s.AllowedOrigins) {
 				httpx.WriteError(w, r, s.Log, apperr.New(apperr.Forbidden, "別のサイトからの操作は受け付けません。"))
@@ -224,7 +226,7 @@ func (s *Server) listPlaybooks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) startLogin(w http.ResponseWriter, r *http.Request) {
-	u, err := s.Auth.StartLogin(r.Context(), w, r.URL.Query().Get("return_to"))
+	u, err := s.Auth.StartLogin(r.Context(), w, r, r.URL.Query().Get("return_to"))
 	if err != nil {
 		s.Log.Error("ログイン開始に失敗", "err", err)
 		http.Redirect(w, r, "/?auth_error="+auth.ErrProviderUnavailable, http.StatusFound)
@@ -264,6 +266,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request, sess auth.Sessio
 		return
 	}
 	s.Auth.ClearCookie(w)
+	s.Auth.MarkLoggedOut(w)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -376,6 +379,14 @@ func (s *Server) respondTask(w http.ResponseWriter, r *http.Request, sess auth.S
 func (s *Server) submitProposal(w http.ResponseWriter, r *http.Request, sess auth.Session) {
 	mutation(s, w, r, sess, s.sessionAccess(r, sess), func(in apitypes.SubmitProposalInput, key *store.IdemKey) (store.Response, error) {
 		return s.Coord.SubmitProposal(r.Context(), sess.User.ID, r.PathValue("session_id"), in, key)
+	})
+}
+
+func (s *Server) deleteSession(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	// 削除後は回が存在しないので、事前のアクセス確認をすると再送が 404 になる。
+	// アクセス確認は DeleteSession の中で、再送判定のあとに行う（再送判定は利用者ごと）。
+	mutation(s, w, r, sess, nil, func(_ apitypes.DeleteSessionInput, key *store.IdemKey) (store.Response, error) {
+		return s.Coord.DeleteSession(r.Context(), sess.User.ID, r.PathValue("session_id"), key)
 	})
 }
 

@@ -135,25 +135,38 @@ func TestAvailabilityRejectsUntrustedShapes(t *testing.T) {
 		`{"status":"unknown","status":"provided","weekly_windows":[],"date_windows":[],"max_duration_minutes":0}`,
 		`{"status":"unknown","weekly_windows":null,"date_windows":[],"max_duration_minutes":0}`,
 	} {
-		r := `{"willing_to_present":false,"prepared_section_ids":[],"explainable_section_ids":[],"max_presentation_minutes":0,"schedule":` + raw + `}`
+		r := `{"declined_presentation":false,"schedule":` + raw + `}`
 		if _, err := pb.ValidatePreparation(context.Background(), s, "attending", json.RawMessage(r)); err == nil {
 			t.Fatalf("accepted invalid schema: %s", raw)
 		}
 	}
 }
 
-func TestScheduleQuestionDoesNotOverwritePresentationMinutes(t *testing.T) {
+// 最大参加時間は聞かない（0 は指定なし）。本人が言った上限は、会の長さより短ければ候補から外す。
+func TestMaxDurationIsOptional(t *testing.T) {
 	s := scheduledSnapshot(t)
+	for _, m := range s.Members {
+		changeAvailability(t, &s, m.ID, func(d *reading.PreparationData) { d.Schedule.MaxDurationMinutes = 0 })
+	}
 	pb := reading.New()
-	current := coord.Interpretation{Attendance: "attending", Data: s.Preparation("mem_b").Data, Unclear: []string{reading.SlotSchedule}, NeedsFollowup: true}
-	out, err := pb.DraftInterpret(context.Background(), coord.InterpretRequest{Snapshot: s, Current: &current, Partial: true, Pending: reading.SlotSchedule, Text: "水 21:00-22:00 60分"})
+	draft, err := pb.DraftPlan(context.Background(), s)
+	if err != nil || draft.Kind != coord.DraftProposal {
+		t.Fatalf("上限なしでも候補がある: %+v %v", draft, err)
+	}
+	changeAvailability(t, &s, "mem_b", func(d *reading.PreparationData) { d.Schedule.MaxDurationMinutes = 30 })
+	if draft, _ := pb.DraftPlan(context.Background(), s); draft.Kind == coord.DraftProposal {
+		t.Fatalf("会の長さより短い上限を無視した: %+v", draft)
+	}
+	// 決まった書き方の時間帯は、最大参加時間なしでも読める（AGENT_MODE=fake）
+	current := coord.Interpretation{Attendance: "attending", Data: json.RawMessage(`{}`), Unclear: []string{reading.SlotSchedule}, NeedsFollowup: true}
+	out, err := pb.DraftInterpret(context.Background(), coord.InterpretRequest{Snapshot: s, Current: &current, Partial: true, Pending: reading.SlotSchedule, Text: "水 21:00-22:00"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	var d reading.PreparationData
 	json.Unmarshal(out.Data, &d)
-	if d.MaxPresentationMinutes != 40 || d.Schedule.MaxDurationMinutes != 60 {
-		t.Fatalf("confused presentation and attendance limits: %+v", d)
+	if d.Schedule == nil || d.Schedule.MaxDurationMinutes != 0 || len(out.Unclear) != 0 {
+		t.Fatalf("時間帯の読み取り: %+v %v", d, out.Unclear)
 	}
 }
 
@@ -179,22 +192,25 @@ func TestConfirmedPeriodSessionRetainsAllMemberPolicy(t *testing.T) {
 	}
 }
 
-func TestPreparationRequestExplainsMissingInformation(t *testing.T) {
+func TestPreparationRequestIsConversational(t *testing.T) {
 	s := scheduledSnapshot(t)
-	changeAvailability(t, &s, "mem_d", func(d *reading.PreparationData) { d.Schedule = &reading.ScheduleAvailability{Status: "unknown", WeeklyWindows: []reading.WeeklyWindow{}, DateWindows: []reading.DateWindow{}} })
+	changeAvailability(t, &s, "mem_d", func(d *reading.PreparationData) {
+		d.Schedule = &reading.ScheduleAvailability{Status: "unknown", WeeklyWindows: []reading.WeeklyWindow{}, DateWindows: []reading.DateWindow{}}
+	})
 	request := reading.New().PreparationRequest(s, "mem_d")
-	for _, want := range []string{"2026-09-20〜2026-09-30", "曜日", "時間帯", "最大時間", "終日", "回答例", "未定"} {
+	for _, want := range []string{"9/20", "9/30", "時間帯", "未定", "欠席"} {
 		if !strings.Contains(request, want) {
 			t.Fatalf("missing %q in schedule request: %s", want, request)
 		}
 	}
-	if strings.Contains(request, "担当できる範囲") {
-		t.Fatal("schedule followup asks wrong question")
+	// 決まった書式・準備状況・最大参加時間は求めない
+	for _, bad := range []string{"最大", "YYYY", "20:00-22:00", "読んできた", "担当できる"} {
+		if strings.Contains(request, bad) {
+			t.Fatalf("request still contains %q: %s", bad, request)
+		}
 	}
 	request = reading.New().PreparationRequest(s, "mem_b")
-	for _, want := range []string{"参加／欠席", "読んできた範囲", "担当できる場合", "分数", "理由は不要"} {
-		if !strings.Contains(request, want) {
-			t.Fatalf("missing %q in preparation request: %s", want, request)
-		}
+	if !strings.Contains(request, "参加") || strings.Contains(request, "読んできた") {
+		t.Fatalf("preparation request: %s", request)
 	}
 }

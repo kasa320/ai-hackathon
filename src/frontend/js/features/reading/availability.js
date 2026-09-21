@@ -4,6 +4,7 @@
 // 並べて入力する。見た目は「出られない日」の行と揃える。
 
 import { el } from "../../dom.js";
+import { DATE_MAX } from "../../ui.js";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 const MAX_WINDOWS = 60;
@@ -15,8 +16,8 @@ export function describeSchedule(s) {
   return [
     ...s.weekly_windows.map((w) => `毎週${WEEKDAYS[w.weekday]}曜 ${w.start}〜${w.end}`),
     ...s.date_windows.map((w) => `${w.date} ${w.start}〜${w.end}`),
-    `最大${s.max_duration_minutes}分（日本時間）`,
-  ].join("、");
+    ...(s.max_duration_minutes ? [`最大${s.max_duration_minutes}分`] : []),
+  ].join("、") + "（日本時間）";
 }
 
 /**
@@ -31,7 +32,8 @@ export function createAvailabilityForm(initial, session) {
     el("option", { value: "provided" }, "参加できる時間帯を入力する"),
     el("option", { value: "unavailable" }, "期間内は参加できません"),
   );
-  const minutes = el("input", { type: "number", name: "schedule_minutes", min: "1", max: "480", step: "1", placeholder: "60" });
+  // 最大参加時間は聞かない。本人が会話で言った値があれば、そのまま引き継ぐ
+  let maxMinutes = 0;
 
   let weekly = [];
   let dates = [];
@@ -70,7 +72,7 @@ export function createAvailabilityForm(initial, session) {
               class: "toc-list__date",
               value: w.date,
               min: session.period_start || null,
-              max: session.period_end || null,
+              max: session.period_end || DATE_MAX,
               "aria-label": "日付",
               onInput: (e) => { w.date = e.target.value; },
             }),
@@ -120,7 +122,6 @@ export function createAvailabilityForm(initial, session) {
     {},
     weeklyBox,
     datesDetails,
-    el("label", { class: "field", style: "margin-top:16px" }, el("span", {}, "1回に参加できる最大時間（1〜480分）"), minutes),
   );
 
   function sync() {
@@ -152,7 +153,7 @@ export function createAvailabilityForm(initial, session) {
 
   function fill(s) {
     status.value = s?.status ?? "unknown";
-    minutes.value = s?.max_duration_minutes ? String(s.max_duration_minutes) : "";
+    maxMinutes = s?.max_duration_minutes ?? 0;
     weekly = structuredClone(s?.weekly_windows ?? []);
     dates = structuredClone(s?.date_windows ?? []);
     renderRows(weeklyBox, weekly, true);
@@ -171,7 +172,7 @@ export function createAvailabilityForm(initial, session) {
         status: status.value,
         weekly_windows: provided ? structuredClone(weekly) : [],
         date_windows: provided ? structuredClone(dates) : [],
-        max_duration_minutes: provided ? Number(minutes.value) : 0,
+        max_duration_minutes: provided ? maxMinutes : 0,
       };
     },
   };

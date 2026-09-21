@@ -25,7 +25,7 @@ type Group = { id: ID; name: string; current_member_id: ID; members: Member[] };
 
 type Preparation = {
   attendance: "attending" | "absent";  // 共通：参加するかどうか
-  data: PreparationData;               // 用途固有：準備状況・担当できる範囲
+  data: PreparationData;               // 用途固有：参加できる時間帯・担当の辞退
 };
 
 type SessionSummary = {
@@ -46,7 +46,7 @@ type SessionSummary = {
 // 開催回の登録（POST /api/groups/{group_id}/sessions）。日時の決め方は2通り。
 type CreateSession = {
   playbook_id: string;
-  title?: string;                          // 省略すると「第N回」を自動で付ける
+  title?: string;                          // 省略すると「会の名前 第N回」を自動で付ける
   starts_at?: Timestamp;                   // 人が日時を決める場合だけ。オフセット必須
   period_start?: string;                   // starts_at を省いたときは必須（"YYYY-MM-DD"）
   period_end?: string;                     // 同上。開始日以降、1年以内
@@ -126,6 +126,7 @@ type SessionDetail = {
     can_withdraw_attendance: boolean;
     can_submit_proposal: boolean;                           // 管理者かつ needs_owner のときだけ
     can_view_activity: boolean;                             // 管理者だけ
+    can_delete_session: boolean;                            // 管理者だけ（開催回を作れるのも管理者だけ）
   };
   current_member_id: ID;
   notification_summary: { pending_count; sent_count; failed_count; unknown_count: number };
@@ -164,14 +165,8 @@ type ApprovalResponse    = { decision: "approve" | "reject"; proposal_id: ID; pr
 // POST /api/sessions/{id}/proposals（管理者、needs_owner のときだけ）
 type SubmitProposal = { expected_revision: Revision; data: PlanData };
 
-// POST /api/groups/{group_id}/leave（本人）と DELETE /api/groups/{group_id}（管理者）
-// 入力は空のJSON {}。本人IDも確認用の文字列も受け取らない。
-type GroupLifecycleResult = {
-  group_id: ID;
-  status: "left" | "deleted";
-  affected_session_count: number;   // 脱退：欠席にして再調整した開始前の回／削除：対象グループの全開催回
-  notification_count: number;       // 送信を登録した個人DMの件数
-};
+// DELETE /api/sessions/{id}（管理者）。本文は {}、応答は削除した回と戻り先のグループ
+type SessionDeleted = { session_id: ID; group_id: ID };
 ```
 
 ## 実行履歴
@@ -221,23 +216,15 @@ type ReadingSessionData = {
   target_section_ids: ID[];                // 今回扱う予定の範囲（1件以上）
 };
 
-// PreparationData：各メンバーの準備状況
+// PreparationData：各メンバーの参加条件。準備状況（読んだ範囲など）は聞かない。
+// 説明の担当は AI が割り振り、割り振られた本人が引き受けるかを答える。
 type ReadingPreparationData = {
-  willing_to_present: boolean;
-  prepared_section_ids: ID[];              // 読んできた節
-  explainable_section_ids: ID[];           // 説明できる節（読んできた節の範囲内）
-  max_presentation_minutes: number;        // 説明に使える時間。担当しないなら0
-  unavailable_dates: string[];             // 出られない日（"YYYY-MM-DD"、JST、60件まで）。空なら制約なし
-  schedule?: ScheduleAvailability;         // 参加できる時間帯。日時未定の回（schedule_status="proposed"）で聞く
+  declined_presentation?: boolean;         // 今回の説明の担当を辞退した（「担当を辞退する」）。true の人には割り振らない
+  unavailable_dates?: string[];            // 出られない日（"YYYY-MM-DD"、JST、60件まで）。本人が言ったときだけ
+  schedule?: ScheduleAvailability | null;  // 参加できる時間帯（日時未定の回だけ）。max_duration_minutes は 0＝指定なし
 };
-
-// 参加できる時間帯。時刻はすべてJST。決め方は scheduling-rule.md を参照。
-type ScheduleAvailability = {
-  status: "provided" | "unknown" | "unavailable";
-  weekly_windows: { weekday: number; start: string; end: string }[];  // weekday は 0=日曜。"HH:mm"、60件まで
-  date_windows: { date: string; start: string; end: string }[];       // "YYYY-MM-DD" と "HH:mm"、60件まで
-  max_duration_minutes: number;            // provided は1〜480、unknown・unavailable は0
-};
+// 以前の willing_to_present・prepared_section_ids・explainable_section_ids・max_presentation_minutes は
+// 送られてきても無視する（保存済みの値との互換）。
 
 // PlanData：今回の計画
 type ReadingPlanData = {
@@ -259,7 +246,7 @@ type ReadingPlanData = {
 
 - 節IDは開催回に登録済みのものだけ。`completed` と `target` は重ならない。
 - `covered` と `deferred` は重ならず、合わせて `target_section_ids` と一致する。
-- 担当者は参加予定かつ `willing_to_present: true` の人だけ。担当する節は本人の `explainable_section_ids` の範囲内、担当時間の合計は本人の `max_presentation_minutes` 以下。
+- 担当者は参加予定で、`declined_presentation` が true でなく、この案件で引き受けを断っていない人だけ。
 - 進行表の節は `covered` か `completed` の範囲内。各 `covered` の節は少なくとも1つの進行項目に含まれる。
 - 同じ人を3回連続で代役にしない。
 
@@ -272,8 +259,8 @@ type TocLookup = {
           "reading_image" | "succeeded" | "failed";
   book: { isbn: string; title: string; authors: string[];
           publisher: string | null; pages: number | null } | null;
-  source: "web" | "image" | null;                  // 候補の出どころ
-  source_urls: string[];                           // source="web" のとき1件以上
+  source: "ndl" | "web" | "image" | null;          // 候補の出どころ（ndl=国立国会図書館サーチのJPRO登録データ）
+  source_urls: string[];                           // source="ndl"・"web" のとき1件以上
   entries: { title: string; level: 1 | 2 | 3 }[];  // 候補（章=1、節=2、項=3）
   unreadable_count: number;                        // 画像から読めなかった箇所
   reason_code: null | "book_not_found" | "toc_not_found" | "source_mismatch" |
@@ -282,4 +269,4 @@ type TocLookup = {
 };
 ```
 
-`entries` はフロントで選択・編集し、`sections` に変換してから開催回登録に使う（IDはフロントが付ける）。`failed` になったら手入力へ案内し、`toc_source.kind` を `manual` にする。
+`entries` はフロントで選択・編集し、`sections` に変換してから開催回登録に使う（IDはフロントが付ける）。`source="ndl"` の候補は `toc_source.kind="web"`（`urls` はNDLサーチの書誌ページ）として登録する。JPROの目次には階層がないため、`level` は番号の書き方（部・第N章・1.1・1-1 など）から推定する。`failed` になったら手入力へ案内し、`toc_source.kind` を `manual` にする。

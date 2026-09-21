@@ -67,6 +67,16 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .nav a:hover { background: var(--panel); }
 .nav a[aria-current="page"] { color: var(--ink); font-weight: 700; }
 .viewer { display: inline-flex; align-items: center; gap: var(--s2); font-size: .78rem; color: var(--ink-2); white-space: nowrap; }
+.account { position: relative; }
+.account > summary { list-style: none; padding: 4px 6px; border-radius: var(--r-ctrl); cursor: pointer; }
+.account > summary::-webkit-details-marker { display: none; }
+.account > summary:hover, .account[open] > summary { background: var(--panel); }
+.account__menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; display: grid; gap: var(--s2); min-width: 200px; padding: var(--s3); border: 1px solid var(--line); border-radius: var(--r-ctrl); background: #fff; box-shadow: 0 12px 30px rgba(35, 42, 49, .12); }
+.account__menu p { display: grid; gap: 2px; padding: 0 var(--s2); font-size: .74rem; color: var(--ink-3); }
+.account__menu p b { font-size: .86rem; color: var(--ink); }
+.account__menu button { padding: 8px var(--s2); border: 0; border-radius: var(--r-ctrl); background: transparent; font: inherit; font-size: .84rem; color: var(--ink); text-align: left; cursor: pointer; }
+.account__menu button:hover:not(:disabled) { background: var(--panel); }
+.account__menu button:disabled { color: var(--ink-3); cursor: default; }
 .viewer i { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: #fff; font-style: normal; font-size: .72rem; font-weight: 700; }
 
 .shell { width: var(--shell); margin: 0 auto; padding: var(--s7) 0 var(--s8); }
@@ -252,6 +262,7 @@ a.row:hover { background: var(--panel); }
 .field input:disabled, .field select:disabled, .field textarea:disabled { background: var(--panel); color: var(--ink-3); }
 .btn:active:not(:disabled) { background: var(--blue-deep); }
 .btn--quiet:active:not(:disabled) { background: var(--panel-deep); }
+.btn--quiet[data-tone="warn"] { color: var(--warn); }
 .availability__list { max-height: none; }
 .availability__row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .availability__row .toc-list__date { min-width: 0; }

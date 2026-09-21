@@ -165,6 +165,9 @@ export const api = {
   respondToTask: (taskId, payload) =>
     write("POST", `/tasks/${encodeURIComponent(taskId)}/responses`, payload),
 
+  /** 開催回の削除（管理者だけ）。参加条件・案・未送信の通知も一緒に消える。 */
+  deleteSession: (sessionId) => write("DELETE", `/sessions/${encodeURIComponent(sessionId)}`, {}),
+
   /** 管理者の代案。案件が needs_owner のときだけ。 */
   submitProposal: (sessionId, expectedRevision, data) =>
     write("POST", `/sessions/${encodeURIComponent(sessionId)}/proposals`, {

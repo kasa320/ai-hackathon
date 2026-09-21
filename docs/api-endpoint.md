@@ -5,9 +5,9 @@
 ## 共通の約束
 
 - 同一オリジンのJSON API。`Content-Type: application/json`、JSONは `snake_case`、本文は最大64 KiB、未知のフィールドは拒否する。
-- 認証はセッションCookie（`session`、HttpOnly、ログインから7日）。本人IDや権限をリクエスト本文で指定しない。
-- 認証済みのPOST・PUT・DELETEには `X-CSRF-Token`（`GET /api/me` で取得）が必須。サーバー側でOriginも検証する。
-- 業務更新のPOST・PUT・DELETEには `Idempotency-Key` が必須。同じキー・同じ本文の再送には最初の成功応答を返す。違う操作での再利用は `409 idempotency_key_reused`。
+- 認証はセッションCookie（`session`、HttpOnly、最後に使ってから30日）。使っている間は1日に1回期限を延ばし、Cookieも出し直すので、ログアウトするまでログインが続く。本人IDや権限をリクエスト本文で指定しない。
+- 認証済みのPOST・PUTには `X-CSRF-Token`（`GET /api/me` で取得）が必須。サーバー側でOriginも検証する。
+- 業務更新のPOST・PUTには `Idempotency-Key` が必須。同じキー・同じ本文の再送には最初の成功応答を返す。違う操作での再利用は `409 idempotency_key_reused`。
 - 更新系は「受け付けた」で202を返し、AIの処理・確定・通知はバックエンドのイベント処理が進める。結果は `GET /api/sessions/{id}` のポーリングで確認する。
 - 競合は版番号で防ぐ。参加条件の更新・辞退・代案は `expected_revision`、案への回答は `proposal_id` と `proposal_version` を送る。古ければ `409`。
 - グループに属さない利用者には、対象の存在も含めて `404` を返す。脱退したメンバーと削除済みグループも同じ扱いで、グループ・開催回・履歴は見えなくなる。
@@ -37,6 +37,7 @@
 | `POST /api/tasks/{task_id}/responses` | タスクの本人 | 202 | 確認への回答・担当の引き受け・投票・管理者の承認 |
 | `POST /api/sessions/{session_id}/proposals` | 管理者 | 202 | 管理者判断待ちのときに代案を提出する |
 | `GET /api/sessions/{session_id}/activity` | 管理者 | 200 | 実行履歴・LLM費用・通知の状況 |
+| `DELETE /api/sessions/{session_id}` | 管理者 | 200 | 開催回を削除する。参加条件・案件・案・タスク・予定していた処理・未送信の通知・実行履歴も消える（LLM費用の記録は残す）。参加者への通知は送らない。本文は `{}` |
 
 「AIを実行する」「強制的に確定する」「他人として同意する」「通知を送る」APIは設けていない。案の作成・確定・通知・再試行はすべてバックエンド内のイベント処理が行う。
 
@@ -65,11 +66,13 @@
 
 | メソッド・パス | 成功 | できること |
 | --- | --- | --- |
-| `POST /api/groups/{group_id}/reading/toc-lookups` | 202 | ISBNから目次の取得を開始する |
+| `POST /api/groups/{group_id}/reading/toc-lookups` | 202 | ISBNから目次の取得を開始する。本文は `{"isbn": "978…"}`。`isbn` を空文字にすると書誌を調べず、画像の提出待ち（`needs_image`）から始める |
 | `GET /api/groups/{group_id}/reading/toc-lookups/{lookup_id}` | 200 | 取得状況と候補を取得する（3秒間隔のポーリング） |
 | `POST /api/groups/{group_id}/reading/toc-lookups/{lookup_id}/images` | 202 | 目次ページの画像を提出する（`needs_image` のときだけ） |
 
-取得結果は**候補にすぎず**、管理者が確認・修正して開催回登録の `data.sections` に使うまで保存されない。書名から目次を推測する経路はなく、取得元ページと照合できなければ画像の提出を求める。画像は LLM への送信にだけ使い、保存しない。
+ISBNからの取得は、まず国立国会図書館サーチ（OAI-PMH）から出版情報登録センター（JPRO）が登録した目次を引く（`source: "ndl"`）。出版社が目次を登録している本だけが対象で、登録がなければ画像の提出を求める。NDLサーチは混雑時に429を返すため、一時的な失敗は10分まで再試行する。画面にはNDLサーチから取得した旨と取得元のリンクを出す（NDLサーチのAPI利用条件）。
+
+取得結果は**候補にすぎず**、管理者が確認・修正して開催回登録の `data.sections` に使うまで保存されない。書名から目次を推測する経路はなく、Web 検索（`ORCAROUTER_SEARCH_MODEL` 設定時のみ）の結果は取得元ページと照合できなければ使わない。画像は LLM への送信にだけ使い、保存しない。
 
 画像は `multipart/form-data` のフィールド名 `images` に1〜5枚（JPEG・PNG・WebP、1枚4 MB・合計10 MBまで）。
 

@@ -43,7 +43,7 @@ func TestInterpretDoesNotSave(t *testing.T) {
 	me := memberID(t, d, "B")
 
 	var got apitypes.PreparationInterpretation
-	b.interpret(seed.SessionID, "今回の前半は読んできました。15分なら説明できます。").
+	b.interpret(seed.SessionID, "参加します。ただ今回は説明は無理です。").
 		mustStatus(t, 200).decode(t, &got)
 
 	if got.Saved {
@@ -54,11 +54,8 @@ func TestInterpretDoesNotSave(t *testing.T) {
 	}
 	var data map[string]any
 	mustUnmarshal(t, got.Preparation.Data, &data)
-	if data["willing_to_present"] != true {
-		t.Fatalf("willing_to_present = %v", data["willing_to_present"])
-	}
-	if v, _ := data["max_presentation_minutes"].(float64); v != 15 {
-		t.Fatalf("max_presentation_minutes = %v", data["max_presentation_minutes"])
+	if data["declined_presentation"] != true {
+		t.Fatalf("declined_presentation = %v", data["declined_presentation"])
 	}
 
 	after := b.detail(seed.SessionID)
@@ -113,7 +110,7 @@ func TestInterpretDraftIsSavable(t *testing.T) {
 	b := s.client().devLogin("B")
 
 	var got apitypes.PreparationInterpretation
-	b.interpret(seed.SessionID, "今回の前半は読んできました。15分なら説明できます。").
+	b.interpret(seed.SessionID, "参加します。").
 		mustStatus(t, 200).decode(t, &got)
 
 	var data map[string]any
@@ -132,19 +129,14 @@ func TestInterpretReportsUnclear(t *testing.T) {
 	b := s.client().devLogin("B")
 
 	var got apitypes.PreparationInterpretation
-	b.interpret(seed.SessionID, "参加はします。準備はまだあまり進んでいません。").
+	b.interpret(seed.SessionID, "うーん、どうしようかな。").
 		mustStatus(t, 200).decode(t, &got)
 
 	if !got.NeedsFollowup {
 		t.Fatal("needs_followup が false")
 	}
-	if len(got.Unclear) == 0 {
-		t.Fatal("unclear が空")
-	}
-	var data map[string]any
-	mustUnmarshal(t, got.Preparation.Data, &data)
-	if data["willing_to_present"] != false {
-		t.Fatal("読み取れないのに担当できることになっている")
+	if len(got.Unclear) == 0 || got.Unclear[0] != "attendance" {
+		t.Fatalf("参加するかを推測した: %v", got.Unclear)
 	}
 }
 
@@ -182,13 +174,13 @@ func TestInterpretModelFailure(t *testing.T) {
 	b := s.client().devLogin("B")
 
 	s.setFaults(map[string]any{"llm": "error"})
-	r := b.interpret(seed.SessionID, "今回の前半は読んできました。15分なら説明できます。").mustStatus(t, 503)
+	r := b.interpret(seed.SessionID, "参加します。").mustStatus(t, 503)
 	if code := r.errorCode(t); code != "temporarily_unavailable" {
 		t.Fatalf("error code = %q", code)
 	}
 
 	s.setFaults(map[string]any{"llm": nil})
-	b.interpret(seed.SessionID, "今回の前半は読んできました。15分なら説明できます。").mustStatus(t, 200)
+	b.interpret(seed.SessionID, "参加します。").mustStatus(t, 200)
 }
 
 // 私的な事情は構造化項目に転記されず、共有画面・通知・実行履歴にも出ない（E09の自由文版）。
@@ -199,13 +191,13 @@ func TestInterpretDoesNotLeakPrivateReason(t *testing.T) {
 	const private = "家族の急病で病院に付き添っています"
 
 	var got apitypes.PreparationInterpretation
-	b.interpret(seed.SessionID, private+"。今回の前半は読んできました。15分なら説明できます。").
+	b.interpret(seed.SessionID, private+"。参加します。今回は説明は無理です。").
 		mustStatus(t, 200).decode(t, &got)
 
 	// 返る値は定義済みの項目だけで、原文は含まれない。
 	var data map[string]any
 	mustUnmarshal(t, got.Preparation.Data, &data)
-	fields := []string{"willing_to_present", "prepared_section_ids", "explainable_section_ids", "max_presentation_minutes", "unavailable_dates"}
+	fields := []string{"declined_presentation", "unavailable_dates"}
 	for _, key := range fields {
 		if _, ok := data[key]; !ok {
 			t.Fatalf("%s がない", key)
@@ -237,7 +229,7 @@ func TestInterpretDoesNotLeakPrivateReason(t *testing.T) {
 			found = item.Summary
 		}
 	}
-	if found == "" || !strings.Contains(found, "説明できる時間：15分") {
+	if found == "" || !strings.Contains(found, "説明の担当：今回は辞退") {
 		t.Fatalf("差分と入口が記録されていない: %q", found)
 	}
 	for _, m := range s.sender.all() {

@@ -11,6 +11,7 @@ import (
 )
 
 // 輪読テスト共通の初期状態：A（管理者）・B・C・D、60分、sec_1 は前回まで、sec_2・sec_3 が今回。
+// A と D は今回の説明の担当を辞退している。
 const sessionJSON = `{
   "book_title": "サンプル技術書",
   "isbn": null,
@@ -24,13 +25,9 @@ const sessionJSON = `{
   "target_section_ids": ["sec_2", "sec_3"]
 }`
 
-func prep(attendance string, willing bool, prepared, explainable []string, minutes int) *coord.Preparation {
-	data, _ := json.Marshal(map[string]any{
-		"willing_to_present":       willing,
-		"prepared_section_ids":     prepared,
-		"explainable_section_ids":  explainable,
-		"max_presentation_minutes": minutes,
-	})
+// prep は参加条件。declined なら今回の説明の担当を辞退している。
+func prep(attendance string, declined bool) *coord.Preparation {
+	data, _ := json.Marshal(map[string]any{"declined_presentation": declined})
 	return &coord.Preparation{Attendance: attendance, Data: data}
 }
 
@@ -50,10 +47,11 @@ func baseSnapshot() coord.Snapshot {
 		},
 		SessionData: json.RawMessage(sessionJSON),
 		Preparations: []coord.MemberPreparation{
-			{MemberID: "mem_a", Value: prep("attending", false, []string{"sec_1"}, []string{}, 0)},
-			{MemberID: "mem_b", Value: prep("attending", true, []string{"sec_1", "sec_2", "sec_3"}, []string{"sec_2", "sec_3"}, 40)},
-			{MemberID: "mem_c", Value: prep("attending", true, []string{"sec_1", "sec_2"}, []string{"sec_2"}, 15)},
-			{MemberID: "mem_d", Value: prep("attending", false, []string{"sec_1"}, []string{}, 0)},
+			// A と D は今回の担当を辞退、B と C には割り振れる
+			{MemberID: "mem_a", Value: prep("attending", true)},
+			{MemberID: "mem_b", Value: prep("attending", false)},
+			{MemberID: "mem_c", Value: prep("attending", false)},
+			{MemberID: "mem_d", Value: prep("attending", true)},
 		},
 	}
 }

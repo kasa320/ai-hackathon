@@ -13,7 +13,6 @@ func confirmReplan(t *testing.T, s *server, p map[string]*client, id string) {
 	t.Helper()
 	p["B"].withdraw(id, "assignment").mustStatus(t, 202)
 	s.process()
-	p["C"].submitPreparation(id, "attending", prepData(true, []string{"sec_1", "sec_2"}, []string{"sec_2"}, 15)).mustStatus(t, 202)
 	s.process()
 	for _, name := range []string{"A", "B", "D"} {
 		p[name].respond(id, "approval", "approve").mustStatus(t, 202)
@@ -79,27 +78,20 @@ func TestRestartWhileWaitingForReplies(t *testing.T) {
 	id := seed.SessionID
 	p["B"].withdraw(id, "assignment").mustStatus(t, 202)
 
-	// 計画イベントが未処理のまま再起動 → 再起動後に1回だけ処理される。
+	// 計画イベントが未処理のまま再起動 → 再起動後に1回だけ処理され、案が二重にできない。
 	s.restart()
 	s.process()
-	s.process()
-	tasks := 0
-	for _, tk := range p["C"].detail(id).MyTasks {
-		if tk.Kind == "preparation" && tk.Status == "open" {
-			tasks++
-		}
-	}
-	if tasks != 1 {
-		t.Fatalf("再起動後の確認依頼は1件: %d", tasks)
-	}
-
-	// 返信待ちで再起動 → C の回答で続きが進む（Cookie のセッションも DB に残っている）。
-	s.restart()
-	p["C"].submitPreparation(id, "attending", prepData(true, []string{"sec_1", "sec_2"}, []string{"sec_2"}, 15)).mustStatus(t, 202)
 	s.process()
 	d := p["A"].detail(id)
-	if d.CurrentProposal == nil || d.ActiveCase.Status != "awaiting_consent" {
-		t.Fatalf("再起動後に再計画が進まない: %s", dump(d.ActiveCase))
+	if d.CurrentProposal == nil || d.CurrentProposal.Version != 2 || d.ActiveCase.Status != "awaiting_consent" {
+		t.Fatalf("再起動後の再計画は1回だけ: %s", dump(d.CurrentProposal))
+	}
+
+	// 返信待ちで再起動しても、案と依頼はそのまま残る（Cookie のセッションも DB に残っている）。
+	s.restart()
+	s.process()
+	if again := p["A"].detail(id); again.CurrentProposal.ID != d.CurrentProposal.ID || p["C"].openTask(id, "assignment") == nil {
+		t.Fatalf("再起動で案や依頼が変わった: %s", dump(again.CurrentProposal))
 	}
 	// 投票待ちで再起動しても、期限のイベントは残っていて管理者へ戻せる。
 	p["C"].respond(id, "assignment", "accept").mustStatus(t, 202)

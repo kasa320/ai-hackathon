@@ -25,8 +25,14 @@ import (
 const (
 	CookieName      = "session"
 	stateCookieName = "oauth_state"
-	SessionTTL      = 7 * 24 * time.Hour
-	stateTTL        = 10 * time.Minute
+	// promptCookieName はログアウトしたことの印。次のログインで Discord の確認画面を出し、
+	// 別のアカウントを選べるようにする（prompt=none のままだと前のアカウントで自動的に戻る）。
+	promptCookieName = "auth_prompt"
+	// SessionTTL は最後に使ってからログインが続く期間。使うたびに延ばす（ログアウトするまで続ける）。
+	SessionTTL = 30 * 24 * time.Hour
+	// sessionRenewInterval は期限を延ばす間隔。リクエストごとに DB を書き換えないよう1日に1回にする。
+	sessionRenewInterval = 24 * time.Hour
+	stateTTL             = 10 * time.Minute
 )
 
 // OAuth の失敗理由（callback の auth_error）。
@@ -44,7 +50,8 @@ type Identity struct {
 
 // Provider は OAuth の提供元。
 type Provider interface {
-	AuthURL(state string) string
+	// AuthURL は認可画面の URL。chooseAccount なら確認画面を必ず出す。
+	AuthURL(state string, chooseAccount bool) string
 	Exchange(ctx context.Context, code string) (Identity, error)
 }
 
@@ -82,7 +89,8 @@ func SanitizeReturnTo(s string) string {
 }
 
 // StartLogin は OAuth の state を保存し、Discord の認可画面の URL を返す。state は Cookie にも結び付ける。
-func (m *Manager) StartLogin(ctx context.Context, w http.ResponseWriter, returnTo string) (string, error) {
+// ログアウト後の最初のログインでは、Discord の確認画面を出してアカウントを選べるようにする。
+func (m *Manager) StartLogin(ctx context.Context, w http.ResponseWriter, r *http.Request, returnTo string) (string, error) {
 	if m.provider == nil {
 		return "/?auth_error=" + ErrProviderUnavailable, nil
 	}
@@ -94,7 +102,8 @@ func (m *Manager) StartLogin(ctx context.Context, w http.ResponseWriter, returnT
 		return "", err
 	}
 	http.SetCookie(w, &http.Cookie{Name: stateCookieName, Value: state, Path: "/api/auth/", HttpOnly: true, Secure: m.secure, SameSite: http.SameSiteLaxMode, MaxAge: int(stateTTL.Seconds())})
-	return m.provider.AuthURL(state), nil
+	_, err = r.Cookie(promptCookieName)
+	return m.provider.AuthURL(state, err == nil), nil
 }
 
 // Callback は state を検証し、コードを交換して本人を確認し、セッションを発行する。
@@ -130,6 +139,8 @@ func (m *Manager) Callback(ctx context.Context, w http.ResponseWriter, r *http.R
 	if err != nil {
 		return "/?auth_error=" + ErrProviderUnavailable
 	}
+	// アカウントを選び直せたので、次からは確認画面なしに戻す
+	http.SetCookie(w, &http.Cookie{Name: promptCookieName, Value: "", Path: "/api/auth/", HttpOnly: true, Secure: m.secure, SameSite: http.SameSiteLaxMode, MaxAge: -1})
 	m.SetCookie(w, token)
 	return returnTo
 }
@@ -172,7 +183,7 @@ func (m *Manager) issue(ctx context.Context, tx *store.Tx, userID string) (strin
 	return token, tx.CreateAuthSession(ctx, store.AuthSession{TokenHash: m.hash(token), UserID: userID, CSRFToken: store.RandomToken(), CreatedAt: now, ExpiresAt: now.Add(SessionTTL)})
 }
 
-// SetCookie はセッション Cookie を発行する。有効期限はログインから7日で固定。
+// SetCookie はセッション Cookie を発行する。有効期限は最後に使ってから SessionTTL。
 func (m *Manager) SetCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: token, Path: "/", HttpOnly: true, Secure: m.secure, SameSite: http.SameSiteLaxMode, MaxAge: int(SessionTTL.Seconds())})
 }
@@ -181,11 +192,19 @@ func (m *Manager) ClearCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: "", Path: "/", HttpOnly: true, Secure: m.secure, SameSite: http.SameSiteLaxMode, MaxAge: -1})
 }
 
+// MarkLoggedOut はログアウトしたことを Cookie に残す。次のログインが済むまで有効。
+func (m *Manager) MarkLoggedOut(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{Name: promptCookieName, Value: "1", Path: "/api/auth/", HttpOnly: true, Secure: m.secure, SameSite: http.SameSiteLaxMode, MaxAge: int(SessionTTL.Seconds())})
+}
+
 // Session は認証済みのリクエストの本人情報。
 type Session struct {
 	User      store.User
 	CSRFToken string
 	tokenHash string
+	// token と renewed は、期限を延ばしたときに Cookie を出し直すために使う。
+	token   string
+	renewed bool
 }
 
 // ErrUnauthenticated は未ログイン・期限切れ・ログアウト済みを示す。
@@ -203,7 +222,8 @@ func (m *Manager) Authenticate(ctx context.Context, r *http.Request) (Session, e
 		if err != nil {
 			return err
 		}
-		if !m.now().Before(as.ExpiresAt) {
+		now := m.now()
+		if !now.Before(as.ExpiresAt) {
 			_ = tx.DeleteAuthSession(ctx, as.TokenHash)
 			return store.ErrNotFound
 		}
@@ -211,13 +231,27 @@ func (m *Manager) Authenticate(ctx context.Context, r *http.Request) (Session, e
 		if err != nil {
 			return err
 		}
-		s = Session{User: u, CSRFToken: as.CSRFToken, tokenHash: as.TokenHash}
+		s = Session{User: u, CSRFToken: as.CSRFToken, tokenHash: as.TokenHash, token: c.Value}
+		// 使っている間はログインを続ける。前回の延長から1日たっていれば期限を延ばす
+		if as.ExpiresAt.Sub(now) < SessionTTL-sessionRenewInterval {
+			if err := tx.ExtendAuthSession(ctx, as.TokenHash, now.Add(SessionTTL)); err != nil {
+				return err
+			}
+			s.renewed = true
+		}
 		return nil
 	})
 	if errors.Is(err, store.ErrNotFound) {
 		return Session{}, ErrUnauthenticated
 	}
 	return s, err
+}
+
+// RefreshCookie は Authenticate で期限を延ばしたときだけ、Cookie の期限も延ばす。
+func (m *Manager) RefreshCookie(w http.ResponseWriter, s Session) {
+	if s.renewed {
+		m.SetCookie(w, s.token)
+	}
 }
 
 // CheckCSRF は X-CSRF-Token がセッションのトークンと一致するかを返す。
@@ -249,8 +283,13 @@ func NewDiscordProvider(clientID, clientSecret, redirectURL string) *DiscordProv
 	}
 }
 
-func (d *DiscordProvider) AuthURL(state string) string {
-	v := url.Values{"client_id": {d.ClientID}, "redirect_uri": {d.RedirectURL}, "response_type": {"code"}, "scope": {"identify"}, "state": {state}, "prompt": {"none"}}
+func (d *DiscordProvider) AuthURL(state string, chooseAccount bool) string {
+	// 承認済みなら確認画面を省く（none）。ログアウト後は確認画面を出し、別のアカウントを選べるようにする（consent）
+	prompt := "none"
+	if chooseAccount {
+		prompt = "consent"
+	}
+	v := url.Values{"client_id": {d.ClientID}, "redirect_uri": {d.RedirectURL}, "response_type": {"code"}, "scope": {"identify"}, "state": {state}, "prompt": {prompt}}
 	return d.AuthBase + "?" + v.Encode()
 }
 

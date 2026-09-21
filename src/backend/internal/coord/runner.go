@@ -123,17 +123,22 @@ func (c *Coordinator) handlePlan(ctx context.Context, e store.Event) error {
 	return c.st.Tx(ctx, func(tx *store.Tx) error {
 		now := c.now()
 		// 呼び出しの記録と回数は、結果を使うかどうかによらず必ず残す。
-		cur, err := tx.Case(ctx, cs.ID)
-		if err != nil {
-			return err
-		}
 		for _, call := range usage.LLMCalls {
 			if err := tx.AddLLMCall(ctx, store.LLMCall{
-				CaseID: cur.ID, Model: call.Model, InputTokens: call.InputTokens, OutputTokens: call.OutputTokens, Currency: call.Currency,
+				CaseID: cs.ID, Model: call.Model, InputTokens: call.InputTokens, OutputTokens: call.OutputTokens, Currency: call.Currency,
 				EstimatedAmount: call.EstimatedAmount, BilledAmount: call.BilledAmount, Succeeded: call.Succeeded, CreatedAt: now,
 			}); err != nil {
 				return err
 			}
+		}
+		cur, err := tx.Case(ctx, cs.ID)
+		if errors.Is(err, store.ErrNotFound) {
+			// AI の処理中に開催回が削除された。費用の記録だけ残して結果は捨て、ほかのイベントの処理は続ける
+			c.log.Info("削除された開催回の計画結果を破棄", "case", cs.ID)
+			return nil
+		}
+		if err != nil {
+			return err
 		}
 		cur.LLMCallCount += len(usage.LLMCalls)
 		cur.ToolCallCount += usage.ToolCalls
@@ -154,6 +159,10 @@ func (c *Coordinator) handlePlan(ctx context.Context, e store.Event) error {
 			return nil
 		}
 
+		if planErr != nil {
+			// 原因をターミナルから追えるように残す。エラーに参加者の原文は含まれない
+			c.log.Warn("AIの計画に失敗", "case", cur.ID, "retry_count", cur.RetryCount, "err", planErr)
+		}
 		switch {
 		case errors.Is(planErr, ErrTransient):
 			delay := c.retryDelay(cur.RetryCount)
@@ -223,7 +232,7 @@ func (c *Coordinator) ask(ctx context.Context, tx *store.Tx, sess store.Session,
 		if err != nil {
 			return err
 		}
-		if err := c.createTask(ctx, tx, sess, *cs, m, store.TaskPreparation, "今回担当できる範囲と時間を確認させてください。", nil, "agent", due, now); err != nil {
+		if err := c.createTask(ctx, tx, sess, *cs, m, store.TaskPreparation, "参加できる日時を確認させてください。", nil, "agent", due, now); err != nil {
 			return err
 		}
 	}

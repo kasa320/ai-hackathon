@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // AgentMode はエージェントの動作モード。
@@ -31,6 +33,12 @@ type Config struct {
 	OrcaRouterAPIKey string
 	OrcaRouterURL    string
 	OrcaRouterModel  string
+	// OrcaRouterPlannerModel は案を考えるエージェントのモデル（空なら OrcaRouterModel）。
+	OrcaRouterPlannerModel string
+	// OrcaRouterInterpreterModel は Web・Discord の自由文から参加条件を取り出すモデル（空なら OrcaRouterModel）。
+	OrcaRouterInterpreterModel string
+	// OrcaRouterTimeout は LLM 呼び出し1回あたりの待ち時間の上限。
+	OrcaRouterTimeout time.Duration
 	// OrcaRouterSearchModel は目次の Web 検索に使うモデル（空なら Web 検索をせず画像の提出を依頼する）。
 	OrcaRouterSearchModel string
 	// OrcaRouterVisionModel は目次画像の書き写しに使うモデル（空なら OrcaRouterModel）。
@@ -59,6 +67,9 @@ func Load() (Config, error) {
 		OrcaRouterURL:    env("ORCAROUTER_BASE_URL", "https://api.orcarouter.ai/v1"),
 		OrcaRouterModel:  env("ORCAROUTER_MODEL", "orcarouter/auto"),
 
+		OrcaRouterPlannerModel:     os.Getenv("ORCAROUTER_PLANNER_MODEL"),
+		OrcaRouterInterpreterModel: os.Getenv("ORCAROUTER_INTERPRETER_MODEL"),
+
 		OrcaRouterSearchModel: os.Getenv("ORCAROUTER_SEARCH_MODEL"),
 		OrcaRouterVisionModel: os.Getenv("ORCAROUTER_VISION_MODEL"),
 
@@ -70,6 +81,18 @@ func Load() (Config, error) {
 
 		SessionSecret: os.Getenv("SESSION_SECRET"),
 	}
+
+	if c.OrcaRouterPlannerModel == "" {
+		c.OrcaRouterPlannerModel = c.OrcaRouterModel
+	}
+	if c.OrcaRouterInterpreterModel == "" {
+		c.OrcaRouterInterpreterModel = c.OrcaRouterModel
+	}
+	timeout, err := strconv.Atoi(env("ORCAROUTER_TIMEOUT_SECONDS", "180"))
+	if err != nil || timeout < 1 || timeout > 600 {
+		return Config{}, fmt.Errorf("ORCAROUTER_TIMEOUT_SECONDS が不正です: %q（1〜600の秒数）", os.Getenv("ORCAROUTER_TIMEOUT_SECONDS"))
+	}
+	c.OrcaRouterTimeout = time.Duration(timeout) * time.Second
 
 	switch c.AgentMode {
 	case AgentModeFake:

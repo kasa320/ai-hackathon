@@ -122,8 +122,9 @@ func (h *harness) memberID(name string) string {
 	return ""
 }
 
-func prepData(willing bool, prepared, explainable []string, minutes int) json.RawMessage {
-	b, _ := json.Marshal(map[string]any{"willing_to_present": willing, "prepared_section_ids": prepared, "explainable_section_ids": explainable, "max_presentation_minutes": minutes})
+// prepData は参加条件。declined なら今回の説明の担当を辞退している。
+func prepData(declined bool) json.RawMessage {
+	b, _ := json.Marshal(map[string]any{"declined_presentation": declined})
 	return b
 }
 
@@ -141,10 +142,10 @@ func (h *harness) mustPrep(name, attendance string, data json.RawMessage) {
 
 // allPrepared は B が全範囲を担当可能、C は第2節のみ15分、A・D は担当しない状態にする。
 func (h *harness) allPrepared() {
-	h.mustPrep("A", "attending", prepData(false, []string{"sec_1"}, []string{}, 0))
-	h.mustPrep("B", "attending", prepData(true, []string{"sec_1", "sec_2", "sec_3"}, []string{"sec_2", "sec_3"}, 40))
-	h.mustPrep("C", "attending", prepData(false, []string{"sec_1", "sec_2"}, []string{}, 0))
-	h.mustPrep("D", "attending", prepData(false, []string{"sec_1"}, []string{}, 0))
+	h.mustPrep("A", "attending", prepData(true))
+	h.mustPrep("B", "attending", prepData(false))
+	h.mustPrep("C", "attending", prepData(true))
+	h.mustPrep("D", "attending", prepData(true))
 }
 
 func (h *harness) process() {

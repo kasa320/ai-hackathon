@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,14 +19,16 @@ import (
 func newInterpreter(t *testing.T, f *fakeLLM) *agent.LLMInterpreter {
 	srv := httptest.NewServer(f)
 	t.Cleanup(srv.Close)
-	return &agent.LLMInterpreter{Client: agent.NewClient(srv.URL+"/v1", "key"), Model: "test-model"}
+	return &agent.LLMInterpreter{Client: agent.NewClient(srv.URL+"/v1", "key", 0), Model: "test-model"}
 }
 
-func validPreparation(minutes int) map[string]any {
-	return map[string]any{
-		"willing_to_present": true, "prepared_section_ids": []string{"sec_2"},
-		"explainable_section_ids": []string{"sec_2"}, "max_presentation_minutes": minutes,
+// validPreparation は検証を通る参加条件。days 日目を出られない日にする（0 ならなし）。
+func validPreparation(days int) map[string]any {
+	dates := []string{}
+	if days > 0 {
+		dates = append(dates, fmt.Sprintf("2026-09-%02d", days))
 	}
+	return map[string]any{"declined_presentation": false, "unavailable_dates": dates}
 }
 
 // interpretRequest は1回の解釈への入力。budget が nil でなければ予算フックを付ける。
@@ -34,7 +37,7 @@ func interpretRequest(t *testing.T, partial bool) coord.InterpretRequest {
 	pb := reading.New()
 	snap := request(nil).Snapshot
 	return coord.InterpretRequest{
-		Snapshot: snap, Playbook: pb, Text: "今回の前半を15分で説明できます", MaxLLMCalls: 2, Partial: partial,
+		Snapshot: snap, Playbook: pb, Text: "参加します。15日は出られません", MaxLLMCalls: 2, Partial: partial,
 		Check: func(ctx context.Context, in coord.Interpretation) error {
 			if in.OutOfScope != "" {
 				return nil
@@ -76,7 +79,7 @@ func TestLLMInterpreterToolContract(t *testing.T) {
 	}
 	// unclear に入れてよい名前と out_of_scope の値は列挙で縛る。
 	slots := props["unclear"].(map[string]any)["items"].(map[string]any)["enum"].([]any)
-	if len(slots) != 7 {
+	if len(slots) != 4 {
 		t.Fatalf("unclear の列挙 = %v", slots)
 	}
 	kinds := props["out_of_scope"].(map[string]any)["enum"].([]any)
@@ -95,12 +98,9 @@ func TestLLMInterpreterSendsCurrentValuesOnly(t *testing.T) {
 	})}}
 	p := newInterpreter(t, f)
 	req := interpretRequest(t, true)
-	cur, _ := json.Marshal(map[string]any{
-		"willing_to_present": false, "prepared_section_ids": []string{"sec_2"},
-		"explainable_section_ids": []string{}, "max_presentation_minutes": 0,
-	})
-	req.Current = &coord.Interpretation{Attendance: "attending", Data: cur, Unclear: []string{"max_presentation_minutes"}, NeedsFollowup: true}
-	req.Pending = "max_presentation_minutes"
+	cur, _ := json.Marshal(map[string]any{"declined_presentation": false})
+	req.Current = &coord.Interpretation{Attendance: "attending", Data: cur, Unclear: []string{"attendance"}, NeedsFollowup: true}
+	req.Pending = "attendance"
 	req.Text = "15分です"
 	if _, _, err := p.Interpret(context.Background(), req); err != nil {
 		t.Fatal(err)
@@ -110,14 +110,14 @@ func TestLLMInterpreterSendsCurrentValuesOnly(t *testing.T) {
 		t.Fatalf("履歴を渡している: %d 件", len(msgs))
 	}
 	content := msgs[1].(map[string]any)["content"].(string)
-	if !strings.Contains(content, "現在の値") || !strings.Contains(content, "質問中の項目：max_presentation_minutes") {
+	if !strings.Contains(content, "現在の値") || !strings.Contains(content, "質問中の項目：attendance") {
 		t.Fatalf("現在の値と質問中の項目が渡っていない: %q", content)
 	}
 	if !strings.Contains(content, "15分です") {
 		t.Fatal("今回の発言が渡っていない")
 	}
 	// 過去の発言は残さない。
-	if strings.Contains(content, "今回の前半を15分で説明できます") {
+	if strings.Contains(content, "参加します。15日は出られません") {
 		t.Fatal("前のターンの発言が渡っている")
 	}
 }
@@ -142,8 +142,7 @@ func TestLLMInterpreterParsesOutOfScope(t *testing.T) {
 func TestLLMInterpreterRepairsInvalidOutput(t *testing.T) {
 	f := &fakeLLM{responses: []func(http.ResponseWriter){
 		toolCall("record_preparation", map[string]any{
-			"attendance": "attending", "data": map[string]any{"willing_to_present": true, "prepared_section_ids": []string{"sec_9"},
-				"explainable_section_ids": []string{"sec_9"}, "max_presentation_minutes": 10}, "unclear": []string{}, "needs_followup": false}),
+			"attendance": "attending", "data": map[string]any{"unavailable_dates": []string{"明日"}}, "unclear": []string{}, "needs_followup": false}),
 		toolCall("record_preparation", map[string]any{
 			"attendance": "attending", "data": validPreparation(15), "unclear": []string{}, "needs_followup": false}),
 	}}
@@ -175,8 +174,7 @@ func TestLLMInterpreterRepairsInvalidOutput(t *testing.T) {
 func TestLLMInterpreterReservesBudgetBeforeEachCall(t *testing.T) {
 	f := &fakeLLM{responses: []func(http.ResponseWriter){
 		toolCall("record_preparation", map[string]any{
-			"attendance": "attending", "data": map[string]any{"willing_to_present": true, "prepared_section_ids": []string{"sec_9"},
-				"explainable_section_ids": []string{"sec_9"}, "max_presentation_minutes": 10}, "unclear": []string{}, "needs_followup": false}),
+			"attendance": "attending", "data": map[string]any{"unavailable_dates": []string{"明日"}}, "unclear": []string{}, "needs_followup": false}),
 		toolCall("record_preparation", map[string]any{
 			"attendance": "attending", "data": validPreparation(15), "unclear": []string{}, "needs_followup": false}),
 	}}
@@ -241,5 +239,24 @@ func TestInterpretFaultInjectionConsumesBudget(t *testing.T) {
 	}
 	if reserved != 1 {
 		t.Fatalf("障害注入で枠を使っていない: %d", reserved)
+	}
+}
+
+// AI が書いた聞き直しの質問文を受け取る（送る前の整形は coord が行う）。
+func TestLLMInterpreterReturnsFollowupQuestion(t *testing.T) {
+	f := &fakeLLM{responses: []func(http.ResponseWriter){toolCall("record_preparation", map[string]any{
+		"attendance": "attending", "data": map[string]any{}, "unclear": []string{"attendance"}, "needs_followup": true,
+		"out_of_scope": "none", "followup_question": "ありがとうございます！今回は参加できそうですか？",
+	})}}
+	got, _, err := newInterpreter(t, f).Interpret(context.Background(), interpretRequest(t, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Question != "ありがとうございます！今回は参加できそうですか？" {
+		t.Fatalf("question = %q", got.Question)
+	}
+	props := f.requests[0]["tools"].([]any)[0].(map[string]any)["function"].(map[string]any)["parameters"].(map[string]any)["properties"].(map[string]any)
+	if _, ok := props["followup_question"]; !ok {
+		t.Fatal("質問文の引数がない")
 	}
 }

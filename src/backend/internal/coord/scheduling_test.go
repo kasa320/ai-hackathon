@@ -106,6 +106,7 @@ func TestScheduleDialogRequiresConfirmationAndPreservesOtherFields(t *testing.T)
 	h := newHarness(t, nil)
 	h.createPeriodSession()
 	h.allPrepared()
+	h.mustPrep("B", "attending", prepData(true)) // 担当の辞退は時間帯の会話で失われない
 	r, err := h.c.StartDialog(ctx, h.users["B"], h.sess)
 	if err != nil {
 		t.Fatal(err)
@@ -127,11 +128,11 @@ func TestScheduleDialogRequiresConfirmationAndPreservesOtherFields(t *testing.T)
 		t.Fatal(err)
 	}
 	var d struct {
-		Minutes  int `json:"max_presentation_minutes"`
-		Schedule any `json:"schedule"`
+		Declined bool `json:"declined_presentation"`
+		Schedule any  `json:"schedule"`
 	}
 	json.Unmarshal(myPrep(t, h, "B").Data, &d)
-	if d.Minutes != 40 || d.Schedule == nil {
+	if !d.Declined || d.Schedule == nil {
 		t.Fatalf("wrong saved fields: %+v", d)
 	}
 	// A placeholder date expiring must not prevent input during the remaining period.

@@ -31,7 +31,7 @@ Discord でログインした利用者。
 | `user_id` | 本人 | `usr_e3ee07baf9fcb7b54c3e4e7f` |
 | `csrf_token` | `X-CSRF-Token` と照合する値 | `9c8281f112d6f092dd3d5e6d91bbb301...` |
 | `created_at` | 発行日時 | `2026-09-20T06:28:15.578685980Z` |
-| `expires_at` | 期限（発行から7日） | `2026-09-27T06:28:15.578685980Z` |
+| `expires_at` | 期限（最後に使ってから30日。使っている間は1日に1回延ばす） | `2026-09-27T06:28:15.578685980Z` |
 
 ## oauth_states
 
@@ -123,17 +123,15 @@ OAuth の state。1回使うと削除する。
 | `session_id` | 開催回 | `ses_eaba7ee95b34d9cb3fbffcb5` |
 | `member_id` | 回答者 | `mem_1a9ffe26d9a1f00b1e8c6c98` |
 | `attendance` | `attending` / `absent` | `attending` |
-| `data` | 用途固有の準備状況（下記 JSON） | — |
+| `data` | 用途固有の参加条件（下記 JSON） | — |
 | `updated_at` | 更新日時 | `2026-09-20T06:28:09.268000000Z` |
 
 `data`（輪読）：
 
 ```json
 {
-  "willing_to_present": false,
-  "prepared_section_ids": ["sec_1"],
-  "explainable_section_ids": [],
-  "max_presentation_minutes": 0
+  "declined_presentation": true,
+  "unavailable_dates": []
 }
 ```
 
@@ -211,7 +209,7 @@ OAuth の state。1回使うと削除する。
 | `member_id` | 宛先。**この本人しか回答できない** | `mem_1a9ffe26d9a1f00b1e8c6c98` |
 | `kind` | `preparation` / `assignment`（担当引き受け） / `approval`（投票） / `owner_approval` | `preparation` |
 | `status` | `open` / `answered` / `expired` / `obsolete`（版が変わって無効） | `answered` |
-| `title` | 画面に出す依頼文 | `今回の準備状況を教えてください。` |
+| `title` | 画面に出す依頼文 | `今回の会に参加できるか教えてください。` |
 | `due_at` | 回答期限 | `2026-09-21T06:28:09.266000000Z` |
 | `proposal_id` | 対象の案 | `null` |
 | `proposal_version` | 対象の版。古い版への回答はここで弾く | `null` |

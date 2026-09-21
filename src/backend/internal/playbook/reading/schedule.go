@@ -59,7 +59,7 @@ func validateDates(v *coord.ValidationError, path string, dates []string) []stri
 // validateSchedule は案が決める開催日時を検証する。
 //
 // 日時がまだ決まっていない回（ScheduleStatus=proposed）では、案は期間内の日時を1つ決める。
-// 開催回の全員が明示した時間帯・最大参加時間を満たす必要がある。
+// 開催回の全員が明示した時間帯（と、本人が言った最大参加時間）を満たす必要がある。
 // 未回答・欠席を対象から除くことはできず、日時の確定には別途全員の同意が必要。
 func validateSchedule(v *coord.ValidationError, s coord.Snapshot, p PlanData) {
 	if len([]rune(p.Frequency)) > maxFrequencyLen {
@@ -105,7 +105,7 @@ func validateSchedule(v *coord.ValidationError, s coord.Snapshot, p PlanData) {
 		v.Add("starts_at", "%s は出られないと答えた人がいます（%s）", day, memberNames(s, busy))
 	}
 	if !scheduleAllows(s, at) {
-		v.Add("starts_at", "開催回の全員が回答した参加可能時間と最大参加時間を満たしていません")
+		v.Add("starts_at", "開催回の全員が回答した参加できる時間帯を満たしていません")
 	}
 	if rejectedStart(s, at) {
 		v.Add("starts_at", "この案件で否決された日時です。別の候補を選んでください")

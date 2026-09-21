@@ -9,7 +9,7 @@ import (
 	"github.com/kasa320/ai-hackathon/src/backend/internal/apitypes"
 )
 
-// E03：確認した C も担当できず、他に成立する案もない → 同じ依頼を繰り返さず管理者判断待ち →
+// E03：B に続いて C も担当を辞退し、割り振れる人がいない → 確認依頼を出さず管理者判断待ち →
 // 管理者が代案（復習回）を出し、過半数の同意で確定する。
 func TestNoFeasiblePlanThenOwnerProposal(t *testing.T) {
 	s := newServer(t)
@@ -19,8 +19,8 @@ func TestNoFeasiblePlanThenOwnerProposal(t *testing.T) {
 
 	p["B"].withdraw(id, "assignment").mustStatus(t, http.StatusAccepted)
 	s.process()
-	// C は確認依頼に「担当できない」と回答する。
-	p["C"].submitPreparation(id, "attending", prepData(false, []string{"sec_1", "sec_2"}, []string{}, 0)).mustStatus(t, http.StatusAccepted)
+	// C も担当を辞退する（A・D は最初から辞退している）。
+	p["C"].withdraw(id, "assignment").mustStatus(t, http.StatusAccepted)
 	s.process()
 
 	d := p["A"].detail(id)
@@ -28,7 +28,7 @@ func TestNoFeasiblePlanThenOwnerProposal(t *testing.T) {
 		t.Fatalf("管理者判断待ちになっていない: %s", dump(d.ActiveCase))
 	}
 	if p["C"].openTask(id, "preparation") != nil {
-		t.Fatal("同じ確認依頼を繰り返した")
+		t.Fatal("確認依頼を出した")
 	}
 	if !d.Permissions.CanSubmitProposal || p["B"].detail(id).Permissions.CanSubmitProposal {
 		t.Fatal("代案を出せるのは判断待ちの管理者だけ")
@@ -75,7 +75,6 @@ func TestUnansweredVotesExpireToOwner(t *testing.T) {
 	id := seed.SessionID
 	p["B"].withdraw(id, "assignment").mustStatus(t, http.StatusAccepted)
 	s.process()
-	p["C"].submitPreparation(id, "attending", prepData(true, []string{"sec_1", "sec_2"}, []string{"sec_2"}, 15)).mustStatus(t, http.StatusAccepted)
 	s.process()
 	p["C"].respond(id, "assignment", "accept").mustStatus(t, http.StatusAccepted)
 	p["A"].respond(id, "approval", "approve").mustStatus(t, http.StatusAccepted)
@@ -124,9 +123,9 @@ func TestMissingPreparationExpiresThenResumes(t *testing.T) {
 	seed := s.seed("initial_demo")
 	p := s.personas()
 	id := seed.SessionID
-	p["A"].submitPreparation(id, "attending", prepData(false, []string{"sec_1"}, []string{}, 0)).mustStatus(t, 202)
-	p["B"].submitPreparation(id, "attending", prepData(true, []string{"sec_2", "sec_3"}, []string{"sec_2", "sec_3"}, 40)).mustStatus(t, 202)
-	p["C"].submitPreparation(id, "absent", prepData(false, []string{}, []string{}, 0)).mustStatus(t, 202)
+	p["A"].submitPreparation(id, "attending", prepData(true)).mustStatus(t, 202)
+	p["B"].submitPreparation(id, "attending", prepData(false)).mustStatus(t, 202)
+	p["C"].submitPreparation(id, "absent", prepData(true)).mustStatus(t, 202)
 	s.process()
 	if d := p["A"].detail(id); d.CurrentProposal != nil || d.ActiveCase.Status != "collecting" {
 		t.Fatal("D の回答前に案を作ってはいけない")
@@ -138,7 +137,7 @@ func TestMissingPreparationExpiresThenResumes(t *testing.T) {
 	}
 	rev := p["D"].detail(id).Session.Revision
 	p["D"].send(http.MethodPut, "/api/sessions/"+id+"/preparations/me", map[string]any{"expected_revision": rev,
-		"preparation": map[string]any{"attendance": "attending", "data": prepData(false, []string{"sec_1"}, []string{}, 0)}}).mustStatus(t, 202)
+		"preparation": map[string]any{"attendance": "attending", "data": prepData(true)}}).mustStatus(t, 202)
 	s.process()
 	d = p["A"].detail(id)
 	if d.CurrentProposal == nil || d.CurrentProposal.ChangeKind != "initial" || d.ActiveCase.Status != "awaiting_consent" {
@@ -184,13 +183,17 @@ func TestAgentFailures(t *testing.T) {
 	}
 	s.setFaults(map[string]any{})
 	s.advance(30 * time.Second)
-	if p["C"].openTask(id, "preparation") == nil {
-		t.Fatalf("障害が解消したら処理が進むはず: %s", dump(p["A"].detail(id).ActiveCase))
+	if d := p["A"].detail(id); d.ActiveCase.Status != "awaiting_consent" || d.CurrentProposal == nil || d.CurrentProposal.Status != "pending" {
+		t.Fatalf("障害が解消したら処理が進むはず: %s", dump(d.ActiveCase))
 	}
 
 	// 不正な出力は未承認の案を作らず、管理者判断待ち（model_error）にする。
+	// D が担当できるように変えると案を作り直す。そのときの出力が不正だった場合。
 	s.setFaults(map[string]any{"llm": "invalid_output"})
-	p["C"].submitPreparation(id, "attending", prepData(true, []string{"sec_1", "sec_2"}, []string{"sec_2"}, 15)).mustStatus(t, http.StatusAccepted)
+	p["D"].send(http.MethodPut, "/api/sessions/"+id+"/preparations/me", map[string]any{
+		"expected_revision": p["D"].detail(id).Session.Revision,
+		"preparation":       map[string]any{"attendance": "attending", "data": prepData(false)},
+	}).mustStatus(t, http.StatusAccepted)
 	s.process()
 	d = p["A"].detail(id)
 	if d.ActiveCase.Status != "needs_owner" || str(d.ActiveCase.ReasonCode) != "model_error" || d.CurrentProposal.Status == "pending" {

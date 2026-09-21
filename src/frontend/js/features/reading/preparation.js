@@ -1,21 +1,21 @@
 // 輪読の参加条件（ReadingPreparationData）の入力と表示。
 //
-// 入力は4項目の構造化フォームに固定する。辞退の理由は集めない。
+// 聞くのは「参加できるか」と、日時が決まっていない回の「参加できる時間帯」だけ。
+// 輪読は日程を決めてから範囲を読んでくるので、準備状況は聞かない。説明の担当は AI が割り振り、
+// 本人が引き受けるかを答える。辞退の理由は集めない。
 // 自由文は「下書きを作るため」だけに使い、サーバーが解釈した結果を本人が確認してから送る
-// （解釈しただけでは保存されない）。
-// サーバーが最終判定するが、同じ規則を送る前に当てて往復を減らす。
+// （解釈しただけでは保存されない）。サーバーが最終判定するが、同じ規則を送る前に当てて往復を減らす。
 
 import { el } from "../../dom.js";
-import { sectionTitle } from "./plan.js";
+import { DATE_MAX } from "../../ui.js";
 import { createAvailabilityForm, describeSchedule } from "./availability.js";
 
-/** 説明できる節は読んできた節の部分集合。担当するなら1件以上＋1〜持ち時間の整数。 */
-export function validate(preparation, durationMinutes) {
+/** 参加できる時間帯の形を確かめる。 */
+export function validate(preparation) {
   const errors = [];
   const d = preparation.data;
-  if (d.schedule?.status === "provided") {
+  if (preparation.attendance === "attending" && d.schedule?.status === "provided") {
     if (!d.schedule.weekly_windows.length && !d.schedule.date_windows.length) errors.push("参加できる時間帯を1つ以上入力してください。");
-    if (!Number.isInteger(d.schedule.max_duration_minutes) || d.schedule.max_duration_minutes < 1 || d.schedule.max_duration_minutes > 480) errors.push("最大参加時間は1〜480分で入力してください。");
     const clock = value => /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
     for (const w of [...d.schedule.weekly_windows, ...d.schedule.date_windows]) {
       if (!clock(w.start) || !(clock(w.end) || w.end === "24:00") || w.start >= w.end) {
@@ -25,43 +25,12 @@ export function validate(preparation, durationMinutes) {
       if (Object.hasOwn(w, "date") && !w.date) { errors.push("参加できる日付を入力してください。"); break; }
     }
   }
-
-  if (preparation.attendance === "attending" && d.willing_to_present) {
-    if (d.explainable_section_ids.length === 0) {
-      errors.push("説明できる範囲を1つ以上選んでください。");
-    }
-    if (!Number.isInteger(d.max_presentation_minutes) || d.max_presentation_minutes < 1 || d.max_presentation_minutes > durationMinutes) {
-      errors.push(`説明できる時間は1〜${durationMinutes}分で指定してください。`);
-    }
-    if (d.explainable_section_ids.some((id) => !d.prepared_section_ids.includes(id))) {
-      errors.push("説明できる範囲は、読んできた範囲の中から選んでください。");
-    }
-  }
   return errors;
-}
-
-/** 欠席・担当しないときの形に揃える。出られない日は担当の有無と関係ないので残す。 */
-function normalize(preparation) {
-  const d = preparation.data;
-  if (preparation.attendance !== "attending" || !d.willing_to_present) {
-    return {
-      attendance: preparation.attendance,
-      data: {
-        ...d,
-        willing_to_present: false,
-        prepared_section_ids: d.prepared_section_ids,
-        explainable_section_ids: [],
-        max_presentation_minutes: 0,
-        unavailable_dates: d.unavailable_dates ?? [],
-      },
-    };
-  }
-  return preparation;
 }
 
 const EMPTY = {
   attendance: "attending",
-  data: { willing_to_present: false, prepared_section_ids: [], explainable_section_ids: [], max_presentation_minutes: 0, unavailable_dates: [] },
+  data: { declined_presentation: false, unavailable_dates: [] },
 };
 
 /**
@@ -70,60 +39,17 @@ const EMPTY = {
  */
 export function createPreparationForm(sessionData, current, durationMinutes, session = {}) {
   const value = current ?? EMPTY;
-  // 日時がまだ決まっていない回だけ、出られない日を聞く。決まっている回では聞かない。
+  // 日時がまだ決まっていない回だけ、参加できる時間帯と出られない日を聞く。
   const askDates = session.schedule_status === "proposed";
   const availability = createAvailabilityForm(value.data.schedule, session);
-  availability.node.hidden = !askDates;
+  // 担当の辞退は「担当を辞退する」から付く。フォームでは変えず、保存済みの値を引き継ぐ
+  let declined = value.data.declined_presentation === true;
 
   const attendance = el(
     "select",
     { name: "attendance" },
     el("option", { value: "attending", selected: value.attendance === "attending" }, askDates ? "参加を希望します（日時はこれから調整）" : "参加します"),
     el("option", { value: "absent", selected: value.attendance === "absent" }, "欠席します"),
-  );
-
-  const willing = el(
-    "select",
-    { name: "willing" },
-    el("option", { value: "false", selected: !value.data.willing_to_present }, "今回は説明できません"),
-    el("option", { value: "true", selected: value.data.willing_to_present }, "説明を担当できます"),
-  );
-
-  const checkboxes = (name, checkedIds) =>
-    el(
-      "div",
-      { class: "inline" },
-      sessionData.sections.map((s) =>
-        el(
-          "label",
-          {},
-          el("input", { type: "checkbox", name, value: s.id, checked: checkedIds.includes(s.id) }),
-          s.title,
-        ),
-      ),
-    );
-
-  const prepared = checkboxes("prepared", value.data.prepared_section_ids);
-  const explainable = checkboxes("explainable", value.data.explainable_section_ids);
-  const minutes = el("input", {
-    type: "number",
-    name: "minutes",
-    min: "1",
-    max: String(durationMinutes),
-    step: "1",
-    value: value.data.max_presentation_minutes ? String(value.data.max_presentation_minutes) : "",
-  });
-
-  const presentFields = el(
-    "div",
-    {},
-    el(
-      "fieldset",
-      { class: "fieldset", style: "font-size:.82rem;color:var(--ink-2)" },
-      el("legend", { style: "border:0;padding:0;font-size:.82rem;font-weight:400" }, "説明できる範囲"),
-      explainable,
-    ),
-    el("label", { class: "field", style: "margin-top:16px" }, el("span", {}, `説明できる時間（1〜${durationMinutes}分）`), minutes),
   );
 
   const dates = el("div", { class: "toc-list", style: "max-height:220px" });
@@ -138,7 +64,7 @@ export function createPreparationForm(sessionData, current, durationMinutes, ses
           class: "toc-list__date",
           value: v,
           min: session.period_start || null,
-          max: session.period_end || null,
+          max: session.period_end || DATE_MAX,
           "data-date": String(i),
           "aria-label": "出られない日",
           onInput: (e) => { dateValues[i] = e.target.value; },
@@ -176,45 +102,20 @@ export function createPreparationForm(sessionData, current, durationMinutes, ses
     el("legend", { style: "border:0;padding:0;font-size:.82rem;font-weight:400" }, "出られない日（任意）"),
     dates,
   );
-  datesField.hidden = !askDates;
-  if (!askDates) for (const input of datesField.querySelectorAll("input, button")) input.disabled = true;
-
-  const checked = (box) => [...box.querySelectorAll("input:checked")].map((i) => i.value);
-
+  const scheduleFields = el("div", { class: "prep-form" }, availability.node, datesField);
   function sync() {
-    const attending = attendance.value === "attending";
-    willingField.hidden = !attending;
-    willing.disabled = !attending;
-    presentFields.hidden = !attending || willing.value !== "true";
-    minutes.disabled = presentFields.hidden;
-
-    const preparedIds = new Set(checked(prepared));
-    for (const input of explainable.querySelectorAll("input")) {
-      input.disabled = presentFields.hidden || !preparedIds.has(input.value);
-      if (!preparedIds.has(input.value)) input.checked = false;
-    }
+    // 欠席なら時間帯は聞かない
+    scheduleFields.hidden = !askDates || attendance.value !== "attending";
+    for (const input of datesField.querySelectorAll("input, button")) input.disabled = scheduleFields.hidden;
   }
-
-  const willingField = el("label", { class: "field" }, el("span", {}, "説明を担当できますか"), willing);
   attendance.addEventListener("change", sync);
-  willing.addEventListener("change", sync);
-  prepared.addEventListener("change", sync);
 
   const node = el(
     "div",
     { class: "prep-form" },
     el("label", { class: "field" }, el("span", {}, "参加できますか"), attendance),
-    willingField,
-    el(
-      "fieldset",
-      { class: "fieldset", style: "font-size:.82rem;color:var(--ink-2)" },
-      el("legend", { style: "border:0;padding:0;font-size:.82rem;font-weight:400" }, "準備できた範囲"),
-      prepared,
-    ),
-    presentFields,
-    availability.node,
-    datesField,
-    el("p", { class: "help" }, "回答は参加者に共有されます。欠席・辞退の理由は記録しません。"),
+    scheduleFields,
+    el("p", { class: "help" }, "説明の担当はエージェントが割り振り、割り振られた人に引き受けられるかを確認します。回答は参加者に共有されます。欠席・辞退の理由は記録しません。"),
   );
 
   sync();
@@ -222,30 +123,21 @@ export function createPreparationForm(sessionData, current, durationMinutes, ses
   return {
     node,
     read() {
-      return normalize({
+      const attending = attendance.value === "attending";
+      return {
         attendance: attendance.value,
         data: {
-          willing_to_present: willing.value === "true",
-          prepared_section_ids: checked(prepared),
-          explainable_section_ids: checked(explainable),
-          max_presentation_minutes: Number(minutes.value || 0),
-          unavailable_dates: [...new Set(dateValues.filter(Boolean))].sort(),
-          ...(askDates ? { schedule: availability.read() } : value.data.schedule ? { schedule: value.data.schedule } : {}),
+          declined_presentation: attending && declined,
+          unavailable_dates: attending && askDates ? [...new Set(dateValues.filter(Boolean))].sort() : [],
+          ...(askDates && attending ? { schedule: availability.read() } : value.data.schedule ? { schedule: value.data.schedule } : {}),
         },
-      });
+      };
     },
     /** 解釈結果を入力欄へ入れる。保存はしない。本人がこのあと直して送る。 */
     fill(preparation) {
       if (Object.hasOwn(preparation.data, "schedule")) availability.fill(preparation.data.schedule);
       attendance.value = preparation.attendance;
-      willing.value = String(preparation.data.willing_to_present);
-      for (const [box, ids] of [
-        [prepared, preparation.data.prepared_section_ids],
-        [explainable, preparation.data.explainable_section_ids],
-      ]) {
-        for (const input of box.querySelectorAll("input")) input.checked = ids.includes(input.value);
-      }
-      minutes.value = preparation.data.max_presentation_minutes ? String(preparation.data.max_presentation_minutes) : "";
+      if (typeof preparation.data.declined_presentation === "boolean") declined = preparation.data.declined_presentation;
       if (Array.isArray(preparation.data.unavailable_dates)) {
         dateValues.length = 0;
         dateValues.push(...preparation.data.unavailable_dates);
@@ -260,26 +152,21 @@ export function createPreparationForm(sessionData, current, durationMinutes, ses
  * 解釈した下書きの中身を、本人が見て確かめられる形にする。
  * unclear は「読み取れなかった項目」＝まだ確定していない項目で、値は推測していない。
  */
-export function renderDraft(sessionData, interpretation, durationMinutes) {
+export function renderDraft(sessionData, interpretation) {
   const d = interpretation.preparation.data;
+  const attending = interpretation.preparation.attendance === "attending";
   const list = [
-    ["参加", interpretation.preparation.attendance === "attending" ? "参加します" : "欠席します"],
-    ["説明の担当", d.willing_to_present ? "担当できます" : "今回は説明できません"],
-    ["読んできた範囲", d.prepared_section_ids.map((id) => sectionTitle(sessionData, id)).join("、") || "—"],
-    ["説明できる範囲", d.explainable_section_ids.map((id) => sectionTitle(sessionData, id)).join("、") || "—"],
-    ["出られない日", (d.unavailable_dates ?? []).join("、") || "—"],
-    ["参加可能時間", describeSchedule(d.schedule)],
-    ["説明できる時間", d.max_presentation_minutes ? `${d.max_presentation_minutes}分（持ち時間は${durationMinutes}分）` : "—"],
+    ["参加", attending ? "参加します" : "欠席します"],
+    ...(attending && d.schedule ? [["参加できる時間帯", describeSchedule(d.schedule)]] : []),
+    ...((d.unavailable_dates ?? []).length ? [["出られない日", d.unavailable_dates.join("、")]] : []),
+    ...(d.declined_presentation ? [["説明の担当", "今回は辞退"]] : []),
   ];
 
   const LABEL = {
     attendance: "参加できるか",
-    prepared_section_ids: "読んできた範囲",
-    explainable_section_ids: "説明できる範囲",
-    max_presentation_minutes: "説明できる時間",
-    willing_to_present: "説明の担当",
-    schedule: "参加できる時間帯・最大参加時間",
+    schedule: "参加できる時間帯",
     unavailable_dates: "出られない日",
+    declined_presentation: "説明の担当",
   };
 
   return el(
@@ -320,23 +207,16 @@ export function renderAnswers(sessionData, detail) {
       );
     }
     const d = value.data;
-    const read = d.prepared_section_ids.map((id) => sectionTitle(sessionData, id)).join("、") || "なし";
+    const parts = [
+      d.schedule ? describeSchedule(d.schedule) : "参加",
+      (d.unavailable_dates ?? []).length ? `出られない日：${d.unavailable_dates.join("、")}` : null,
+      d.declined_presentation ? "今回は説明の担当を辞退" : null,
+    ].filter(Boolean);
     return el(
       "div",
       { class: "answer" },
       el("span", { class: "answer__who" }, m.display_name),
-      el(
-        "span",
-        { class: "answer__body" },
-        d.willing_to_present
-          ? el("span", {}, el("b", {}, `説明できます（最大${d.max_presentation_minutes}分）`), "　")
-          : el("span", {}, "説明の担当はしません　"),
-        `読んだ範囲：${read}`,
-        d.schedule ? el("span", {}, `　${describeSchedule(d.schedule)}`) : null,
-        (d.unavailable_dates ?? []).length
-          ? el("span", {}, `　出られない日：${d.unavailable_dates.join("、")}`)
-          : null,
-      ),
+      el("span", { class: "answer__body" }, parts.join("　")),
     );
   });
   return el("div", { class: "answers" }, rows);

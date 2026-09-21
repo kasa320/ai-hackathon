@@ -1,4 +1,5 @@
-// Package toc は輪読の教材登録で使う「ISBN からの目次の取得」（docs/api-endpoint.md）。
+// Package toc は輪読の教材登録で使う目次の取得（docs/api-endpoint.md）。
+// ISBN から国立国会図書館サーチに登録された目次を引くか、目次ページの写真から書き写す。
 // 取得結果は候補にすぎず、管理者が確認・修正して開催回登録に使うまで保存しない。
 // LLM に書名や記憶から目次を作らせる経路は設けず、Web 検索の結果は取得元ページとの照合をコードで行う。
 package toc
@@ -20,6 +21,13 @@ const (
 	StatusReadingImage  = "reading_image"
 	StatusSucceeded     = "succeeded"
 	StatusFailed        = "failed"
+)
+
+// 目次の取得元（Lookup.source）。
+const (
+	SourceNDL   = "ndl"   // 国立国会図書館サーチ（出版情報登録センターの登録データ）
+	SourceWeb   = "web"   // Web 検索し、取得元ページと照合した
+	SourceImage = "image" // 目次ページの写真から書き写した
 )
 
 // 理由コード。
@@ -93,6 +101,12 @@ type Lookup struct {
 // Bibliography は ISBN から書誌を確定する（openBD → 国立国会図書館サーチ）。見つからなければ nil, nil。
 type Bibliography interface {
 	Lookup(ctx context.Context, isbn string) (*Book, error)
+}
+
+// Contents は ISBN から登録済みの目次を取得する（国立国会図書館サーチの JPRO データ）。
+// 登録されていなければ nil, nil。混雑・通信の失敗は coord.ErrTransient を包んで返す。
+type Contents interface {
+	Contents(ctx context.Context, isbn string) ([]Entry, error)
 }
 
 // SearchResult は Web 検索で見つけた目次と取得元。

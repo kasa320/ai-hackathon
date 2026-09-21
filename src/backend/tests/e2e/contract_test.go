@@ -72,7 +72,7 @@ func TestSessionDetailShape(t *testing.T) {
 		t.Fatalf("preparation タスク: %v", task)
 	}
 	perm := d["permissions"].(map[string]any)
-	wantPerm := map[string]any{"can_update_preparation": true, "can_withdraw_assignment": false, "can_withdraw_attendance": true, "can_submit_proposal": false, "can_view_activity": false}
+	wantPerm := map[string]any{"can_update_preparation": true, "can_withdraw_assignment": false, "can_withdraw_attendance": true, "can_submit_proposal": false, "can_view_activity": false, "can_delete_session": false}
 	if !reflect.DeepEqual(perm, wantPerm) {
 		t.Fatalf("B の権限: %v", perm)
 	}
@@ -93,7 +93,6 @@ func TestProposalAndActivityShape(t *testing.T) {
 	id := seed.SessionID
 	p["B"].withdraw(id, "assignment").mustStatus(t, 202)
 	s.process()
-	p["C"].submitPreparation(id, "attending", prepData(true, []string{"sec_1", "sec_2"}, []string{"sec_2"}, 15)).mustStatus(t, 202)
 	s.process()
 
 	var d map[string]any
@@ -153,7 +152,7 @@ func TestPublicAndErrorShapes(t *testing.T) {
 	if r := c.get("/api/unknown"); r.status != 404 || r.errorCode(t) != "not_found" {
 		t.Fatalf("未定義: %d", r.status)
 	}
-	if r := c.do(http.MethodDelete, "/api/sessions/x", nil, nil); r.status != 405 || r.errorCode(t) != "method_not_allowed" {
+	if r := c.do(http.MethodPatch, "/api/sessions/x", nil, nil); r.status != 405 || r.errorCode(t) != "method_not_allowed" {
 		t.Fatalf("メソッド違い: %d", r.status)
 	}
 	if r := c.get("/api/groups"); r.status != 401 || r.errorCode(t) != "unauthenticated" {

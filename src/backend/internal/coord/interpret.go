@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/kasa320/ai-hackathon/src/backend/internal/apitypes"
@@ -65,6 +66,30 @@ type Interpretation struct {
 	// OutOfScope は参加条件の変更では扱えない依頼の分類。空なら扱える。
 	// 空でないとき、このターンの候補は全体を捨てて値を変えない。
 	OutOfScope string `json:"out_of_scope"`
+	// Question は AI が書いた、未確定の項目を本人に聞く質問文。対話でだけ使い、
+	// 送る前に CleanQuestion を通す。空なら用途の既定の文を使う。
+	Question string `json:"-"`
+}
+
+// CleanQuestion は AI が書いた質問文を、本人へ送れる形に整える。使えなければ空を返す。
+// 改行・メンション記号・URL・制御文字を落とし、長すぎる文は使わない（既定の文に戻す）。
+func CleanQuestion(q string) string {
+	q = strings.Join(strings.Fields(q), " ")
+	if q == "" || utf8.RuneCountInString(q) > 200 {
+		return ""
+	}
+	lower := strings.ToLower(q)
+	for _, bad := range []string{"http", "://", "www.", "discord.gg", "@", "<", ">", "`"} {
+		if strings.Contains(lower, bad) {
+			return ""
+		}
+	}
+	for _, r := range q {
+		if unicode.IsControl(r) {
+			return ""
+		}
+	}
+	return q
 }
 
 // InterpretRequest は1回の解釈への入力。
@@ -332,8 +357,12 @@ func (c *Coordinator) interpretError(ierr error, sessionID string) error {
 	case errors.Is(ierr, ErrBudgetExceeded):
 		return apperr.InvalidStateErr("AIの呼び出し回数の上限に達したため、解釈は使えません。フォームから入力してください。")
 	case errors.Is(ierr, ErrTransient):
+		// 通信・タイムアウト・429・5xx のエラーには原文が含まれないので、詳細を残す
+		c.log.Warn("自由文の解釈でAIが応答しませんでした", "session_id", sessionID, "err", ierr)
 		return apperr.New(apperr.TemporarilyUnavailable, "AIが応答しませんでした。フォームから入力するか、しばらくしてからやり直してください。")
 	case errors.Is(ierr, ErrInvalidOutput):
+		// 出力には原文の一部が含まれうるので、詳細は出さない
+		c.log.Warn("自由文の解釈でAIの出力が形式を満たしませんでした", "session_id", sessionID)
 		return apperr.New(apperr.TemporarilyUnavailable, "発言から項目を取り出せませんでした。フォームから入力してください。")
 	default:
 		// 原文が混ざらないよう、詳細は返さずログにも出さない。
