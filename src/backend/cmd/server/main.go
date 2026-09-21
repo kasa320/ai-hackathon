@@ -66,12 +66,15 @@ func run(log *slog.Logger) error {
 
 	var planner coord.Planner = coord.DraftOnlyPlanner{}
 	var interpreter coord.Interpreter = coord.DraftOnlyInterpreter{}
+	var bookAgent coord.BookAgent = coord.DraftBookAgent{}
 	tocDeps := toc.Deps{Store: st, Clock: clk, Faults: faults, Bib: toc.Chain{toc.NewOpenBD(), toc.NewNDLSearch()}, Contents: toc.NewNDLToc(), Fetcher: toc.NewSafeFetcher(), Log: log}
 	if cfg.AgentMode == config.AgentModeLLM {
 		client := agent.NewClient(cfg.OrcaRouterURL, cfg.OrcaRouterAPIKey, cfg.OrcaRouterTimeout)
 		// 案を考える処理と、自由文から条件を取り出す処理は別のモデルを使える
 		planner = &agent.LLMPlanner{Client: client, Model: cfg.OrcaRouterPlannerModel}
 		interpreter = &agent.LLMInterpreter{Client: client, Model: cfg.OrcaRouterInterpreterModel}
+		// ブックの全体計画・担当変更の候補も、案を考えるモデルと同じ設定で作る（提案は必ずサーバーで検証する）
+		bookAgent = &agent.LLMBookAgent{Client: client, Model: cfg.OrcaRouterPlannerModel}
 		log.Info("LLM の設定", "planner_model", cfg.OrcaRouterPlannerModel, "interpreter_model", cfg.OrcaRouterInterpreterModel, "timeout", cfg.OrcaRouterTimeout)
 		if cfg.OrcaRouterSearchModel != "" {
 			tocDeps.Searcher = &toc.LLMSearcher{Client: client, Model: cfg.OrcaRouterSearchModel}
@@ -92,12 +95,13 @@ func run(log *slog.Logger) error {
 	}
 	if cfg.DevMode {
 		planner = agent.WithFaults(planner, faults)
+		bookAgent = agent.WithBookFaults(bookAgent, faults)
 		interpreter = agent.WithInterpretFaults(interpreter, faults)
 		sender = notify.WithFaults(sender, faults)
 	}
 
 	runLock := &sync.Mutex{}
-	coordinator := coord.NewCoordinator(registry, st, clk, planner, coord.Options{PublicBaseURL: cfg.PublicBaseURL, Log: log, RunLock: runLock, Interpreter: interpreter})
+	coordinator := coord.NewCoordinator(registry, st, clk, planner, coord.Options{PublicBaseURL: cfg.PublicBaseURL, Log: log, RunLock: runLock, Interpreter: interpreter, BookAgent: bookAgent})
 	dispatcher := notify.NewDispatcher(st, clk, sender, log)
 	if err := dispatcher.Recover(ctx); err != nil {
 		return err
