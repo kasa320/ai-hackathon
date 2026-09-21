@@ -19,8 +19,9 @@ export function renderTopbar(node, { me, current }) {
     el(
       "nav",
       { class: "nav", "aria-label": "主なページ" },
-      link("/", "サークル", "home"),
-      me ? link("/setup.html", "サークルを作る", "setup") : null,
+      link("/", "グループ", "home"),
+      me ? link("/setup.html", "グループを作る", "setup") : null,
+      me ? link("/weekly.html", "普段の空き時間", "weekly") : null,
     ),
     me ? accountMenu(me) : null,
   );
@@ -226,6 +227,17 @@ export async function reportMutationError(err, { node, refresh, loginUrl }) {
   flash(node, { title: err.message, detail: err.requestId ? `記録番号 ${err.requestId}` : null, tone: "warn" });
 }
 
+/** エラーを利用者向けの1文にする。画面側は code で分岐し、ここでは表示だけを整える。 */
+export function describeError(err) {
+  if (err instanceof NetworkError) return "サーバーに接続できません。通信が戻ってから、もう一度お試しください。";
+  if (err instanceof ApiError) {
+    const fields = err.fieldErrors.map((f) => f.message).join(" ");
+    const base = err.status === 422 ? fields || err.message : err.message;
+    return err.requestId ? `${base}（記録番号 ${err.requestId}）` : base;
+  }
+  return String(err?.message ?? "処理できませんでした。");
+}
+
 /** 送信を待っている間の表示。確定ではないことを必ず添える。 */
 export function receipt(text) {
   return el(
@@ -238,6 +250,13 @@ export function receipt(text) {
 
 export function placeholder(title, body) {
   return el("div", { class: "placeholder" }, el("strong", {}, title), body);
+}
+
+/** グループ種別（playbook_id）の表示名。未知の種別は ID をそのまま出す。 */
+const PLAYBOOK_NAMES = { reading: "輪読" };
+
+export function playbookName(playbookId) {
+  return PLAYBOOK_NAMES[playbookId] ?? playbookId ?? "種別未設定";
 }
 
 /** 用途の札。輪読以外の用途が増えてもここだけで済むようにしておく。 */
