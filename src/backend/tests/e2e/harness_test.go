@@ -53,7 +53,7 @@ var persona = map[string]string{
 // fakeProvider は Discord OAuth の代わり。code は "Discord ID:表示名"。
 type fakeProvider struct{ base string }
 
-func (p fakeProvider) AuthURL(state string) string {
+func (p fakeProvider) AuthURL(state string, _ bool) string {
 	return p.base + "/fake-discord/authorize?state=" + state
 }
 func (p fakeProvider) Exchange(_ context.Context, code string) (auth.Identity, error) {

@@ -5,7 +5,7 @@
 ## 共通の約束
 
 - 同一オリジンのJSON API。`Content-Type: application/json`、JSONは `snake_case`、本文は最大64 KiB、未知のフィールドは拒否する。
-- 認証はセッションCookie（`session`、HttpOnly、ログインから7日）。本人IDや権限をリクエスト本文で指定しない。
+- 認証はセッションCookie（`session`、HttpOnly、最後に使ってから30日）。使っている間は1日に1回期限を延ばし、Cookieも出し直すので、ログアウトするまでログインが続く。本人IDや権限をリクエスト本文で指定しない。
 - 認証済みのPOST・PUTには `X-CSRF-Token`（`GET /api/me` で取得）が必須。サーバー側でOriginも検証する。
 - 業務更新のPOST・PUTには `Idempotency-Key` が必須。同じキー・同じ本文の再送には最初の成功応答を返す。違う操作での再利用は `409 idempotency_key_reused`。
 - 更新系は「受け付けた」で202を返し、AIの処理・確定・通知はバックエンドのイベント処理が進める。結果は `GET /api/sessions/{id}` のポーリングで確認する。

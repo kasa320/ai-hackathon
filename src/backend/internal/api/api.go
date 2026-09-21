@@ -149,6 +149,7 @@ func (s *Server) authed(h authedHandler) http.HandlerFunc {
 			httpx.WriteError(w, r, s.Log, err)
 			return
 		}
+		s.Auth.RefreshCookie(w, sess)
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			if !httpx.CheckOrigin(r, s.AllowedOrigins) {
 				httpx.WriteError(w, r, s.Log, apperr.New(apperr.Forbidden, "別のサイトからの操作は受け付けません。"))
@@ -223,7 +224,7 @@ func (s *Server) listPlaybooks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) startLogin(w http.ResponseWriter, r *http.Request) {
-	u, err := s.Auth.StartLogin(r.Context(), w, r.URL.Query().Get("return_to"))
+	u, err := s.Auth.StartLogin(r.Context(), w, r, r.URL.Query().Get("return_to"))
 	if err != nil {
 		s.Log.Error("ログイン開始に失敗", "err", err)
 		http.Redirect(w, r, "/?auth_error="+auth.ErrProviderUnavailable, http.StatusFound)
@@ -263,6 +264,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request, sess auth.Sessio
 		return
 	}
 	s.Auth.ClearCookie(w)
+	s.Auth.MarkLoggedOut(w)
 	w.WriteHeader(http.StatusNoContent)
 }
 

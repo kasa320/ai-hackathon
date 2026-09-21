@@ -3,10 +3,12 @@ package auth_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -23,7 +25,7 @@ var (
 
 type fakeProvider struct{ id auth.Identity }
 
-func (f fakeProvider) AuthURL(state string) string {
+func (f fakeProvider) AuthURL(state string, _ bool) string {
 	return "https://discord.test/authorize?state=" + state
 }
 func (f fakeProvider) Exchange(_ context.Context, code string) (auth.Identity, error) {
@@ -47,7 +49,7 @@ func setup(t *testing.T) (*auth.Manager, *store.Store, *clock.Offset) {
 func login(t *testing.T, m *auth.Manager, returnTo, code string, tamper bool) (string, []*http.Cookie) {
 	t.Helper()
 	w := httptest.NewRecorder()
-	u, err := m.StartLogin(ctx, w, returnTo)
+	u, err := m.StartLogin(ctx, w, httptest.NewRequest(http.MethodGet, "/api/auth/discord", nil), returnTo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +88,7 @@ func TestLoginFlowActivatesInvitation(t *testing.T) {
 		t.Fatalf("戻り先 = %q", loc)
 	}
 	c := sessionCookie(cookies)
-	if c == nil || !c.HttpOnly || c.SameSite != http.SameSiteLaxMode || c.Path != "/" || c.MaxAge != int((7*24*time.Hour).Seconds()) {
+	if c == nil || !c.HttpOnly || c.SameSite != http.SameSiteLaxMode || c.Path != "/" || c.MaxAge != int(auth.SessionTTL.Seconds()) {
 		t.Fatalf("Cookie の属性: %+v", c)
 	}
 	r := httptest.NewRequest(http.MethodGet, "/api/me", nil)
@@ -114,7 +116,7 @@ func TestCallbackFailures(t *testing.T) {
 	}
 	// state の Cookie がない（別のブラウザーから開いた）場合も拒否する。
 	w := httptest.NewRecorder()
-	u, _ := m.StartLogin(ctx, w, "/")
+	u, _ := m.StartLogin(ctx, w, httptest.NewRequest(http.MethodGet, "/api/auth/discord", nil), "/")
 	parsed, _ := url.Parse(u)
 	r := httptest.NewRequest(http.MethodGet, "/api/auth/callback?code=good&state="+parsed.Query().Get("state"), nil)
 	if loc := m.Callback(ctx, httptest.NewRecorder(), r); loc != "/?auth_error=invalid_state" {
@@ -122,7 +124,7 @@ func TestCallbackFailures(t *testing.T) {
 	}
 	// 利用者が拒否した場合。
 	w = httptest.NewRecorder()
-	u, _ = m.StartLogin(ctx, w, "/")
+	u, _ = m.StartLogin(ctx, w, httptest.NewRequest(http.MethodGet, "/api/auth/discord", nil), "/")
 	parsed, _ = url.Parse(u)
 	r = httptest.NewRequest(http.MethodGet, "/api/auth/callback?error=access_denied&state="+parsed.Query().Get("state"), nil)
 	for _, c := range w.Result().Cookies() {
@@ -175,9 +177,46 @@ func TestSessionExpiryAndLogout(t *testing.T) {
 
 	_, cookies = login(t, m, "/", "good", false)
 	c = sessionCookie(cookies)
-	clk.Advance(7*24*time.Hour + time.Second)
+	clk.Advance(auth.SessionTTL + time.Second)
 	if _, err := m.Authenticate(ctx, req()); !errors.Is(err, auth.ErrUnauthenticated) {
-		t.Fatal("7日で期限切れ")
+		t.Fatal("使わないまま期限を過ぎたら期限切れ")
+	}
+}
+
+// 使っている間はログインが続く。期限は1日に1回延ばし、そのときだけ Cookie を出し直す。
+func TestSessionSlidesWhileUsed(t *testing.T) {
+	m, _, clk := setup(t)
+	_, cookies := login(t, m, "/", "good", false)
+	c := sessionCookie(cookies)
+	if c.MaxAge != int(auth.SessionTTL.Seconds()) {
+		t.Fatalf("Cookie の期限: %d", c.MaxAge)
+	}
+	use := func() http.Header {
+		t.Helper()
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.AddCookie(c)
+		s, err := m.Authenticate(ctx, r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w := httptest.NewRecorder()
+		m.RefreshCookie(w, s)
+		return w.Header()
+	}
+
+	if h := use(); h.Get("Set-Cookie") != "" {
+		t.Fatal("ログイン直後は延ばさない")
+	}
+	// 20日ごとに使えば、最初の期限（30日）を過ぎてもログインが続く
+	for i := 0; i < 5; i++ {
+		clk.Advance(20 * 24 * time.Hour)
+		h := use()
+		if !strings.Contains(h.Get("Set-Cookie"), "Max-Age="+strconv.Itoa(int(auth.SessionTTL.Seconds()))) {
+			t.Fatalf("%d回目：Cookie を出し直していない: %q", i, h.Get("Set-Cookie"))
+		}
+	}
+	if h := use(); h.Get("Set-Cookie") != "" {
+		t.Fatal("同じ日のうちは延ばさない")
 	}
 }
 
@@ -188,7 +227,7 @@ func TestProviderUnavailableWhenNotConfigured(t *testing.T) {
 	}
 	defer st.Close()
 	m := auth.NewManager(st, clock.Fixed{T: t0}, nil, "s", false)
-	u, err := m.StartLogin(ctx, httptest.NewRecorder(), "/")
+	u, err := m.StartLogin(ctx, httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/auth/discord", nil), "/")
 	if err != nil || !strings.Contains(u, "provider_unavailable") {
 		t.Fatalf("未設定なら provider_unavailable: %q %v", u, err)
 	}
@@ -196,9 +235,75 @@ func TestProviderUnavailableWhenNotConfigured(t *testing.T) {
 
 func TestDiscordAuthURL(t *testing.T) {
 	p := auth.NewDiscordProvider("cid", "secret", "http://localhost:24680/api/auth/callback")
-	u, _ := url.Parse(p.AuthURL("st"))
+	u, _ := url.Parse(p.AuthURL("st", false))
 	q := u.Query()
-	if q.Get("client_id") != "cid" || q.Get("scope") != "identify" || q.Get("state") != "st" || strings.Contains(u.String(), "secret") {
+	if q.Get("client_id") != "cid" || q.Get("scope") != "identify" || q.Get("state") != "st" || q.Get("prompt") != "none" || strings.Contains(u.String(), "secret") {
 		t.Fatalf("auth url = %s", u)
+	}
+	// ログアウト後は確認画面を出し、別のアカウントを選べるようにする
+	u, _ = url.Parse(p.AuthURL("st", true))
+	if u.Query().Get("prompt") != "consent" {
+		t.Fatalf("アカウントを選ぶ auth url = %s", u)
+	}
+}
+
+// promptProvider は確認画面を出すよう求められたかを URL に残す。
+type promptProvider struct{ fakeProvider }
+
+func (p promptProvider) AuthURL(state string, chooseAccount bool) string {
+	return fmt.Sprintf("https://discord.test/authorize?state=%s&choose=%t", state, chooseAccount)
+}
+
+// ログアウト後の最初のログインだけ Discord の確認画面を出し、別のアカウントを選べるようにする。
+func TestChooseAccountAfterLogout(t *testing.T) {
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	m := auth.NewManager(st, clock.Fixed{T: t0}, promptProvider{fakeProvider{id: auth.Identity{DiscordUserID: "222222222222222222", DisplayName: "B"}}}, "s", false)
+	start := func(cookies []*http.Cookie) (string, []*http.Cookie) {
+		t.Helper()
+		r := httptest.NewRequest(http.MethodGet, "/api/auth/discord", nil)
+		for _, c := range cookies {
+			r.AddCookie(c)
+		}
+		w := httptest.NewRecorder()
+		u, err := m.StartLogin(ctx, w, r, "/")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return u, w.Result().Cookies()
+	}
+	if u, _ := start(nil); !strings.Contains(u, "choose=false") {
+		t.Fatalf("初回は確認画面を省く: %s", u)
+	}
+
+	w := httptest.NewRecorder()
+	m.MarkLoggedOut(w)
+	loggedOut := w.Result().Cookies()
+	u, stateCookies := start(loggedOut)
+	if !strings.Contains(u, "choose=true") {
+		t.Fatalf("ログアウト後は確認画面を出す: %s", u)
+	}
+
+	// ログインが済んだら印を消す
+	parsed, _ := url.Parse(u)
+	r := httptest.NewRequest(http.MethodGet, "/api/auth/callback?code=good&state="+parsed.Query().Get("state"), nil)
+	for _, c := range append(stateCookies, loggedOut...) {
+		r.AddCookie(c)
+	}
+	w = httptest.NewRecorder()
+	if loc := m.Callback(ctx, w, r); strings.Contains(loc, "auth_error") {
+		t.Fatalf("ログイン失敗: %s", loc)
+	}
+	cleared := false
+	for _, c := range w.Result().Cookies() {
+		if c.Name == "auth_prompt" && c.MaxAge < 0 {
+			cleared = true
+		}
+	}
+	if !cleared {
+		t.Fatal("ログイン後に印を消していない")
 	}
 }

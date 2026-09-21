@@ -90,6 +90,11 @@ func (t *Tx) AuthSession(ctx context.Context, tokenHash string) (AuthSession, er
 	return s, nil
 }
 
+// ExtendAuthSession はログインの期限を延ばす（使っている間はログインを続ける）。
+func (t *Tx) ExtendAuthSession(ctx context.Context, tokenHash string, expires time.Time) error {
+	return t.exec(ctx, "UPDATE auth_sessions SET expires_at = ? WHERE token_hash = ?", ts(expires), tokenHash)
+}
+
 func (t *Tx) DeleteAuthSession(ctx context.Context, tokenHash string) error {
 	return t.exec(ctx, "DELETE FROM auth_sessions WHERE token_hash = ?", tokenHash)
 }

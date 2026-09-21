@@ -6,7 +6,7 @@
 // - 送信直後は必ず「受け付けました」を出し、確定と区別する
 
 import { el, mount } from "./dom.js";
-import { ApiError, NetworkError } from "./api.js";
+import { api, ApiError, NetworkError } from "./api.js";
 
 /** 上部の帯。現在のページに aria-current を付ける。 */
 export function renderTopbar(node, { me, current }) {
@@ -22,15 +22,63 @@ export function renderTopbar(node, { me, current }) {
       link("/", "会", "home"),
       me ? link("/setup.html", "会を登録", "setup") : null,
     ),
-    me
-      ? el(
-          "span",
-          { class: "viewer" },
-          el("i", { "aria-hidden": "true" }, initial(me.user.display_name)),
-          el("span", {}, me.user.display_name),
-        )
-      : null,
+    me ? accountMenu(me) : null,
   );
+}
+
+/** 右上のアカウント。押すとメニューが開き、ログアウトできる。 */
+function accountMenu(me) {
+  const logout = el(
+    "button",
+    {
+      type: "button",
+      role: "menuitem",
+      onClick: async () => {
+        logout.disabled = true;
+        logout.textContent = "ログアウトしています…";
+        try {
+          await api.logout();
+        } catch (err) {
+          // すでにログアウト済み（401）なら、そのまま最初の画面へ戻す
+          if (!(err instanceof ApiError && err.status === 401)) {
+            logout.disabled = false;
+            logout.textContent = "ログアウト";
+            alert("ログアウトできませんでした。通信を確認してもう一度お試しください。");
+            return;
+          }
+        }
+        location.href = "/";
+      },
+    },
+    "ログアウト",
+  );
+  const menu = el(
+    "details",
+    { class: "account" },
+    el(
+      "summary",
+      { class: "viewer", "aria-label": `${me.user.display_name}のアカウント` },
+      el("i", { "aria-hidden": "true" }, initial(me.user.display_name)),
+      el("span", {}, me.user.display_name),
+    ),
+    el(
+      "div",
+      { class: "account__menu", role: "menu" },
+      el("p", {}, "Discordでログイン中", el("b", {}, me.user.display_name)),
+      logout,
+    ),
+  );
+  // メニューの外を押す・Esc で閉じる
+  document.addEventListener("click", (e) => {
+    if (menu.open && !menu.contains(e.target)) menu.open = false;
+  });
+  menu.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && menu.open) {
+      menu.open = false;
+      menu.querySelector("summary").focus();
+    }
+  });
+  return menu;
 }
 
 /**
