@@ -25,7 +25,7 @@ type Group = { id: ID; name: string; current_member_id: ID; members: Member[] };
 
 type Preparation = {
   attendance: "attending" | "absent";  // 共通：参加するかどうか
-  data: PreparationData;               // 用途固有：準備状況・担当できる範囲
+  data: PreparationData;               // 用途固有：参加できる時間帯・担当の辞退
 };
 
 type SessionSummary = {
@@ -46,7 +46,7 @@ type SessionSummary = {
 // 開催回の登録（POST /api/groups/{group_id}/sessions）。日時の決め方は2通り。
 type CreateSession = {
   playbook_id: string;
-  title?: string;                          // 省略すると「第N回」を自動で付ける
+  title?: string;                          // 省略すると「会の名前 第N回」を自動で付ける
   starts_at?: Timestamp;                   // 人が日時を決める場合だけ。オフセット必須
   period_start?: string;                   // starts_at を省いたときは必須（"YYYY-MM-DD"）
   period_end?: string;                     // 同上。開始日以降、1年以内
@@ -216,14 +216,15 @@ type ReadingSessionData = {
   target_section_ids: ID[];                // 今回扱う予定の範囲（1件以上）
 };
 
-// PreparationData：各メンバーの準備状況
+// PreparationData：各メンバーの参加条件。準備状況（読んだ範囲など）は聞かない。
+// 説明の担当は AI が割り振り、割り振られた本人が引き受けるかを答える。
 type ReadingPreparationData = {
-  willing_to_present: boolean;
-  prepared_section_ids: ID[];              // 読んできた節
-  explainable_section_ids: ID[];           // 説明できる節（読んできた節の範囲内）
-  max_presentation_minutes: number;        // 説明に使える時間。担当しないなら0
-  unavailable_dates: string[];             // 出られない日（"YYYY-MM-DD"、JST、60件まで）。空なら制約なし
+  declined_presentation?: boolean;         // 今回の説明の担当を辞退した（「担当を辞退する」）。true の人には割り振らない
+  unavailable_dates?: string[];            // 出られない日（"YYYY-MM-DD"、JST、60件まで）。本人が言ったときだけ
+  schedule?: ScheduleAvailability | null;  // 参加できる時間帯（日時未定の回だけ）。max_duration_minutes は 0＝指定なし
 };
+// 以前の willing_to_present・prepared_section_ids・explainable_section_ids・max_presentation_minutes は
+// 送られてきても無視する（保存済みの値との互換）。
 
 // PlanData：今回の計画
 type ReadingPlanData = {
@@ -245,7 +246,7 @@ type ReadingPlanData = {
 
 - 節IDは開催回に登録済みのものだけ。`completed` と `target` は重ならない。
 - `covered` と `deferred` は重ならず、合わせて `target_section_ids` と一致する。
-- 担当者は参加予定かつ `willing_to_present: true` の人だけ。担当する節は本人の `explainable_section_ids` の範囲内、担当時間の合計は本人の `max_presentation_minutes` 以下。
+- 担当者は参加予定で、`declined_presentation` が true でなく、この案件で引き受けを断っていない人だけ。
 - 進行表の節は `covered` か `completed` の範囲内。各 `covered` の節は少なくとも1つの進行項目に含まれる。
 - 同じ人を3回連続で代役にしない。
 
