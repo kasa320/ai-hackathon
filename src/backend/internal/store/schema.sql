@@ -257,3 +257,32 @@ CREATE TABLE IF NOT EXISTS reading_toc_lookups (
     expires_at       TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS reading_toc_lookups_group ON reading_toc_lookups(group_id, created_at);
+
+-- 輪読ブックと、その回ごとの予定枠。未開始枠は session_id を持たないため、共通の
+-- 案件・タスク・通知を作らない。
+CREATE TABLE IF NOT EXISTS reading_books (
+    id TEXT PRIMARY KEY,
+    group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    isbn TEXT,
+    toc_source TEXT NOT NULL,
+    sections TEXT NOT NULL,
+    planned_session_count INTEGER NOT NULL CHECK (planned_session_count BETWEEN 1 AND 52),
+    session_creation_mode TEXT NOT NULL CHECK (session_creation_mode IN ('sequential', 'all')),
+    status TEXT NOT NULL CHECK (status IN ('in_progress', 'completed')),
+    completed_section_ids TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS reading_books_group ON reading_books(group_id, created_at);
+
+CREATE TABLE IF NOT EXISTS reading_book_slots (
+    id TEXT PRIMARY KEY,
+    book_id TEXT NOT NULL REFERENCES reading_books(id) ON DELETE CASCADE,
+    sequence_number INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('planned', 'active', 'completed')),
+    session_id TEXT UNIQUE REFERENCES sessions(id) ON DELETE SET NULL,
+    covered_section_ids TEXT NOT NULL DEFAULT '[]',
+    UNIQUE (book_id, sequence_number)
+);
+CREATE INDEX IF NOT EXISTS reading_book_slots_book ON reading_book_slots(book_id, sequence_number);
