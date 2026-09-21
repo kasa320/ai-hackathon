@@ -13,11 +13,11 @@ export const WEEKDAYS = [
 
 // 最後の更新からこの日数が過ぎたら、いまも合っているか確かめてもらう。
 // バックエンドが再確認の要否を返すようになれば、その値を優先する。
-export const RECONFIRM_AFTER_DAYS = 60;
+export const RECONFIRM_AFTER_DAYS = 30;
 
 /** "none"（未登録）| "stale"（再確認が必要）| "ok"。days は stale のときの経過日数。 */
 export function availabilityStatus(data, now = Date.now()) {
-  if (!data || !Array.isArray(data.windows) || data.windows.length === 0) return { kind: "none" };
+  if (!data || !Array.isArray(data.windows) || !data.updated_at) return { kind: "none" };
   const updated = data.updated_at ? new Date(data.updated_at).getTime() : NaN;
   if (Number.isNaN(updated)) return { kind: "ok" };
   const days = Math.floor((now - updated) / 86400000);

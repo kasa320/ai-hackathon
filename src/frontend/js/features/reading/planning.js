@@ -1,6 +1,6 @@
 // 輪読：ブック全体のセッション計画（担当の仮割当・日程調整・直前の担当確認）の表示語彙。
 //
-// バックエンドの状態値はまだ確定していないため、ここに対応表を一か所だけ置く。
+// バックエンドの状態値との対応をここに一か所だけ置く。
 // 表にない値は「確認中」として生の値を添えて出す。確定・引き受け済みのように見せない。
 
 /** 担当の状態を画面で区別する4+1種類。 */
@@ -18,7 +18,7 @@ const ASSIGNMENT_ALIASES = {
   [ASSIGNMENT_KIND.unassigned]: ["unassigned", "none", "not_assigned"],
   [ASSIGNMENT_KIND.unanswered]: ["proposed", "pending", "tentative", "awaiting_response", "awaiting_answer", "unanswered", "requested"],
   [ASSIGNMENT_KIND.changeRequested]: ["change_requested", "change_request", "requested_change"],
-  [ASSIGNMENT_KIND.replacementPending]: ["replacement_pending", "replacement_proposed", "awaiting_replacement", "awaiting_replacement_approval", "replacement_candidate"],
+  [ASSIGNMENT_KIND.replacementPending]: ["change_proposed", "replacement_pending", "replacement_proposed", "awaiting_replacement", "awaiting_replacement_approval", "replacement_candidate"],
   [ASSIGNMENT_KIND.confirmationPending]: ["confirmation_pending", "reconfirmation_pending", "final_confirmation_pending", "awaiting_confirmation", "awaiting_final_confirmation", "reconfirmation_requested"],
   [ASSIGNMENT_KIND.confirmed]: ["confirmed", "accepted", "accept"],
 };
@@ -46,15 +46,17 @@ const SCHEDULING_KIND = Object.freeze({
   collecting: "collecting",
   proposing: "proposing",
   confirmed: "confirmed",
+  completed: "completed",
   needsAttention: "needs_attention",
   unknown: "unknown",
 });
 
 const SCHEDULING_ALIASES = {
-  [SCHEDULING_KIND.notStarted]: ["not_started", "waiting", "planned", "scheduled", "pending"],
-  [SCHEDULING_KIND.collecting]: ["collecting", "collecting_availability", "in_progress", "active", "started"],
+  [SCHEDULING_KIND.notStarted]: ["not_started", "waiting", "planned", "pending"],
+  [SCHEDULING_KIND.collecting]: ["scheduling", "collecting", "collecting_availability", "in_progress", "active", "started"],
   [SCHEDULING_KIND.proposing]: ["proposed", "proposing", "awaiting_consent", "awaiting_approval"],
-  [SCHEDULING_KIND.confirmed]: ["confirmed", "fixed"],
+  [SCHEDULING_KIND.confirmed]: ["scheduled", "confirmed", "fixed"],
+  [SCHEDULING_KIND.completed]: ["completed"],
   [SCHEDULING_KIND.needsAttention]: ["needs_attention", "needs_owner", "blocked", "failed"],
 };
 
@@ -63,6 +65,7 @@ const SCHEDULING_LABEL = {
   [SCHEDULING_KIND.collecting]: "参加できる日を集めています",
   [SCHEDULING_KIND.proposing]: "日程の案を確認中",
   [SCHEDULING_KIND.confirmed]: "日程確定",
+  [SCHEDULING_KIND.completed]: "完了",
   [SCHEDULING_KIND.needsAttention]: "調整に確認が必要です",
 };
 
@@ -104,10 +107,17 @@ export function slotsAwaitingMyAnswer(slots, memberId) {
 }
 
 export function slotAwaitsMyConfirmation(slot, memberId) {
-  return slot.assignee_member_id === memberId && assignmentState(slot).kind === ASSIGNMENT_KIND.confirmationPending;
+  return slot.assignee_member_id === memberId
+    && slot.can_confirm_assignment === true
+    && ["open", "needs_owner"].includes(slot.assignee_confirmation_status);
 }
 
 const PLAN_LABEL = {
+  planning: "計画を作成中",
+  awaiting_approval: "担当の回答待ち",
+  approved: "計画成立・進行中",
+  needs_attention: "管理者の確認が必要",
+  legacy: "従来方式のブック",
   draft: "計画を作成中",
   awaiting_assignments: "担当の回答待ち",
   awaiting_assignment_responses: "担当の回答待ち",
@@ -118,7 +128,7 @@ const PLAN_LABEL = {
 
 /** ブック全体の計画状態。値が無い・未知のときは null（見せない）か生の値。 */
 export function planLabel(book) {
-  const raw = book.planning_status;
+  const raw = book.plan_status;
   if (!raw) return null;
   return PLAN_LABEL[raw] ?? `計画状態：${raw}`;
 }

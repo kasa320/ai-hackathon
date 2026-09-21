@@ -162,30 +162,50 @@ function renderMyPlan() {
   const me = myMemberId();
   if (!me) return null;
   const mine = slots().filter((s) => s.assignee_member_id === me);
-  if (mine.length === 0) return null;
+  const proposed = slots().filter((s) => s.proposed_assignee_member_id === me && s.assignment_status === "change_proposed");
+  if (mine.length === 0 && proposed.length === 0) return null;
   const awaiting = slotsAwaitingMyAnswer(slots(), me);
   const label = mine.map((s) => `第${s.sequence_number}回`).join("・");
 
+  const candidateRequests = proposed.map((slot) => el("article", { class: "my-plan my-plan--ask" },
+    el("h2", {}, `第${slot.sequence_number}回の交代候補です`),
+    el("p", {}, "あなたが引き受けるまで、現在の担当者から変更されません。"),
+    el("div", { class: "actions" },
+      actionButton("引き受ける", "btn", () => answerCandidate(slot, ASSIGNMENT_DECISION.accept, "担当交代の引き受けを受け付けました")),
+      actionButton("辞退する", "btn btn--quiet", () => answerCandidate(slot, ASSIGNMENT_DECISION.requestChange, "担当交代の辞退を受け付けました")),
+    ),
+  ));
+
   if (awaiting.length === 0) {
-    return el("section", { class: "my-plan" },
-      el("h2", {}, "あなたの担当"),
-      el("p", {}, `${label}を担当する計画です。`),
-      el("p", { class: "help" }, "各回の状態は、下のセッション計画で確認できます。"),
+    return el("div", {},
+      mine.length ? el("section", { class: "my-plan" },
+        el("h2", {}, "あなたの担当"),
+        el("p", {}, `${label}を担当する計画です。`),
+        el("p", { class: "help" }, "各回の状態は、下のセッション計画で確認できます。"),
+      ) : null,
+      ...candidateRequests,
     );
   }
-  return el("section", { class: "my-plan my-plan--ask", "aria-labelledby": "my-plan-title" },
-    el("h2", { id: "my-plan-title" }, "あなたの担当を確認してください"),
-    el("p", {}, `あなたの担当は${awaiting.map((s) => `第${s.sequence_number}回`).join("・")}の仮割当です。`),
-    el("p", { class: "help" }, "回答は、この計画のあなたの担当すべてにまとめて適用されます。変更を希望しても、交代はすぐには決まりません。"),
-    el("div", { class: "actions" },
-      actionButton("引き受ける", "btn", () => answerAssignments(ASSIGNMENT_DECISION.accept, "担当の引き受けを受け付けました")),
-      actionButton("変更を希望する", "btn btn--quiet", () => answerAssignments(ASSIGNMENT_DECISION.requestChange, "変更の希望を受け付けました")),
+  return el("div", {},
+    el("section", { class: "my-plan my-plan--ask", "aria-labelledby": "my-plan-title" },
+      el("h2", { id: "my-plan-title" }, "あなたの担当を確認してください"),
+      el("p", {}, `あなたの担当は${awaiting.map((s) => `第${s.sequence_number}回`).join("・")}の仮割当です。`),
+      el("p", { class: "help" }, "回答は、この計画のあなたの担当すべてにまとめて適用されます。変更を希望しても、交代はすぐには決まりません。"),
+      el("div", { class: "actions" },
+        actionButton("引き受ける", "btn", () => answerAssignments(ASSIGNMENT_DECISION.accept, "担当の引き受けを受け付けました")),
+        actionButton("変更を希望する", "btn btn--quiet", () => answerAssignments(ASSIGNMENT_DECISION.requestChange, "変更の希望を受け付けました")),
+      ),
     ),
+    ...candidateRequests,
   );
 }
 
 async function answerAssignments(decision, message) {
   await act(() => api.answerAssignments(groupId, bookId, decision), message);
+}
+
+async function answerCandidate(slot, decision, message) {
+  await act(() => api.answerAssignments(groupId, bookId, decision, slot.slot_id), message);
 }
 
 // ---- セッション枠 -----------------------------------------------------------------
@@ -198,6 +218,9 @@ function renderSlot(slot, sections) {
   const mine = !!me && slot.assignee_member_id === me;
   const targets = names(slot.target_section_ids ?? slot.covered_section_ids, sections);
   const assignee = slot.assignee_member_id ? `${memberName(members(), slot.assignee_member_id)}${mine ? "（あなた）" : ""}` : "未定";
+  const proposed = slot.proposed_assignee_member_id
+    ? memberName(members(), slot.proposed_assignee_member_id)
+    : null;
   const confirmedTime = session?.schedule_status === "confirmed" && session.starts_at ? formatDateTime(session.starts_at) : null;
 
   const actions = [];
@@ -224,10 +247,13 @@ function renderSlot(slot, sections) {
         assignee,
         " ",
         el("span", { class: "stamp", "data-assignment": assignment.kind, "data-tone": assignment.kind === ASSIGNMENT_KIND.confirmed ? "done" : assignment.kind === ASSIGNMENT_KIND.unknown ? "warn" : null }, assignment.label),
+        proposed ? el("small", { class: "help" }, `交代候補：${proposed}（本人の承認待ち）`) : null,
       ),
       el("dt", {}, "日程調整"), el("dd", {}, scheduling.label, confirmedTime ? `（${confirmedTime}）` : ""),
     ),
     el("p", { class: "help" }, assignment.hint),
+    slot.assignee_confirmation_status === "open" ? el("p", { class: "help" }, "開催前の担当確認を待っています。") : null,
+    slot.assignee_confirmation_status === "needs_owner" ? el("p", { class: "help" }, "担当確認が未回答のため、管理者の確認が必要です。") : null,
     !session ? el("p", { class: "help" }, "実セッションはまだ作られていません。日程調整の開始時期になると、自動で始まります。") : null,
     assignment.kind === ASSIGNMENT_KIND.unknown && assignment.raw ? el("p", { class: "help" }, `状態値：${assignment.raw}`) : null,
     actions.length ? el("div", { class: "actions", style: "margin-top:12px" }, actions) : null,
@@ -284,10 +310,10 @@ async function act(run, successTitle) {
 function renderEditSection() {
   if (!detail.permissions.can_manage) return null;
   const reason = editLockReason(slots());
-  if (reason) {
+  if (!detail.permissions.can_edit) {
     return el("section", { class: "edit-lock", "aria-label": "ブックの編集" },
       el("p", {}, el("strong", {}, "ブックの内容は変更できません")),
-      el("p", { class: "help" }, reason),
+      el("p", { class: "help" }, reason ?? "現在の計画状態では編集できません。"),
     );
   }
   return el("section", { class: "edit-book", "aria-label": "ブックの編集" },

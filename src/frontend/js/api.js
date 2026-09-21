@@ -258,8 +258,11 @@ export const api = {
     }),
 
   /** 最初の担当割当への回答。decision は ASSIGNMENT_DECISION。自分の担当をまとめて答える。 */
-  answerAssignments: (groupId, bookId, decision) =>
-    write("PUT", `/groups/${encodeURIComponent(groupId)}/reading/books/${encodeURIComponent(bookId)}/assignments/me`, { decision }),
+  answerAssignments: (groupId, bookId, decision, slotId = null) =>
+    write("PUT", `/groups/${encodeURIComponent(groupId)}/reading/books/${encodeURIComponent(bookId)}/assignments/me`, {
+      decision,
+      ...(slotId ? { slot_id: slotId } : {}),
+    }),
 
   /** 開催直前の担当確認。decision は SLOT_CONFIRMATION。 */
   confirmSlotAssignee: (groupId, bookId, slotId, decision) =>
