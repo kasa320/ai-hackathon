@@ -220,7 +220,7 @@ export function createTocPicker(client, groupId, { onPick, onManual, picked = nu
         : null,
       bookLine(),
       el("label", { class: "field" }, el("span", {}, "目次ページの写真（1〜10枚、1枚4MB・合計20MBまで）"), input),
-      el("p", { class: "help" }, "写真は読み取りにだけ使い、保存しません。"),
+      el("p", { class: "help" }, "目次の最上位の項目（章）だけを読み取ります。写真は読み取りにだけ使い、保存しません。"),
       error,
       el(
         "div",
