@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -21,8 +20,6 @@ type Client struct {
 	BaseURL string
 	APIKey  string
 	HTTP    *http.Client
-	// CostCurrency は応答の usage.cost の通貨。分からなければ空（unknown として記録）。
-	CostCurrency string
 }
 
 // NewClient を作る。timeout は1回の呼び出しの上限で、0以下なら DefaultTimeout を使う。
@@ -78,9 +75,11 @@ type ChatResponse struct {
 		} `json:"message"`
 	} `json:"choices"`
 	Usage *struct {
-		PromptTokens     *int     `json:"prompt_tokens"`
-		CompletionTokens *int     `json:"completion_tokens"`
-		Cost             *float64 `json:"cost"`
+		PromptTokens     *int `json:"prompt_tokens"`
+		CompletionTokens *int `json:"completion_tokens"`
+		// CostUSD is emitted by OrcaRouter only when the request opts in. Keep it
+		// as json.Number so the amount can be persisted without float rounding.
+		CostUSD *json.Number `json:"cost_usd"`
 	} `json:"usage"`
 }
 
@@ -98,6 +97,7 @@ func (c *Client) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, coor
 	}
 	hreq.Header.Set("Content-Type", "application/json")
 	hreq.Header.Set("Authorization", "Bearer "+c.APIKey)
+	hreq.Header.Set("X-OrcaRouter-Include-Cost", "true")
 	res, err := c.HTTP.Do(hreq)
 	if err != nil {
 		return nil, call, fmt.Errorf("%w: %v", coord.ErrTransient, err)
@@ -121,12 +121,10 @@ func (c *Client) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, coor
 	call.Succeeded = true
 	if u := out.Usage; u != nil {
 		call.InputTokens, call.OutputTokens = u.PromptTokens, u.CompletionTokens
-		if u.Cost != nil {
-			s := strconv.FormatFloat(*u.Cost, 'f', -1, 64)
+		if u.CostUSD != nil {
+			s := string(*u.CostUSD)
 			call.EstimatedAmount = &s
-			if c.CostCurrency != "" {
-				call.Currency = c.CostCurrency
-			}
+			call.Currency = "USD"
 		}
 	}
 	return &out, call, nil

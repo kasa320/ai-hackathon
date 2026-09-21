@@ -55,9 +55,6 @@ func normalizeRequirements(s Snapshot, req ApprovalRequirements) (storedRequirem
 			}
 			required := len(eligible)/2 + 1
 			if a.Kind == ApprovalAll {
-				if len(eligible) != len(s.Members) {
-					return out, errNoEligibleVoters
-				}
 				required = len(eligible)
 			}
 			out.Approvals = append(out.Approvals, storedApproval{Kind: a.Kind, Eligible: eligible, Required: required})

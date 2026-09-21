@@ -137,7 +137,7 @@ func (s *Seeder) Seed(ctx context.Context, scenario string) (SeedResult, error) 
 		if _, err := s.coord.ProcessDue(ctx); err != nil {
 			return SeedResult{}, err
 		}
-		for _, step := range []struct{ name, kind, decision string }{{"B", "assignment", "accept"}, {"C", "assignment", "accept"}, {"A", "owner_approval", "approve"}} {
+		for _, step := range []struct{ name, kind, decision string }{{"B", "assignment", "accept"}, {"C", "assignment", "accept"}, {"A", "approval", "approve"}, {"B", "approval", "approve"}, {"C", "approval", "approve"}, {"D", "approval", "approve"}} {
 			if err := s.respond(ctx, users[step.name], sessionID, step.kind, step.decision); err != nil {
 				return SeedResult{}, fmt.Errorf("%s の回答: %w", step.name, err)
 			}

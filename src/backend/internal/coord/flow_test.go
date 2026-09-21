@@ -56,7 +56,7 @@ func TestNoProposalUntilAllPrepared(t *testing.T) {
 	}
 }
 
-func TestInitialPlanNeedsAcceptanceAndOwnerApproval(t *testing.T) {
+func TestInitialPlanNeedsAcceptanceAndUnanimousConsent(t *testing.T) {
 	h := newHarness(t, nil)
 	h.createSession()
 	h.allPrepared()
@@ -67,14 +67,16 @@ func TestInitialPlanNeedsAcceptanceAndOwnerApproval(t *testing.T) {
 	if p == nil || p.Status != "pending" || p.ChangeKind != "initial" || p.Author != "agent" {
 		t.Fatalf("初回案がない: %+v", p)
 	}
-	if len(p.Assignments) != 1 || p.Assignments[0].MemberID != h.memberID("B") || len(p.Approvals) != 1 || p.Approvals[0].Kind != "owner" {
+	if len(p.Assignments) != 1 || p.Assignments[0].MemberID != h.memberID("B") || len(p.Approvals) != 1 || p.Approvals[0].Kind != "all" || p.Approvals[0].RequiredCount != 4 {
 		t.Fatalf("初回案の条件が違う: %+v", p)
 	}
-	if h.openTask("A", "owner_approval") == nil || h.openTask("B", "assignment") == nil {
-		t.Fatal("担当者の assignment と管理者の owner_approval が必要")
+	if h.openTask("A", "owner_approval") != nil || h.openTask("B", "assignment") == nil {
+		t.Fatal("管理者専用タスクを作らず、担当者の assignment が必要")
 	}
-	// 管理者の承認だけでは本人の引き受けを代行しない。
-	h.mustRespond("A", "owner_approval", "approve")
+	// 全員同意でも本人の引き受けを代行しない。
+	for _, name := range []string{"A", "B", "C", "D"} {
+		h.mustRespond(name, "approval", "approve")
+	}
 	if d := h.detail("A"); d.Session.Status == "confirmed" {
 		t.Fatal("本人の引き受けなしに確定した")
 	}
@@ -165,7 +167,7 @@ func TestNoFeasiblePlanGoesToOwnerAndOwnerProposal(t *testing.T) {
 		t.Fatal(err)
 	}
 	d = h.detail("A")
-	if d.CurrentProposal.Author != "owner" || d.ActiveCase.Status != "awaiting_consent" || d.CurrentProposal.Approvals[0].Kind != "majority" {
+	if d.CurrentProposal.Author != "owner" || d.ActiveCase.Status != "awaiting_consent" || d.CurrentProposal.Approvals[0].Kind != "all" {
 		t.Fatalf("代案の状態が違う: %+v", d.CurrentProposal)
 	}
 	// 管理者が案を提出したことを承認として数えない。
@@ -181,14 +183,14 @@ func TestStaleVoteIsRejected(t *testing.T) {
 	h.allPrepared()
 	h.process()
 	old := h.openTask("B", "assignment")
-	oldOwner := h.openTask("A", "owner_approval")
+	oldApproval := h.openTask("A", "approval")
 
 	// D が参加条件を変えると、現在の案は旧版になる。
 	h.mustPrep("D", "absent", prepData(true))
 	if _, err := h.c.RespondTask(ctx, h.users["B"], old.ID, apitypes.TaskResponseInput{Decision: "accept", ProposalID: old.ProposalID, ProposalVersion: old.ProposalVersion}, nil); code(err) != apperr.ProposalSuperseded {
 		t.Fatalf("旧版への回答は 409 proposal_superseded: %v", err)
 	}
-	if _, err := h.c.RespondTask(ctx, h.users["A"], oldOwner.ID, apitypes.TaskResponseInput{Decision: "approve", ProposalID: oldOwner.ProposalID, ProposalVersion: oldOwner.ProposalVersion}, nil); code(err) != apperr.ProposalSuperseded {
+	if _, err := h.c.RespondTask(ctx, h.users["A"], oldApproval.ID, apitypes.TaskResponseInput{Decision: "approve", ProposalID: oldApproval.ProposalID, ProposalVersion: oldApproval.ProposalVersion}, nil); code(err) != apperr.ProposalSuperseded {
 		t.Fatalf("旧版への承認は拒否: %v", err)
 	}
 	h.process()
@@ -261,8 +263,8 @@ func TestReminderOnceAndDeadlineToOwner(t *testing.T) {
 			reminders++
 		}
 	}
-	if reminders != 1 {
-		t.Fatalf("未回答の A への催促は1回だけのはず: %d", reminders)
+	if reminders != 4 {
+		t.Fatalf("未回答の全員への催促はそれぞれ1回のはず: %d", reminders)
 	}
 	h.clk.Advance(11 * time.Hour)
 	h.process()

@@ -237,17 +237,18 @@ func TestThirdConsecutiveSubstituteIsRejected(t *testing.T) {
 func TestApprovalRequirements(t *testing.T) {
 	pb := reading.New()
 
-	t.Run("初回案は担当者の引き受けと管理者の承認", func(t *testing.T) {
+	t.Run("初回案は担当者の引き受けと参加予定者全員の同意", func(t *testing.T) {
 		req, err := pb.ApprovalRequirements(ctx, baseSnapshot(), coord.Proposal{ChangeKind: coord.ChangeInitial, Data: json.RawMessage(initialPlanJSON)})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !reflect.DeepEqual(req.RequiredAcceptorIDs, []string{"mem_b"}) || len(req.Approvals) != 1 || req.Approvals[0].Kind != coord.ApprovalOwner {
+		if !reflect.DeepEqual(req.RequiredAcceptorIDs, []string{"mem_b"}) || len(req.Approvals) != 1 || req.Approvals[0].Kind != coord.ApprovalAll ||
+			!reflect.DeepEqual(req.Approvals[0].EligibleMemberIDs, []string{"mem_a", "mem_b", "mem_c", "mem_d"}) {
 			t.Fatalf("unexpected: %+v", req)
 		}
 	})
 
-	t.Run("範囲の変更は参加予定者の過半数", func(t *testing.T) {
+	t.Run("範囲の変更は参加予定者全員の同意", func(t *testing.T) {
 		s := withConfirmed(baseSnapshot(), initialPlanJSON)
 		setPrep(&s, "mem_d", prep("absent", false))
 		req, err := pb.ApprovalRequirements(ctx, s, coord.Proposal{ChangeKind: coord.ChangeReplan, Data: json.RawMessage(replanJSON)})
@@ -257,7 +258,7 @@ func TestApprovalRequirements(t *testing.T) {
 		if !reflect.DeepEqual(req.RequiredAcceptorIDs, []string{"mem_c"}) {
 			t.Fatalf("acceptors: %v", req.RequiredAcceptorIDs)
 		}
-		if len(req.Approvals) != 1 || req.Approvals[0].Kind != coord.ApprovalMajority ||
+		if len(req.Approvals) != 1 || req.Approvals[0].Kind != coord.ApprovalAll ||
 			!reflect.DeepEqual(req.Approvals[0].EligibleMemberIDs, []string{"mem_a", "mem_b", "mem_c"}) {
 			t.Fatalf("approvals: %+v", req.Approvals)
 		}
@@ -275,7 +276,7 @@ func TestApprovalRequirements(t *testing.T) {
 		}
 	})
 
-	t.Run("時間配分の変更は過半数", func(t *testing.T) {
+	t.Run("時間配分の変更は参加予定者全員の同意", func(t *testing.T) {
 		s := withConfirmed(baseSnapshot(), initialPlanJSON)
 		changed := strings.Replace(strings.Replace(initialPlanJSON, `"minutes": 30`, `"minutes": 25`, 1), `"minutes": 15}
   ]`, `"minutes": 20}
@@ -284,7 +285,7 @@ func TestApprovalRequirements(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(req.Approvals) != 1 || req.Approvals[0].Kind != coord.ApprovalMajority {
+		if len(req.Approvals) != 1 || req.Approvals[0].Kind != coord.ApprovalAll {
 			t.Fatalf("unexpected: %+v", req)
 		}
 	})

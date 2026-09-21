@@ -43,7 +43,7 @@ func TestScheduledProposalRequiresEveryMemberAndBoundCards(t *testing.T) {
 	if d.CurrentProposal == nil {
 		t.Fatal("missing proposal")
 	}
-	if len(d.CurrentProposal.Approvals) != 2 || d.CurrentProposal.Approvals[1].Kind != "all" || d.CurrentProposal.Approvals[1].RequiredCount != 4 {
+	if len(d.CurrentProposal.Approvals) != 1 || d.CurrentProposal.Approvals[0].Kind != "all" || d.CurrentProposal.Approvals[0].RequiredCount != 4 {
 		t.Fatalf("requirements: %+v", d.CurrentProposal.Approvals)
 	}
 	cards, err := h.c.DialogTasks(ctx, h.users["B"], h.sess)
@@ -58,7 +58,6 @@ func TestScheduledProposalRequiresEveryMemberAndBoundCards(t *testing.T) {
 			t.Fatalf("proxy response: %v", err)
 		}
 	}
-	h.mustRespond("A", "owner_approval", "approve")
 	h.mustRespond("B", "assignment", "accept")
 	for _, name := range []string{"A", "B", "C"} {
 		h.mustRespond(name, "approval", "approve")
