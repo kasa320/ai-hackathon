@@ -7,11 +7,24 @@
 
 import { el } from "../../dom.js";
 import { sectionTitle } from "./plan.js";
+import { createAvailabilityForm, describeSchedule } from "./availability.js";
 
 /** 説明できる節は読んできた節の部分集合。担当するなら1件以上＋1〜持ち時間の整数。 */
 export function validate(preparation, durationMinutes) {
   const errors = [];
   const d = preparation.data;
+  if (d.schedule?.status === "provided") {
+    if (!d.schedule.weekly_windows.length && !d.schedule.date_windows.length) errors.push("参加できる時間帯を1つ以上入力してください。");
+    if (!Number.isInteger(d.schedule.max_duration_minutes) || d.schedule.max_duration_minutes < 1 || d.schedule.max_duration_minutes > 480) errors.push("最大参加時間は1〜480分で入力してください。");
+    const clock = value => /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+    for (const w of [...d.schedule.weekly_windows, ...d.schedule.date_windows]) {
+      if (!clock(w.start) || !(clock(w.end) || w.end === "24:00") || w.start >= w.end) {
+        errors.push("参加できる時間帯の開始・終了を確認してください。終了は開始より後にしてください。");
+        break;
+      }
+      if (Object.hasOwn(w, "date") && !w.date) { errors.push("参加できる日付を入力してください。"); break; }
+    }
+  }
 
   if (preparation.attendance === "attending" && d.willing_to_present) {
     if (d.explainable_section_ids.length === 0) {
@@ -34,6 +47,7 @@ function normalize(preparation) {
     return {
       attendance: preparation.attendance,
       data: {
+        ...d,
         willing_to_present: false,
         prepared_section_ids: d.prepared_section_ids,
         explainable_section_ids: [],
@@ -58,11 +72,13 @@ export function createPreparationForm(sessionData, current, durationMinutes, ses
   const value = current ?? EMPTY;
   // 日時がまだ決まっていない回だけ、出られない日を聞く。決まっている回では聞かない。
   const askDates = session.schedule_status === "proposed";
+  const availability = createAvailabilityForm(value.data.schedule, session);
+  availability.node.hidden = !askDates;
 
   const attendance = el(
     "select",
     { name: "attendance" },
-    el("option", { value: "attending", selected: value.attendance === "attending" }, "参加します"),
+    el("option", { value: "attending", selected: value.attendance === "attending" }, askDates ? "参加を希望します（日時はこれから調整）" : "参加します"),
     el("option", { value: "absent", selected: value.attendance === "absent" }, "欠席します"),
   );
 
@@ -161,18 +177,21 @@ export function createPreparationForm(sessionData, current, durationMinutes, ses
     dates,
   );
   datesField.hidden = !askDates;
+  if (!askDates) for (const input of datesField.querySelectorAll("input, button")) input.disabled = true;
 
   const checked = (box) => [...box.querySelectorAll("input:checked")].map((i) => i.value);
 
   function sync() {
     const attending = attendance.value === "attending";
     willingField.hidden = !attending;
+    willing.disabled = !attending;
     presentFields.hidden = !attending || willing.value !== "true";
+    minutes.disabled = presentFields.hidden;
 
     const preparedIds = new Set(checked(prepared));
     for (const input of explainable.querySelectorAll("input")) {
-      input.disabled = !preparedIds.has(input.value);
-      if (input.disabled) input.checked = false;
+      input.disabled = presentFields.hidden || !preparedIds.has(input.value);
+      if (!preparedIds.has(input.value)) input.checked = false;
     }
   }
 
@@ -183,7 +202,7 @@ export function createPreparationForm(sessionData, current, durationMinutes, ses
 
   const node = el(
     "div",
-    {},
+    { class: "prep-form" },
     el("label", { class: "field" }, el("span", {}, "参加できますか"), attendance),
     willingField,
     el(
@@ -193,6 +212,7 @@ export function createPreparationForm(sessionData, current, durationMinutes, ses
       prepared,
     ),
     presentFields,
+    availability.node,
     datesField,
     el("p", { class: "help" }, "回答は参加者に共有されます。欠席・辞退の理由は記録しません。"),
   );
@@ -210,11 +230,13 @@ export function createPreparationForm(sessionData, current, durationMinutes, ses
           explainable_section_ids: checked(explainable),
           max_presentation_minutes: Number(minutes.value || 0),
           unavailable_dates: [...new Set(dateValues.filter(Boolean))].sort(),
+          ...(askDates ? { schedule: availability.read() } : value.data.schedule ? { schedule: value.data.schedule } : {}),
         },
       });
     },
     /** 解釈結果を入力欄へ入れる。保存はしない。本人がこのあと直して送る。 */
     fill(preparation) {
+      if (Object.hasOwn(preparation.data, "schedule")) availability.fill(preparation.data.schedule);
       attendance.value = preparation.attendance;
       willing.value = String(preparation.data.willing_to_present);
       for (const [box, ids] of [
@@ -246,6 +268,7 @@ export function renderDraft(sessionData, interpretation, durationMinutes) {
     ["読んできた範囲", d.prepared_section_ids.map((id) => sectionTitle(sessionData, id)).join("、") || "—"],
     ["説明できる範囲", d.explainable_section_ids.map((id) => sectionTitle(sessionData, id)).join("、") || "—"],
     ["出られない日", (d.unavailable_dates ?? []).join("、") || "—"],
+    ["参加可能時間", describeSchedule(d.schedule)],
     ["説明できる時間", d.max_presentation_minutes ? `${d.max_presentation_minutes}分（持ち時間は${durationMinutes}分）` : "—"],
   ];
 
@@ -255,6 +278,8 @@ export function renderDraft(sessionData, interpretation, durationMinutes) {
     explainable_section_ids: "説明できる範囲",
     max_presentation_minutes: "説明できる時間",
     willing_to_present: "説明の担当",
+    schedule: "参加できる時間帯・最大参加時間",
+    unavailable_dates: "出られない日",
   };
 
   return el(
@@ -307,6 +332,7 @@ export function renderAnswers(sessionData, detail) {
           ? el("span", {}, el("b", {}, `説明できます（最大${d.max_presentation_minutes}分）`), "　")
           : el("span", {}, "説明の担当はしません　"),
         `読んだ範囲：${read}`,
+        d.schedule ? el("span", {}, `　${describeSchedule(d.schedule)}`) : null,
         (d.unavailable_dates ?? []).length
           ? el("span", {}, `　出られない日：${d.unavailable_dates.join("、")}`)
           : null,

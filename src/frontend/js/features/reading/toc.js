@@ -33,11 +33,14 @@ export function createTocPicker(client, groupId, { onPick, onManual }) {
   const node = el("div", {});
   let timer = null;
   let lookup = null;
+  let active = true;
+  let lastIsbn = "";
 
-  const stop = () => clearTimeout(timer);
+  const stop = () => { active = false; clearTimeout(timer); };
+  const manual = () => { stop(); onManual(); };
 
   function renderIsbn(message = null) {
-    const input = el("input", { type: "text", inputmode: "numeric", placeholder: "9784297127831" });
+    const input = el("input", { type: "text", inputmode: "numeric", placeholder: "9784297127831", value: lastIsbn });
     mount(
       node,
       el(
@@ -49,13 +52,14 @@ export function createTocPicker(client, groupId, { onPick, onManual }) {
           "div",
           { style: "display:flex;gap:12px;margin-top:16px" },
           el("button", { type: "button", class: "btn", onClick: () => start(input.value.trim()) }, "目次を取得する"),
-          el("button", { type: "button", class: "btn btn--quiet", onClick: () => onManual() }, "手入力する"),
+          el("button", { type: "button", class: "btn btn--quiet", onClick: manual }, "手入力する"),
         ),
       ),
     );
   }
 
   async function start(isbn) {
+    lastIsbn = isbn;
     if (!/^\d{10}$|^\d{13}$/.test(isbn)) {
       renderIsbn("ISBNは10桁か13桁の数字で入れてください。");
       return;
@@ -63,22 +67,28 @@ export function createTocPicker(client, groupId, { onPick, onManual }) {
     renderWaiting("resolving_book");
     try {
       lookup = await client.startTocLookup(groupId, isbn);
+      if (!active) return;
       poll();
     } catch (err) {
+      if (!active) return;
       renderIsbn(err.message ?? "取得を開始できませんでした。");
     }
   }
 
   function renderWaiting(status) {
-    mount(node, placeholder(STATUS_TEXT[status] ?? "取得しています…", ""));
+    mount(node, placeholder(STATUS_TEXT[status] ?? "取得しています…", ""),
+      el("button", { type: "button", class: "btn btn--quiet", onClick: manual }, "手入力に切り替える"));
   }
 
   function poll() {
-    stop();
+    clearTimeout(timer);
+    if (!active) return;
     timer = setTimeout(async () => {
       try {
         lookup = await client.tocLookup(groupId, lookup.id);
+        if (!active) return;
       } catch (err) {
+        if (!active) return;
         renderIsbn(err.message ?? "状況を取得できませんでした。");
         return;
       }
@@ -105,6 +115,7 @@ export function createTocPicker(client, groupId, { onPick, onManual }) {
 
   function renderNeedsImage() {
     const input = el("input", { type: "file", accept: "image/jpeg,image/png,image/webp", multiple: true });
+    const error = el("p", { class: "field__error", role: "alert" });
     mount(
       node,
       el(
@@ -124,6 +135,7 @@ export function createTocPicker(client, groupId, { onPick, onManual }) {
         bookLine(),
         el("label", { class: "field", style: "margin-top:16px" }, el("span", {}, "目次ページの写真（1〜5枚、1枚4MBまで）"), input),
         el("p", { class: "help" }, "画像は保存しません。"),
+        error,
         el(
           "div",
           { style: "display:flex;gap:12px;margin-top:16px" },
@@ -133,12 +145,14 @@ export function createTocPicker(client, groupId, { onPick, onManual }) {
               type: "button",
               class: "btn",
               onClick: async () => {
-                if (!input.files?.length) return;
+                if (!input.files?.length) { error.textContent = "目次の画像を選んでください。"; return; }
                 renderWaiting("reading_image");
                 try {
                   lookup = await client.submitTocImages(groupId, lookup.id, input.files);
+                  if (!active) return;
                   poll();
                 } catch (err) {
+                  if (!active) return;
                   renderNeedsImage();
                   node.append(el("p", { class: "field__error" }, err.message ?? "画像を送れませんでした。"));
                 }
@@ -146,7 +160,7 @@ export function createTocPicker(client, groupId, { onPick, onManual }) {
             },
             "この画像から読み取る",
           ),
-          el("button", { type: "button", class: "btn btn--quiet", onClick: () => onManual() }, "手入力する"),
+          el("button", { type: "button", class: "btn btn--quiet", onClick: manual }, "手入力する"),
         ),
       ),
     );
@@ -167,7 +181,7 @@ export function createTocPicker(client, groupId, { onPick, onManual }) {
         el(
           "div",
           { style: "display:flex;gap:12px;margin-top:16px" },
-          el("button", { type: "button", class: "btn", onClick: () => onManual() }, "手入力する"),
+          el("button", { type: "button", class: "btn", onClick: manual }, "手入力する"),
           el("button", { type: "button", class: "btn btn--quiet", onClick: () => renderIsbn() }, "別のISBNで試す"),
         ),
       ),
@@ -185,6 +199,7 @@ export function createTocPicker(client, groupId, { onPick, onManual }) {
   }
 
   function renderEntries() {
+    const error = el("p", { class: "field__error", role: "alert" });
     const checks = el(
       "div",
       { class: "toc-list" },
@@ -214,6 +229,7 @@ export function createTocPicker(client, groupId, { onPick, onManual }) {
           lookup.unreadable_count > 0 ? el("span", {}, `読めなかった箇所 ${lookup.unreadable_count}件`) : null,
         ),
         checks,
+        error,
         el(
           "div",
           { style: "display:flex;gap:12px;margin-top:16px" },
@@ -227,14 +243,14 @@ export function createTocPicker(client, groupId, { onPick, onManual }) {
                   id: `sec_${n + 1}`,
                   title: lookup.entries[Number(input.value)].title,
                 }));
-                if (picked.length === 0) return;
+                if (picked.length === 0) { error.textContent = "今回扱う範囲を1つ以上選んでください。"; return; }
                 stop();
                 onPick(picked, { kind: lookup.source === "image" ? "image" : "web", urls: lookup.source_urls ?? [] }, lookup.book);
               },
             },
             "この内容で進む",
           ),
-          el("button", { type: "button", class: "btn btn--quiet", onClick: () => onManual() }, "手入力に切り替える"),
+          el("button", { type: "button", class: "btn btn--quiet", onClick: manual }, "手入力に切り替える"),
         ),
       ),
     );

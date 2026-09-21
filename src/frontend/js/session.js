@@ -37,7 +37,7 @@ const REASON_LABEL = {
 const TASK_TITLE = {
   preparation: "参加条件を答えてください",
   assignment: "担当を引き受けるか答えてください",
-  approval: "この変更に同意するか答えてください",
+  approval: "この案に同意するか答えてください",
   owner_approval: "管理者として承認するか答えてください",
 };
 
@@ -205,11 +205,12 @@ function headlineTitle() {
 function headlineText(task) {
   if (task) {
     const left = remaining(task.due_at, detail.server_now);
-    return `期限：${formatDateTime(task.due_at)}（残り${left}）`;
+    // タスク名は Discord 向けの回答例を含むので、Web では1行目の目的だけを出す
+    return `${task.title.split("\n")[0]} 期限：${formatDateTime(task.due_at)}（残り${left}）`;
   }
   const c = detail.active_case;
   if (c?.status === "needs_owner") {
-    return `${REASON_LABEL[c.reason_code] ?? c.summary} 自動での再試行は予定していません。`;
+    return `${c.summary || REASON_LABEL[c.reason_code]} 自動での再試行は予定していません。`;
   }
   return c?.summary ?? "この会でいま動いている調整はありません。";
 }
@@ -243,7 +244,12 @@ function renderActions(task, proposal) {
     buttons.push(el("button", { class: "btn", type: "button", disabled: busy, onClick: openProposalForm }, "代案を出す"));
   }
 
-  const approval = proposal?.approvals?.[0] ?? null;
+  // 自分のタスクに対応する承認の進み具合を出す。管理者の承認と全員の同意は別に数える
+  const approvals = proposal?.approvals ?? [];
+  const approval =
+    (task?.kind === "owner_approval" ? approvals.find((a) => a.kind === "owner") : approvals.find((a) => a.kind !== "owner")) ??
+    approvals[0] ??
+    null;
   const progress = approval
     ? tally({
         done: approval.approved_member_ids.length,
@@ -270,7 +276,8 @@ function renderProposals() {
   if (detail.confirmed_plan && detail.confirmed_plan.id !== detail.current_proposal?.id) list.push(detail.confirmed_plan);
 
   if (!list.length) {
-    mount($("proposals"), el("div", { style: "margin-top:24px" }, placeholder("案はまだありません", "参加条件を集めています。")));
+    const status = CASE_LABEL[detail.active_case?.status];
+    mount($("proposals"), el("div", { style: "margin-top:24px" }, placeholder("案はまだありません", status ? `${status}。` : "")));
     return;
   }
 
@@ -295,6 +302,7 @@ function renderProposal(proposal) {
     el(
       "div",
       { class: "proposal__body" },
+      proposal.data.starts_at ? el("p", {}, `開催日時：${new Date(proposal.data.starts_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}（日本時間）・${detail.session.duration_minutes}分`) : null,
       el("p", {}, proposal.summary),
       feature ? feature.renderScope(proposal.data, detail.data) : null,
       feature ? feature.renderAgendaTable(proposal.data, detail.data, detail.members) : null,
@@ -308,7 +316,7 @@ function renderConsent(proposal) {
   const blocks = [];
 
   for (const approval of proposal.approvals ?? []) {
-    const label = approval.kind === "owner" ? "管理者の承認" : "参加予定者の同意";
+    const label = approval.kind === "owner" ? "管理者の承認" : approval.kind === "all" ? "全員の参加可否・同意" : "参加予定者の同意";
     blocks.push(
       el(
         "div",
@@ -497,7 +505,7 @@ async function loadActivity() {
     $("activity"),
     el(
       "details",
-      { class: "activity-details" },
+      { class: "activity-details", open: $("activity").querySelector("details")?.open ?? false },
       el("summary", {}, "実行記録"),
       el(
         "div",
@@ -561,6 +569,7 @@ function metric(value, label, note) {
 // ---- 操作 ------------------------------------------------------------------
 
 async function decide(task, decision) {
+  if (busy) return;
   clearFlash($("flash"));
   setBusy(true);
   try {
@@ -571,6 +580,10 @@ async function decide(task, decision) {
     });
     flash($("flash"), { title: "回答を受け付けました", detail: "まだ確定していません。最新の案と照合しています。" });
     await refresh();
+    // 自分の回答で確定した場合は「まだ確定していません」を残さない
+    if (detail.session.status === "confirmed" && detail.confirmed_plan?.id === task.proposal_id) {
+      flash($("flash"), { title: "回答を受け付けました", detail: "全員の回答がそろい、計画が確定しました。" });
+    }
     poller.refreshNow();
   } catch (err) {
     await reportMutationError(err, { node: $("flash"), refresh, loginUrl });
@@ -580,6 +593,7 @@ async function decide(task, decision) {
 }
 
 async function withdraw(scope) {
+  if (busy) return;
   const label = scope === "assignment" ? "今回の担当をすべて辞退します。" : "今回は欠席と伝えます。";
   if (!confirm(`${label}\n理由は送られません。よろしいですか？`)) return;
 
@@ -599,8 +613,10 @@ async function withdraw(scope) {
 
 /** 参加条件の入力。自由文で下書きを作れるが、保存は本人が確認してからになる。 */
 function openPreparation() {
-  const current = detail.preparations.find((p) => p.member_id === detail.current_member_id)?.value ?? null;
-  const form = feature.createPreparationForm(detail.data, current, detail.session.duration_minutes, detail.session);
+  if (busy || prepDialog?.dialog.isConnected) return;
+  const snapshot = detail;
+  const current = snapshot.preparations.find((p) => p.member_id === snapshot.current_member_id)?.value ?? null;
+  const form = feature.createPreparationForm(snapshot.data, current, snapshot.session.duration_minutes, snapshot.session);
 
   const draftBox = el("div", {});
   const text = el("textarea", {
@@ -617,16 +633,17 @@ function openPreparation() {
       onClick: async () => {
         const value = text.value.trim();
         if (!value || interpret.disabled) return;
-        interpret.disabled = true;
+        dialog.setPending(true, "読み取っています…");
         mount(draftBox, receipt("読み取っています。保存はされません。"));
         try {
           const result = await api.interpretPreparation(sessionId, value);
+          dialog.setPending(false);
           form.fill(result.preparation);
-          mount(draftBox, feature.renderDraft(detail.data, result, detail.session.duration_minutes));
+          mount(draftBox, feature.renderDraft(snapshot.data, result, snapshot.session.duration_minutes));
         } catch (err) {
           mount(draftBox, el("p", { class: "field__error" }, interpretMessage(err)));
         } finally {
-          interpret.disabled = false;
+          dialog.setPending(false);
         }
       },
     },
@@ -659,33 +676,36 @@ function openPreparation() {
     submitLabel: "回答を送る",
     onSubmit: async ({ showError, showReceipt, close }) => {
       const preparation = form.read();
-      const errors = feature.validate(preparation, detail.session.duration_minutes);
+      const errors = feature.validate(preparation, snapshot.session.duration_minutes);
       if (errors.length) return showError(errors.join(" "));
 
       showError(null);
       showReceipt("まだ確定していません。最新の状態と照合しています。");
+      setBusy(true);
       try {
-        const openPrep = detail.my_tasks.find((t) => t.kind === "preparation" && t.status === "open");
+        const openPrep = snapshot.my_tasks.find((t) => t.kind === "preparation" && t.status === "open");
         if (openPrep) {
           await api.respondToTask(openPrep.id, {
             decision: "submit",
-            expected_revision: detail.session.revision,
+            expected_revision: snapshot.session.revision,
             preparation,
           });
         } else {
-          await api.updatePreparation(sessionId, detail.session.revision, preparation);
+          await api.updatePreparation(sessionId, snapshot.session.revision, preparation);
         }
         close();
         flash($("flash"), { title: "回答を受け付けました", detail: "エージェントが内容を確認します。" });
         await refresh();
         poller.refreshNow();
       } catch (err) {
-        // 入力は消さない。409 でも同じ内容のまま送り直せるようにする。
         showReceipt(null);
+        showError(err.message ?? "送信できませんでした。通信を確認してもう一度お試しください。");
         await reportMutationError(err, { node: $("flash"), refresh, loginUrl });
         if (err instanceof ApiError && err.isConflict) {
-          showError("状態が変わりました。最新の内容を確認して、もう一度送信してください。");
+          showError("状態が変わりました。入力内容を控えてから、いったん閉じて開き直し、最新の内容を確認してください。");
         }
+      } finally {
+        setBusy(false);
       }
     },
   });
