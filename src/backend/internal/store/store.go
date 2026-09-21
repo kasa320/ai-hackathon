@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -53,6 +54,10 @@ func open(ctx context.Context, dsn string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	if err := relaxGroupNotificationKinds(ctx, db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	// 以前は自動の回名が「第N回」だけだった。会の名前を前に付ける（付け済みの回は対象外）。
 	if _, err := db.ExecContext(ctx, `UPDATE sessions SET title = (SELECT name FROM groups WHERE groups.id = sessions.group_id) || ' ' || title
 		WHERE title GLOB '第[0-9]*回' AND EXISTS (SELECT 1 FROM groups WHERE groups.id = sessions.group_id)`); err != nil {
@@ -73,6 +78,27 @@ func addMissingColumns(ctx context.Context, db *sql.DB) error {
 		{"sessions", "period_start", "TEXT NOT NULL DEFAULT ''"},
 		{"sessions", "period_end", "TEXT NOT NULL DEFAULT ''"},
 		{"sessions", "schedule_status", "TEXT NOT NULL DEFAULT 'confirmed'"},
+		{"reading_books", "period_start", "TEXT NOT NULL DEFAULT ''"},
+		{"reading_books", "period_end", "TEXT NOT NULL DEFAULT ''"},
+		{"reading_books", "duration_minutes", "INTEGER NOT NULL DEFAULT 0"},
+		{"reading_books", "adjustment_lead_days", "INTEGER NOT NULL DEFAULT 7"},
+		// 旧ブックは自動進行の対象にしない（legacy）。新規のブックだけが計画を持つ。
+		{"reading_books", "plan_status", "TEXT NOT NULL DEFAULT 'legacy'"},
+		{"reading_books", "plan_version", "INTEGER NOT NULL DEFAULT 0"},
+		{"reading_books", "plan_summary", "TEXT NOT NULL DEFAULT ''"},
+		{"reading_books", "plan_attempts", "INTEGER NOT NULL DEFAULT 0"},
+		{"reading_books", "plan_next_at", "TEXT"},
+		{"reading_books", "plan_reason", "TEXT NOT NULL DEFAULT ''"},
+		{"reading_book_slots", "period_start", "TEXT NOT NULL DEFAULT ''"},
+		{"reading_book_slots", "period_end", "TEXT NOT NULL DEFAULT ''"},
+		{"reading_book_slots", "target_section_ids", "TEXT NOT NULL DEFAULT '[]'"},
+		{"reading_book_slots", "assignee_member_id", "TEXT"},
+		{"reading_book_slots", "assignment_status", "TEXT NOT NULL DEFAULT 'unassigned'"},
+		{"reading_book_slots", "proposed_assignee_member_id", "TEXT"},
+		{"reading_book_slots", "excluded_member_ids", "TEXT NOT NULL DEFAULT '[]'"},
+		{"reading_book_slots", "change_attempts", "INTEGER NOT NULL DEFAULT 0"},
+		{"reading_book_slots", "change_next_at", "TEXT"},
+		{"reading_book_slots", "attention_reason", "TEXT NOT NULL DEFAULT ''"},
 	} {
 		has, err := hasColumn(ctx, db, c.table, c.name)
 		if err != nil {
@@ -86,6 +112,52 @@ func addMissingColumns(ctx context.Context, db *sql.DB) error {
 		}
 	}
 	return nil
+}
+
+// relaxGroupNotificationKinds は、種別を脱退・削除の2つに限っていた旧 group_notifications の CHECK 制約を外す。
+// SQLite は制約だけを変更できないため、旧定義の表だけを作り直す（行は保持し、新しい表は対象外）。
+func relaxGroupNotificationKinds(ctx context.Context, db *sql.DB) error {
+	var def string
+	err := db.QueryRowContext(ctx, "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'group_notifications'").Scan(&def)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("group_notifications の定義の取得: %w", err)
+	}
+	if !strings.Contains(def, "CHECK (kind IN") {
+		return nil
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, q := range []string{
+		"ALTER TABLE group_notifications RENAME TO group_notifications_old",
+		`CREATE TABLE group_notifications (
+			id TEXT PRIMARY KEY,
+			group_id TEXT NOT NULL REFERENCES groups(id),
+			kind TEXT NOT NULL,
+			recipient_discord_user_id TEXT NOT NULL,
+			dedupe_key TEXT NOT NULL UNIQUE,
+			content TEXT NOT NULL,
+			status TEXT NOT NULL CHECK (status IN ('pending', 'sending', 'sent', 'failed', 'unknown')),
+			error_code TEXT,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			seq INTEGER NOT NULL
+		)`,
+		`INSERT INTO group_notifications (id, group_id, kind, recipient_discord_user_id, dedupe_key, content, status, error_code, created_at, updated_at, seq)
+			SELECT id, group_id, kind, recipient_discord_user_id, dedupe_key, content, status, error_code, created_at, updated_at, seq FROM group_notifications_old`,
+		"DROP TABLE group_notifications_old",
+		"CREATE INDEX IF NOT EXISTS group_notifications_status ON group_notifications(status, seq)",
+	} {
+		if _, err := tx.ExecContext(ctx, q); err != nil {
+			return fmt.Errorf("group_notifications の移行: %w", err)
+		}
+	}
+	return tx.Commit()
 }
 
 func hasColumn(ctx context.Context, db *sql.DB, table, name string) (bool, error) {

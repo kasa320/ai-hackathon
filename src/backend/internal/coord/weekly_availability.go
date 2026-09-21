@@ -148,3 +148,27 @@ func (c *Coordinator) PutWeeklyAvailability(ctx context.Context, userID string, 
 	}
 	return weeklyView(a)
 }
+
+// standingAvailability は本人の普段の空き時間を、日時候補の計算に使う形で返す。未登録なら nil。
+func (c *Coordinator) standingAvailability(ctx context.Context, tx *store.Tx, userID string) (*StandingAvailability, error) {
+	a, err := tx.WeeklyAvailability(ctx, userID)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var windows []apitypes.WeeklyWindow
+	if err := json.Unmarshal(a.Windows, &windows); err != nil {
+		return nil, err
+	}
+	out := &StandingAvailability{Timezone: a.Timezone}
+	for _, w := range windows {
+		start, okS := parseClock(w.Start, false)
+		end, okE := parseClock(w.End, true)
+		if okS && okE {
+			out.Windows = append(out.Windows, StandingWindow{Weekday: w.Weekday, StartMinute: start, EndMinute: end})
+		}
+	}
+	return out, nil
+}

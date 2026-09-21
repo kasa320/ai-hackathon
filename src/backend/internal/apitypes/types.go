@@ -61,6 +61,10 @@ type SessionList struct {
 	Items []SessionSummary `json:"items"`
 }
 
+// ReadingBook は輪読のブック。同じグループに複数登録でき、複数を同時に進められる。
+// PlanStatus: planning（AIの全体計画を作成中）/ awaiting_approval（担当者の承認待ち）/
+// approved（全担当者が承認済みで、各回の調整開始日に自動進行）/ needs_attention（管理者の判断待ち）/
+// legacy（自動進行の前に作られたブック）。
 type ReadingBook struct {
 	ID                    string          `json:"id"`
 	GroupID               string          `json:"group_id"`
@@ -68,7 +72,14 @@ type ReadingBook struct {
 	ISBN                  *string         `json:"isbn"`
 	TocSource             json.RawMessage `json:"toc_source,omitempty"`
 	Sections              json.RawMessage `json:"sections,omitempty"`
+	PeriodStart           string          `json:"period_start"`
+	PeriodEnd             string          `json:"period_end"`
 	PlannedSessionCount   int             `json:"planned_session_count"`
+	DurationMinutes       int             `json:"duration_minutes"`
+	AdjustmentLeadDays    int             `json:"adjustment_lead_days"`
+	PlanStatus            string          `json:"plan_status"`
+	PlanVersion           int             `json:"plan_version"`
+	PlanSummary           string          `json:"plan_summary"`
 	SessionCreationMode   string          `json:"session_creation_mode"`
 	Status                string          `json:"status"`
 	CompletedSectionIDs   []string        `json:"completed_section_ids"`
@@ -79,29 +90,93 @@ type ReadingBook struct {
 type ReadingBookList struct {
 	Items []ReadingBook `json:"items"`
 }
+
+// ReadingBookSlot はブックの1回分の枠。実セッションは調整開始日になるまで作られず、その間 Session は null。
+// AssignmentStatus: unassigned / pending（仮担当・未回答）/ accepted / change_requested（候補待ち）/
+// change_proposed（候補本人の承認待ち）/ needs_attention。
+// SchedulingStatus: waiting（調整開始前）/ scheduling（日程調整中）/ scheduled（日時確定）/ needs_attention / completed。
 type ReadingBookSlot struct {
 	SlotID            string          `json:"slot_id"`
 	SequenceNumber    int             `json:"sequence_number"`
 	Status            string          `json:"status"`
 	CoveredSectionIDs []string        `json:"covered_section_ids"`
 	Session           *SessionSummary `json:"session"`
+
+	PeriodStart      string   `json:"period_start"`
+	PeriodEnd        string   `json:"period_end"`
+	TargetSectionIDs []string `json:"target_section_ids"`
+	// AssigneeMemberID は現在の担当者。変更候補は本人が承認するまで入れ替わらない。
+	AssigneeMemberID         *string `json:"assignee_member_id"`
+	AssignmentStatus         string  `json:"assignment_status"`
+	SchedulingStatus         string  `json:"scheduling_status"`
+	ProposedAssigneeMemberID *string `json:"proposed_assignee_member_id"`
+	// AdjustmentStartsOn は日程調整を始める日（YYYY-MM-DD、JST）。調整開始前の枠だけ入る。
+	AdjustmentStartsOn *string `json:"adjustment_starts_on"`
+	// AssigneeConfirmationStatus は開催3日前の担当者確認の状態（open / confirmed / change_requested / needs_owner）。
+	AssigneeConfirmationStatus *string `json:"assignee_confirmation_status"`
+	CanConfirmAssignment       bool    `json:"can_confirm_assignment"`
 }
 type ReadingBookDetail struct {
 	Book        ReadingBook       `json:"book"`
 	Sessions    []ReadingBookSlot `json:"sessions"`
 	Permissions struct {
 		CanManage bool `json:"can_manage"`
+		// CanEdit は最初の実セッションが始まる前の、管理者による編集・計画の再生成ができること。
+		CanEdit bool `json:"can_edit"`
+		// CanRespondAssignment は本人に回答待ちの担当があること。
+		CanRespondAssignment bool `json:"can_respond_assignment"`
 	} `json:"permissions"`
 }
+
+// CreateReadingBookInput はブックの登録。実セッションは作らず、全枠と全体計画だけを作る。
 type CreateReadingBookInput struct {
-	Title               string                  `json:"title"`
-	ISBN                *string                 `json:"isbn"`
-	TocSource           json.RawMessage         `json:"toc_source"`
-	Sections            json.RawMessage         `json:"sections"`
-	PlannedSessionCount int                     `json:"planned_session_count"`
-	SessionCreationMode string                  `json:"session_creation_mode"`
-	InitialSession      ReadingBookSessionInput `json:"initial_session"`
+	Title               string          `json:"title"`
+	ISBN                *string         `json:"isbn"`
+	TocSource           json.RawMessage `json:"toc_source"`
+	Sections            json.RawMessage `json:"sections"`
+	PeriodStart         string          `json:"period_start"`
+	PeriodEnd           string          `json:"period_end"`
+	PlannedSessionCount int             `json:"planned_session_count"`
+	DurationMinutes     int             `json:"duration_minutes"`
+	AdjustmentLeadDays  int             `json:"adjustment_lead_days"`
 }
+
+// UpdateReadingBookInput は最初の実セッションが始まる前のブックの編集。指定した項目だけを変える。
+// isbn は空文字で消せる。構造・計画に関わる項目を変えると、以前の担当承認は無効になり計画を作り直す。
+type UpdateReadingBookInput struct {
+	Title               *string         `json:"title"`
+	ISBN                *string         `json:"isbn"`
+	TocSource           json.RawMessage `json:"toc_source"`
+	Sections            json.RawMessage `json:"sections"`
+	PeriodStart         *string         `json:"period_start"`
+	PeriodEnd           *string         `json:"period_end"`
+	PlannedSessionCount *int            `json:"planned_session_count"`
+	DurationMinutes     *int            `json:"duration_minutes"`
+	AdjustmentLeadDays  *int            `json:"adjustment_lead_days"`
+}
+
+// RegenerateBookPlanInput は計画の再生成依頼（本文は空のオブジェクト）。
+type RegenerateBookPlanInput struct{}
+
+// BookAssignmentInput は初期担当・担当変更候補への回答。Decision は accept / request_change。
+// SlotID を省くと、自分に割り当てられた未回答の初期担当すべてが対象。担当変更の候補として
+// 承認・辞退するときは SlotID が必要（自分が候補になっていない枠には作用しない）。
+type BookAssignmentInput struct {
+	Decision string `json:"decision"`
+	SlotID   string `json:"slot_id,omitempty"`
+}
+
+// AssigneeConfirmationInput は開催3日前の担当者確認への回答。Decision は confirm / request_change。
+type AssigneeConfirmationInput struct {
+	Decision string `json:"decision"`
+}
+
+// AvailabilityRequestResult は週間空き時間の登録・再確認の依頼結果。
+type AvailabilityRequestResult struct {
+	RequestedCount int `json:"requested_count"`
+	SkippedCount   int `json:"skipped_count"`
+}
+
 type ReadingBookSessionInput struct {
 	SlotID           string   `json:"slot_id,omitempty"`
 	PeriodStart      string   `json:"period_start"`
@@ -109,9 +184,10 @@ type ReadingBookSessionInput struct {
 	DurationMinutes  int      `json:"duration_minutes"`
 	TargetSectionIDs []string `json:"target_section_ids"`
 }
+
+// CreateReadingBookResult は登録したブック。作成直後は実セッションもタスクもない。
 type CreateReadingBookResult struct {
-	Book           ReadingBook    `json:"book"`
-	InitialSession SessionSummary `json:"initial_session"`
+	Book ReadingBook `json:"book"`
 }
 type StartReadingBookSessionResult struct {
 	SlotID  string         `json:"slot_id"`

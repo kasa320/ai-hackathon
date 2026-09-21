@@ -186,7 +186,7 @@ CREATE INDEX IF NOT EXISTS notifications_status ON notifications(status, seq);
 CREATE TABLE IF NOT EXISTS group_notifications (
     id                        TEXT PRIMARY KEY,
     group_id                  TEXT NOT NULL REFERENCES groups(id),
-    kind                      TEXT NOT NULL CHECK (kind IN ('member_left', 'group_deleted')),
+    kind                      TEXT NOT NULL,
     recipient_discord_user_id TEXT NOT NULL,
     dedupe_key                TEXT NOT NULL UNIQUE,
     content                   TEXT NOT NULL,
@@ -261,7 +261,9 @@ CREATE TABLE IF NOT EXISTS reading_toc_lookups (
 CREATE INDEX IF NOT EXISTS reading_toc_lookups_group ON reading_toc_lookups(group_id, created_at);
 
 -- 輪読ブックと、その回ごとの予定枠。未開始枠は session_id を持たないため、共通の
--- 案件・タスク・通知を作らない。
+-- 案件・タスク・通知を作らない。session_creation_mode は旧契約の名残で、新規のブックは常に 'all'。
+-- plan_status: legacy（旧ブック・自動進行なし）/ planning（AIの計画待ち）/ awaiting_approval（担当者の承認待ち）/
+--              approved（自動進行中）/ needs_attention（管理者の判断待ち）。
 CREATE TABLE IF NOT EXISTS reading_books (
     id TEXT PRIMARY KEY,
     group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
@@ -274,10 +276,22 @@ CREATE TABLE IF NOT EXISTS reading_books (
     status TEXT NOT NULL CHECK (status IN ('in_progress', 'completed')),
     completed_section_ids TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    period_start TEXT NOT NULL DEFAULT '',
+    period_end TEXT NOT NULL DEFAULT '',
+    duration_minutes INTEGER NOT NULL DEFAULT 0,
+    adjustment_lead_days INTEGER NOT NULL DEFAULT 7,
+    plan_status TEXT NOT NULL DEFAULT 'legacy',
+    plan_version INTEGER NOT NULL DEFAULT 0,
+    plan_summary TEXT NOT NULL DEFAULT '',
+    plan_attempts INTEGER NOT NULL DEFAULT 0,
+    plan_next_at TEXT,
+    plan_reason TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS reading_books_group ON reading_books(group_id, created_at);
 
+-- assignment_status: unassigned / pending（仮担当・未回答）/ accepted / change_requested（候補待ち）/
+--                    change_proposed（候補本人の承認待ち）/ needs_attention（候補を作れない）。
 CREATE TABLE IF NOT EXISTS reading_book_slots (
     id TEXT PRIMARY KEY,
     book_id TEXT NOT NULL REFERENCES reading_books(id) ON DELETE CASCADE,
@@ -285,6 +299,16 @@ CREATE TABLE IF NOT EXISTS reading_book_slots (
     status TEXT NOT NULL CHECK (status IN ('planned', 'active', 'completed')),
     session_id TEXT UNIQUE REFERENCES sessions(id) ON DELETE SET NULL,
     covered_section_ids TEXT NOT NULL DEFAULT '[]',
+    period_start TEXT NOT NULL DEFAULT '',
+    period_end TEXT NOT NULL DEFAULT '',
+    target_section_ids TEXT NOT NULL DEFAULT '[]',
+    assignee_member_id TEXT,
+    assignment_status TEXT NOT NULL DEFAULT 'unassigned',
+    proposed_assignee_member_id TEXT,
+    excluded_member_ids TEXT NOT NULL DEFAULT '[]',
+    change_attempts INTEGER NOT NULL DEFAULT 0,
+    change_next_at TEXT,
+    attention_reason TEXT NOT NULL DEFAULT '',
     UNIQUE (book_id, sequence_number)
 );
 CREATE INDEX IF NOT EXISTS reading_book_slots_book ON reading_book_slots(book_id, sequence_number);
@@ -297,3 +321,30 @@ CREATE TABLE IF NOT EXISTS user_weekly_availability (
     windows    TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+-- 開催3日前の担当者の最終確認。(枠, 担当者) ごとに1行だけ作る。
+-- status: open / confirmed / change_requested / needs_owner（1日前でも未回答）/ superseded（担当交代）。
+CREATE TABLE IF NOT EXISTS reading_slot_confirmations (
+    id           TEXT PRIMARY KEY,
+    slot_id      TEXT NOT NULL REFERENCES reading_book_slots(id) ON DELETE CASCADE,
+    member_id    TEXT NOT NULL REFERENCES members(id),
+    status       TEXT NOT NULL,
+    requested_at TEXT NOT NULL,
+    reminded_at  TEXT,
+    escalated_at TEXT,
+    answered_at  TEXT,
+    UNIQUE (slot_id, member_id)
+);
+
+-- ブックの計画・担当承認・最終確認の履歴（追跡用）。私的な理由は記録しない。
+CREATE TABLE IF NOT EXISTS reading_book_log (
+    seq         INTEGER PRIMARY KEY AUTOINCREMENT,
+    id          TEXT NOT NULL UNIQUE,
+    book_id     TEXT NOT NULL REFERENCES reading_books(id) ON DELETE CASCADE,
+    slot_id     TEXT,
+    member_id   TEXT,
+    kind        TEXT NOT NULL,
+    summary     TEXT NOT NULL,
+    occurred_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS reading_book_log_book ON reading_book_log(book_id, seq);

@@ -33,6 +33,12 @@ func (c *Coordinator) ProcessDue(ctx context.Context) (int, error) {
 		defer c.opts.RunLock.Unlock()
 	}
 	n := 0
+	// ブックの自動進行（全体計画・調整開始・担当確認）。状態から導くため、再処理しても重複しない。
+	bn, err := c.processBookWork(ctx)
+	n += bn
+	if err != nil {
+		return n, fmt.Errorf("ブックの自動進行: %w", err)
+	}
 	for {
 		var due []store.Event
 		if err := c.st.Tx(ctx, func(tx *store.Tx) error {

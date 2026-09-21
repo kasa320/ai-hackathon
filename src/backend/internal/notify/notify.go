@@ -44,7 +44,12 @@ type Message struct {
 var DMKinds = map[string]bool{"task_requested": true, "reminder": true}
 
 // DMOnlyKinds は共通チャンネルへ退避せず、必ず本人との個人チャットだけへ送る通知。
-var DMOnlyKinds = map[string]bool{"member_left": true, "group_deleted": true}
+var DMOnlyKinds = map[string]bool{
+	"member_left": true, "group_deleted": true,
+	// ブックの担当承認・直前確認・週間空き時間の依頼。個人の担当に関わるため本人だけに送る。
+	"book_plan_proposed": true, "book_plan_approved": true, "book_attention": true, "book_assignee_change": true,
+	"book_assignee_confirm": true, "book_assignee_reminder": true, "book_assignee_escalation": true, "availability_requested": true,
+}
 
 type Sender interface {
 	Send(ctx context.Context, m Message) error

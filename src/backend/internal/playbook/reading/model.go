@@ -20,6 +20,9 @@ type SessionData struct {
 	Sections            []Section `json:"sections"`
 	CompletedSectionIDs []string  `json:"completed_section_ids"`
 	TargetSectionIDs    []string  `json:"target_section_ids"`
+	// AssigneeMemberID はブックの全体計画で、この回の担当として本人が承認した人。ある場合、
+	// 発表の担当はこの人に限る（担当の変更は本人の承認を経てこの値ごと更新される）。
+	AssigneeMemberID string `json:"assignee_member_id,omitempty"`
 }
 
 // PreparationData は参加条件の輪読用の型。参加できる時間帯と、担当の辞退。

@@ -70,6 +70,11 @@ func (s *Server) Handler(frontendDir string, mount ...func(mux *http.ServeMux)) 
 	mux.HandleFunc("GET /api/groups/{group_id}/reading/books", s.authed(s.listReadingBooks))
 	mux.HandleFunc("POST /api/groups/{group_id}/reading/books", s.authed(s.createReadingBook))
 	mux.HandleFunc("GET /api/groups/{group_id}/reading/books/{book_id}", s.authed(s.readingBookDetail))
+	mux.HandleFunc("PATCH /api/groups/{group_id}/reading/books/{book_id}", s.authed(s.updateReadingBook))
+	mux.HandleFunc("POST /api/groups/{group_id}/reading/books/{book_id}/plan/regenerate", s.authed(s.regenerateBookPlan))
+	mux.HandleFunc("PUT /api/groups/{group_id}/reading/books/{book_id}/assignments/me", s.authed(s.respondBookAssignment))
+	mux.HandleFunc("PUT /api/groups/{group_id}/reading/books/{book_id}/slots/{slot_id}/assignee-confirmation", s.authed(s.respondAssigneeConfirmation))
+	mux.HandleFunc("POST /api/groups/{group_id}/reading/books/{book_id}/availability-requests", s.authed(s.requestAvailability))
 	mux.HandleFunc("POST /api/groups/{group_id}/reading/books/{book_id}/sessions", s.authed(s.startReadingBookSession))
 	mux.HandleFunc("POST /api/groups/{group_id}/reading/books/{book_id}/sessions/{slot_id}/complete", s.authed(s.completeReadingBookSession))
 	mux.HandleFunc("GET /api/sessions/{session_id}", s.authed(s.getSession))
@@ -392,6 +397,43 @@ func (s *Server) readingBookDetail(w http.ResponseWriter, r *http.Request, sess 
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
+}
+func (s *Server) updateReadingBook(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	gid, bid := r.PathValue("group_id"), r.PathValue("book_id")
+	access := func() error { _, err := s.Coord.CheckGroupAccess(r.Context(), sess.User.ID, gid, true); return err }
+	mutation(s, w, r, sess, access, func(in apitypes.UpdateReadingBookInput, key *store.IdemKey) (store.Response, error) {
+		return s.Coord.UpdateReadingBook(r.Context(), sess.User.ID, gid, bid, in, key)
+	})
+}
+func (s *Server) regenerateBookPlan(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	gid, bid := r.PathValue("group_id"), r.PathValue("book_id")
+	access := func() error { _, err := s.Coord.CheckGroupAccess(r.Context(), sess.User.ID, gid, true); return err }
+	mutation(s, w, r, sess, access, func(in apitypes.RegenerateBookPlanInput, key *store.IdemKey) (store.Response, error) {
+		return s.Coord.RegenerateBookPlan(r.Context(), sess.User.ID, gid, bid, in, key)
+	})
+}
+
+// respondBookAssignment は本人の担当への回答。対象は常に認証済みの本人で、メンバーIDを入力から受け取らない。
+func (s *Server) respondBookAssignment(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	gid, bid := r.PathValue("group_id"), r.PathValue("book_id")
+	access := func() error { _, err := s.Coord.CheckGroupAccess(r.Context(), sess.User.ID, gid, false); return err }
+	mutation(s, w, r, sess, access, func(in apitypes.BookAssignmentInput, key *store.IdemKey) (store.Response, error) {
+		return s.Coord.RespondBookAssignment(r.Context(), sess.User.ID, gid, bid, in, key)
+	})
+}
+func (s *Server) respondAssigneeConfirmation(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	gid, bid, sid := r.PathValue("group_id"), r.PathValue("book_id"), r.PathValue("slot_id")
+	access := func() error { _, err := s.Coord.CheckGroupAccess(r.Context(), sess.User.ID, gid, false); return err }
+	mutation(s, w, r, sess, access, func(in apitypes.AssigneeConfirmationInput, key *store.IdemKey) (store.Response, error) {
+		return s.Coord.RespondAssigneeConfirmation(r.Context(), sess.User.ID, gid, bid, sid, in, key)
+	})
+}
+func (s *Server) requestAvailability(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	gid, bid := r.PathValue("group_id"), r.PathValue("book_id")
+	access := func() error { _, err := s.Coord.CheckGroupAccess(r.Context(), sess.User.ID, gid, true); return err }
+	mutation(s, w, r, sess, access, func(_ struct{}, key *store.IdemKey) (store.Response, error) {
+		return s.Coord.RequestAvailabilityUpdate(r.Context(), sess.User.ID, gid, bid, key)
+	})
 }
 func (s *Server) startReadingBookSession(w http.ResponseWriter, r *http.Request, sess auth.Session) {
 	gid, bid := r.PathValue("group_id"), r.PathValue("book_id")

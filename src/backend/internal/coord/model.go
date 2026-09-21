@@ -42,6 +42,26 @@ type SnapshotMember struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"display_name"`
 	Role        string `json:"role"`
+	// Standing は本人が登録した普段の空き時間（未登録なら nil）。他の人には共有せず、日時候補の計算にだけ使う。
+	Standing *StandingAvailability `json:"-"`
+}
+
+// StandingAvailability はユーザー共通の週間空き時間。曜日は 1=月曜〜7=日曜、時刻は Timezone での0時からの分（終了は最大1440）。
+type StandingAvailability struct {
+	Timezone string           `json:"timezone"`
+	Windows  []StandingWindow `json:"windows"`
+}
+
+type StandingWindow struct {
+	Weekday     int `json:"weekday"`
+	StartMinute int `json:"start_minute"`
+	EndMinute   int `json:"end_minute"`
+}
+
+// BusyInterval は開催候補と重なってはいけない、開催回のメンバーの別の確定済み予定（別ブック・別グループを含む）。
+type BusyInterval struct {
+	StartsAt time.Time `json:"starts_at"`
+	EndsAt   time.Time `json:"ends_at"`
 }
 
 // Preparation は本人が共有を確認した参加条件。Data の型は各 Playbook が定義する。
@@ -106,6 +126,8 @@ type Snapshot struct {
 	ConfirmedPlans  []PlanRecord        `json:"confirmed_plans"`
 	History         []PastSession       `json:"history"`
 	Case            CaseContext         `json:"case"`
+	// BusyIntervals は開催回のメンバーの別の確定済み予定。日時を決める案はこれと重ならない。
+	BusyIntervals []BusyInterval `json:"-"`
 }
 
 // Preparation は指定メンバーの参加条件を返す。未回答なら nil。
