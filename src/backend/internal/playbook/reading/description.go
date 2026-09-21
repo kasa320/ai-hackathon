@@ -7,16 +7,13 @@ import (
 	"time"
 )
 
+// PreparationRequest は参加条件の確認依頼の文面。1行目は目的（Web ではこの行だけを出す）。
 func (Playbook) PreparationRequest(s coord.Snapshot, memberID string) string {
 	p, d := preparationData(s, memberID)
 	if s.ScheduleStatus == coord.ScheduleProposed && (p == nil || d.Schedule == nil || d.Schedule.Status == "unknown") {
-		text := fmt.Sprintf("%s〜%sの開催日時を決めるため、次の予定を教えてください。\n・参加できる曜日または日付と時間帯（日本時間）\n・1回に参加できる最大時間\n・終日参加できない日（なければ「なし」）\n時間帯の回答例：水 20:00-22:00 60分\nまだ分からなければ「未定」と答えられます。", s.PeriodStart, s.PeriodEnd)
-		if p == nil {
-			text += "\n続けて、輪読への参加希望・読んだ範囲・説明を担当できる範囲と分数も確認します。"
-		}
-		return text
+		return fmt.Sprintf("%s〜%sのどこかで開く日程を決めるため、参加できそうな日や時間帯を教えてください。\n「平日の夜なら」「土曜の午後」のように、ふだんの言葉で返信してもらえれば大丈夫です。\nまだ分からなければ「未定」、今回は難しければ「欠席」と送ってください。", shortDate(s.PeriodStart), shortDate(s.PeriodEnd))
 	}
-	return "今回の進行と担当を決めるため、次の内容を教えてください。\n・参加できるか（参加／欠席）\n・読んできた範囲\n・説明を担当できるか（はい／いいえ）\n・担当できる場合、その範囲と説明できる分数\n担当できない場合も、そのまま回答してください。欠席や辞退の理由は不要です。"
+	return "今回の会に参加できるか教えてください。\n「参加します」「欠席します」のように返信してもらえれば大丈夫です。欠席の理由は不要です。"
 }
 
 func (Playbook) DescribePlan(sessionRaw, planRaw json.RawMessage, duration int, memberNames map[string]string) ([]string, error) {

@@ -10,8 +10,8 @@ import (
 	"github.com/kasa320/ai-hackathon/src/backend/internal/apitypes"
 )
 
-// E02：中心の流れ。B が辞退 → AI が C に確認 → C が「第2節なら15分」と回答 → 範囲を縮めた案 →
-// C 本人の引き受けと参加予定者の過半数で確定 → 計画・未消化範囲を保存 → Discord に通知。
+// E02：中心の流れ。B が担当を辞退 → AI が辞退していない C に全範囲を割り振り直す →
+// 進行表が変わるので、C 本人の引き受けと参加予定者の過半数で確定 → 計画を保存 → Discord に通知。
 func TestReplanDemoFlow(t *testing.T) {
 	s := newServer(t)
 	seed := s.seed("replan_demo")
@@ -20,7 +20,7 @@ func TestReplanDemoFlow(t *testing.T) {
 
 	d := p["B"].detail(id)
 	if d.Session.Status != "confirmed" || d.ConfirmedPlan == nil || !d.Permissions.CanWithdrawAssignment {
-		t.Fatalf("初期状態：B の担当で確定済みのはず: %s", dump(d.Session))
+		t.Fatalf("初期状態：B と C の担当で確定済みのはず: %s", dump(d.Session))
 	}
 	initialPlan := d.ConfirmedPlan.ID
 	rev := d.Session.Revision
@@ -36,25 +36,20 @@ func TestReplanDemoFlow(t *testing.T) {
 		t.Fatalf("辞退後は要調整。以前の確定計画は履歴として残す: %s", dump(d.Session))
 	}
 
-	// 2. AI（仮の判断処理）が、担当できる人がいないため準備済みの C に確認する。
+	// 2. AI（仮の判断処理）が、辞退していない C に全範囲を割り振り直す。準備状況の確認依頼は出さない。
 	s.process()
-	if p["C"].openTask(id, "preparation") == nil {
-		t.Fatalf("C への確認依頼がない: %s", dump(p["A"].detail(id).ActiveCase))
+	for _, name := range []string{"A", "B", "C", "D"} {
+		if p[name].openTask(id, "preparation") != nil {
+			t.Fatalf("%s に確認依頼を出した", name)
+		}
 	}
-	if p["B"].openTask(id, "preparation") != nil || p["D"].openTask(id, "preparation") != nil {
-		t.Fatal("辞退した B・準備していない D には依頼しない")
-	}
-	if !sentTo(s, persona["C"]) {
-		t.Fatal("C への依頼が Discord に通知されていない")
-	}
-
-	// 3. C が「第2節なら15分説明できる」と回答する。参加条件の回答では引き受けにならない。
-	p["C"].submitPreparation(id, "attending", prepData(true, []string{"sec_1", "sec_2"}, []string{"sec_2"}, 15)).mustStatus(t, http.StatusAccepted)
-	s.process()
 	d = p["C"].detail(id)
 	prop := d.CurrentProposal
 	if prop == nil || prop.Status != "pending" || prop.ChangeKind != "replan" || prop.Author != "agent" || d.ActiveCase.Status != "awaiting_consent" {
 		t.Fatalf("再計画の案がない: %s", dump(d.ActiveCase))
+	}
+	if !sentTo(s, persona["C"]) {
+		t.Fatal("C への依頼が Discord に通知されていない")
 	}
 	var plan struct {
 		Covered  []string `json:"covered_section_ids"`
@@ -67,9 +62,9 @@ func TestReplanDemoFlow(t *testing.T) {
 	}
 	_ = json.Unmarshal(prop.Data, &plan)
 	cID := memberID(t, d, "C")
-	if !reflect.DeepEqual(plan.Covered, []string{"sec_2"}) || !reflect.DeepEqual(plan.Deferred, []string{"sec_3"}) ||
-		plan.Agenda[0].Activity != "presentation" || str(plan.Agenda[0].Presenter) != cID || plan.Agenda[0].Minutes != 15 {
-		t.Fatalf("C の条件（第2節・15分）に沿った案になっていない: %s", prop.Data)
+	if !reflect.DeepEqual(plan.Covered, []string{"sec_2", "sec_3"}) || len(plan.Deferred) != 0 ||
+		plan.Agenda[0].Activity != "presentation" || str(plan.Agenda[0].Presenter) != cID {
+		t.Fatalf("C が全範囲を担当する案になっていない: %s", prop.Data)
 	}
 	total := 0
 	for _, a := range plan.Agenda {
@@ -98,7 +93,7 @@ func TestReplanDemoFlow(t *testing.T) {
 	}
 	p["C"].respond(id, "assignment", "accept").mustStatus(t, http.StatusAccepted)
 
-	// 5. 必要な条件が揃うとバックエンドが確定する。未消化範囲（sec_3）も保存される。
+	// 5. 必要な条件が揃うとバックエンドが確定する。
 	d = p["D"].detail(id)
 	if d.Session.Status != "confirmed" || d.ConfirmedPlan == nil || d.ConfirmedPlan.ID != prop.ID || d.ActiveCase.Status != "confirmed" {
 		t.Fatalf("確定していない: %s", dump(d.Session))
@@ -136,7 +131,7 @@ func TestReplanDemoFlow(t *testing.T) {
 			t.Fatalf("履歴に %s がない: %v", k, kinds)
 		}
 	}
-	if act.Summary.CaseID == nil || *act.Summary.CaseID != acc.CaseID || act.Summary.ToolCallCount < 2 || act.Summary.LLMCallCount != 0 || len(act.Summary.Costs) != 0 {
+	if act.Summary.CaseID == nil || *act.Summary.CaseID != acc.CaseID || act.Summary.ToolCallCount < 1 || act.Summary.LLMCallCount != 0 || len(act.Summary.Costs) != 0 {
 		t.Fatalf("集計（fake モードは LLM 0回・費用なし）: %s", dump(act.Summary))
 	}
 	for i := 1; i < len(act.Items); i++ {
@@ -149,17 +144,18 @@ func TestReplanDemoFlow(t *testing.T) {
 	}
 }
 
-// E01：C が全範囲を担当できる場合は、範囲・進行表が同じ「担当だけの変更」になり、C 本人の引き受けだけで確定する。
+// E01：D も担当できる場合は、辞退した B の分だけを D に回す「担当だけの変更」になり、
+// 担当者本人の引き受けだけで確定する（投票は要らない）。
 func TestPresenterOnlyChangeNeedsOnlyAcceptance(t *testing.T) {
 	s := newServer(t)
 	seed := s.seed("replan_demo")
 	p := s.personas()
 	id := seed.SessionID
 
-	rev := p["C"].detail(id).Session.Revision
-	p["C"].send(http.MethodPut, "/api/sessions/"+id+"/preparations/me", map[string]any{
+	rev := p["D"].detail(id).Session.Revision
+	p["D"].send(http.MethodPut, "/api/sessions/"+id+"/preparations/me", map[string]any{
 		"expected_revision": rev,
-		"preparation":       map[string]any{"attendance": "attending", "data": prepData(true, []string{"sec_1", "sec_2", "sec_3"}, []string{"sec_2", "sec_3"}, 30)},
+		"preparation":       map[string]any{"attendance": "attending", "data": prepData(false)},
 	}).mustStatus(t, http.StatusAccepted)
 	if d := p["A"].detail(id); d.Session.Status != "confirmed" {
 		t.Fatal("確定計画に影響しない参加条件の変更で要調整にしない")
@@ -167,15 +163,16 @@ func TestPresenterOnlyChangeNeedsOnlyAcceptance(t *testing.T) {
 	p["B"].withdraw(id, "assignment").mustStatus(t, http.StatusAccepted)
 	s.process()
 	d := p["C"].detail(id)
-	if d.CurrentProposal == nil || len(d.CurrentProposal.Approvals) != 0 || len(d.CurrentProposal.Assignments) != 1 {
+	if d.CurrentProposal == nil || len(d.CurrentProposal.Approvals) != 0 || len(d.CurrentProposal.Assignments) != 2 {
 		t.Fatalf("担当だけの変更は承認不要: %s", dump(d.CurrentProposal))
 	}
 	if p["A"].openTask(id, "approval") != nil {
 		t.Fatal("投票タスクを作らない")
 	}
 	p["C"].respond(id, "assignment", "accept").mustStatus(t, http.StatusAccepted)
+	p["D"].respond(id, "assignment", "accept").mustStatus(t, http.StatusAccepted)
 	if d := p["A"].detail(id); d.Session.Status != "confirmed" || d.ConfirmedPlan.ID != d.CurrentProposal.ID {
-		t.Fatalf("C の引き受けで確定するはず: %s", dump(d.Session))
+		t.Fatalf("担当者の引き受けで確定するはず: %s", dump(d.Session))
 	}
 }
 

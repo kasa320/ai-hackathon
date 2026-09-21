@@ -126,49 +126,42 @@ func (d SessionData) sectionSet() idSet {
 	return s
 }
 
+// legacyPreparationKeys は以前の参加条件にあった準備状況の項目。保存済みの値や古い画面から
+// 送られてきても無視する（準備状況は聞かなくなった）。それ以外の未知の項目は今までどおり拒否する。
+var legacyPreparationKeys = []string{"willing_to_present", "prepared_section_ids", "explainable_section_ids", "max_presentation_minutes"}
+
+func dropLegacyKeys(raw json.RawMessage) json.RawMessage {
+	var m map[string]json.RawMessage
+	if json.Unmarshal(raw, &m) != nil {
+		return raw
+	}
+	changed := false
+	for _, k := range legacyPreparationKeys {
+		if _, ok := m[k]; ok {
+			delete(m, k)
+			changed = true
+		}
+	}
+	if !changed {
+		return raw
+	}
+	return mustJSON(m)
+}
+
 // ValidatePreparation は参加条件を検証する（docs/data-structure.md）。
 func (Playbook) ValidatePreparation(_ context.Context, s coord.Snapshot, attendance string, raw json.RawMessage) (json.RawMessage, error) {
-	sd, err := sessionData(s)
-	if err != nil {
-		return nil, err
-	}
 	var d PreparationData
-	if err := decodeStrict(raw, &d); err != nil {
+	if err := decodeStrict(dropLegacyKeys(raw), &d); err != nil {
 		return nil, decodeError(err)
 	}
-	d.PreparedSectionIDs = nonNil(d.PreparedSectionIDs)
-	d.ExplainableSectionIDs = nonNil(d.ExplainableSectionIDs)
 	d.UnavailableDates = nonNil(d.UnavailableDates)
 
 	v := &coord.ValidationError{}
 	d.UnavailableDates = validateDates(v, "unavailable_dates", d.UnavailableDates)
 	validateAvailability(v, d.Schedule)
-	known := sd.sectionSet()
-	checkIDList(v, "prepared_section_ids", d.PreparedSectionIDs, known)
-	checkIDList(v, "explainable_section_ids", d.ExplainableSectionIDs, known)
-	prepared := newIDSet(d.PreparedSectionIDs)
-	for i, id := range d.ExplainableSectionIDs {
-		if !prepared.has(id) {
-			v.Add(fmt.Sprintf("explainable_section_ids[%d]", i), "説明できる節は読んできた節から選んでください")
-		}
-	}
-	if attendance == coord.AttendanceAttending && d.WillingToPresent {
-		if len(d.ExplainableSectionIDs) == 0 {
-			v.Add("explainable_section_ids", "担当できる場合は説明できる節を1件以上選んでください")
-		}
-		if d.MaxPresentationMinutes < 1 || d.MaxPresentationMinutes > s.DurationMinutes {
-			v.Add("max_presentation_minutes", "持ち時間以内で指定してください")
-		}
-	} else {
-		if d.WillingToPresent {
-			v.Add("willing_to_present", "欠席する場合は担当できません")
-		}
-		if len(d.ExplainableSectionIDs) != 0 {
-			v.Add("explainable_section_ids", "担当しない場合は空にしてください")
-		}
-		if d.MaxPresentationMinutes != 0 {
-			v.Add("max_presentation_minutes", "担当しない場合は0にしてください")
-		}
+	if attendance == coord.AttendanceAbsent {
+		// 欠席する人には担当を割り振らないので、辞退の印は要らない
+		d.DeclinedPresentation = false
 	}
 	if err := v.Err(); err != nil {
 		return nil, err
@@ -176,88 +169,53 @@ func (Playbook) ValidatePreparation(_ context.Context, s coord.Snapshot, attenda
 	return mustJSON(d), nil
 }
 
-// ValidatePartialPreparation は対話の途中の値を検証する。未確定の項目を許し、
-// 確定した値から導ける従属値だけを正規化する。保存直前には ValidatePreparation を別に通す。
-//
-// ValidatePreparation は「担当できるなら説明できる節1件以上と1分以上」を求めるため、
-// 「説明できます」とだけ答えた段階には当てられない。ここで見るのは型・登録済みの節ID・分数の範囲だけ。
+// ValidatePartialPreparation は対話の途中の値を検証する。未確定の項目を許す。
+// 保存直前には ValidatePreparation を別に通す。
 func (Playbook) ValidatePartialPreparation(_ context.Context, s coord.Snapshot, attendance string, raw json.RawMessage, unclear []string) (json.RawMessage, []string, error) {
-	sd, err := sessionData(s)
-	if err != nil {
-		return nil, nil, err
-	}
 	var d PreparationData
-	if err := decodeStrict(raw, &d); err != nil {
+	if err := decodeStrict(dropLegacyKeys(raw), &d); err != nil {
 		return nil, nil, decodeError(err)
 	}
-	d.PreparedSectionIDs = nonNil(d.PreparedSectionIDs)
-	d.ExplainableSectionIDs = nonNil(d.ExplainableSectionIDs)
+	d.UnavailableDates = nonNil(d.UnavailableDates)
 
 	v := &coord.ValidationError{}
-	known := sd.sectionSet()
-	checkIDList(v, "prepared_section_ids", d.PreparedSectionIDs, known)
-	checkIDList(v, "explainable_section_ids", d.ExplainableSectionIDs, known)
-	if d.MaxPresentationMinutes < 0 || d.MaxPresentationMinutes > s.DurationMinutes {
-		v.Add("max_presentation_minutes", "0分以上、持ち時間（%d分）以内で指定してください", s.DurationMinutes)
-	}
 	open := newIDSet(unclear)
 	d.UnavailableDates = validateDates(v, SlotUnavailable, d.UnavailableDates)
 	validateAvailability(v, d.Schedule)
-	if s.ScheduleStatus != coord.ScheduleProposed {
+	// 出られない日は本人が言ったときだけ反映する。こちらからは聞かない
+	delete(open, SlotUnavailable)
+	delete(open, SlotDeclined)
+	switch {
+	case s.ScheduleStatus != coord.ScheduleProposed:
 		delete(open, SlotSchedule)
-		delete(open, SlotUnavailable)
-	} else if d.Schedule == nil {
+	case attendance == coord.AttendanceAbsent && !open.has(coord.SlotAttendance):
+		// 欠席なら時間帯は聞かない
+		delete(open, SlotSchedule)
+	case d.Schedule == nil:
 		open[SlotSchedule] = struct{}{}
-	}
-	// 部分集合の関係は、両方が確定してから確かめる（勝手に「読んできた節」を増やさない）。
-	if !open.has(SlotPrepared) && !open.has(SlotExplainable) {
-		prepared := newIDSet(d.PreparedSectionIDs)
-		for i, id := range d.ExplainableSectionIDs {
-			if !prepared.has(id) {
-				v.Add(fmt.Sprintf("explainable_section_ids[%d]", i), "説明できる節は読んできた節から選んでください")
-			}
-		}
 	}
 	if err := v.Err(); err != nil {
 		return nil, nil, err
 	}
-
-	// 確定した値から決まる従属値の正規化。結果は確認画面にそのまま出す。
-	if (attendance == coord.AttendanceAbsent && !open.has(coord.SlotAttendance)) ||
-		(!d.WillingToPresent && !open.has(SlotWilling)) {
-		d.WillingToPresent = false
-		d.ExplainableSectionIDs = []string{}
-		d.MaxPresentationMinutes = 0
-		delete(open, SlotWilling)
-		delete(open, SlotExplainable)
-		delete(open, SlotMinutes)
-	}
-	if !open.has(SlotExplainable) && !open.has(SlotMinutes) && !open.has(coord.SlotAttendance) {
-		// 説明できる節と分数が確定すれば、担当できるかも決まる。
-		d.WillingToPresent = attendance == coord.AttendanceAttending && len(d.ExplainableSectionIDs) > 0 && d.MaxPresentationMinutes > 0
-		delete(open, SlotWilling)
-		if !d.WillingToPresent {
-			d.ExplainableSectionIDs = []string{}
-			d.MaxPresentationMinutes = 0
-		}
+	if attendance == coord.AttendanceAbsent && !open.has(coord.SlotAttendance) {
+		d.DeclinedPresentation = false
 	}
 	return mustJSON(d), orderedSlots(open), nil
 }
 
-// ApplyWithdrawal は辞退時の変換（docs/data-structure.md）。準備済みの節は維持する。
+// ApplyWithdrawal は辞退時の変換（docs/data-structure.md）。担当の辞退の印を付け、予定はそのまま残す。
 func (Playbook) ApplyWithdrawal(_ context.Context, _ coord.Snapshot, _ string, current json.RawMessage) (json.RawMessage, error) {
-	d := PreparationData{PreparedSectionIDs: []string{}, UnavailableDates: []string{}}
+	d := PreparationData{UnavailableDates: []string{}}
 	if len(current) > 0 {
 		var cur PreparationData
 		if err := json.Unmarshal(current, &cur); err != nil {
 			return nil, fmt.Errorf("reading: 参加条件を読めません: %w", err)
 		}
-		d.PreparedSectionIDs = nonNil(cur.PreparedSectionIDs)
-		// 出られない日は担当の辞退では変わらない。本人が答えた予定なので引き継ぐ。
+		// 出られない日・参加できる時間帯は担当の辞退では変わらない。本人が答えた予定なので引き継ぐ。
 		d.UnavailableDates = nonNil(cur.UnavailableDates)
 		d.Schedule = cur.Schedule
 	}
-	d.ExplainableSectionIDs = []string{}
+	d.DeclinedPresentation = true
 	return mustJSON(d), nil
 }
 
@@ -338,7 +296,7 @@ func (pb Playbook) ValidatePlan(_ context.Context, s coord.Snapshot, prop coord.
 	inAgenda := idSet{}
 	itemIDs := idSet{}
 	total := 0
-	minutesByPresenter := map[string]int{}
+	declined := newIDSet(s.Case.DeclinedMemberIDs)
 	for i, item := range p.Agenda {
 		path := fmt.Sprintf("agenda[%d]", i)
 		if !validID(item.ID) {
@@ -377,19 +335,10 @@ func (pb Playbook) ValidatePlan(_ context.Context, s coord.Snapshot, prop coord.
 		switch {
 		case prep == nil || prep.Attendance != coord.AttendanceAttending:
 			v.Add(path+".presenter_member_id", "担当者は参加予定のメンバーから選んでください")
-		case !pd.WillingToPresent:
-			v.Add(path+".presenter_member_id", "この人は今回担当できないと回答しています")
-		default:
-			explainable := newIDSet(pd.ExplainableSectionIDs)
-			for j, id := range item.SectionIDs {
-				if !explainable.has(id) {
-					v.Add(fmt.Sprintf("%s.section_ids[%d]", path, j), "担当者が説明できる節ではありません")
-				}
-			}
-			minutesByPresenter[pid] += item.Minutes
-			if minutesByPresenter[pid] > pd.MaxPresentationMinutes {
-				v.Add(path+".minutes", "担当者が説明できる時間（%d分）を超えています", pd.MaxPresentationMinutes)
-			}
+		case pd.DeclinedPresentation:
+			v.Add(path+".presenter_member_id", "この人は今回の担当を辞退しています")
+		case declined.has(pid):
+			v.Add(path+".presenter_member_id", "この人はこの案件で担当を引き受けられないと答えています")
 		}
 	}
 	for i, id := range p.CoveredSectionIDs {
@@ -521,12 +470,6 @@ var _ coord.PreparationDiffer = Playbook{}
 
 // DiffPreparation は参加条件の変更点を1行ずつ返す（活動記録用）。理由や原文は含めない。
 func (Playbook) DiffPreparation(s coord.Snapshot, before *coord.Preparation, after coord.Preparation) []string {
-	titles := map[string]string{}
-	if sd, err := sessionData(s); err == nil {
-		for _, sec := range sd.Sections {
-			titles[sec.ID] = sec.Title
-		}
-	}
 	var old PreparationData
 	oldAttendance := ""
 	if before != nil {
@@ -549,15 +492,30 @@ func (Playbook) DiffPreparation(s coord.Snapshot, before *coord.Preparation, aft
 		}
 	}
 	add("参加", attendanceLabel(oldAttendance), attendanceLabel(after.Attendance))
-	add("説明の担当", willingLabel(old.WillingToPresent), willingLabel(now.WillingToPresent))
-	add("読んできた範囲", sectionsLabel(titles, old.PreparedSectionIDs), sectionsLabel(titles, now.PreparedSectionIDs))
-	add("説明できる範囲", sectionsLabel(titles, old.ExplainableSectionIDs), sectionsLabel(titles, now.ExplainableSectionIDs))
-	add("説明できる時間", minutesLabel(old.MaxPresentationMinutes), minutesLabel(now.MaxPresentationMinutes))
 	if s.ScheduleStatus == coord.ScheduleProposed || old.Schedule != nil || now.Schedule != nil {
-		add("日程条件", strings.Join(scheduleLines(old.Schedule), "／"), strings.Join(scheduleLines(now.Schedule), "／"))
-		add("出られない日", strings.Join(old.UnavailableDates, "、"), strings.Join(now.UnavailableDates, "、"))
+		add("参加できる時間帯", strings.Join(scheduleLines(old.Schedule), "／"), strings.Join(scheduleLines(now.Schedule), "／"))
+	}
+	if len(old.UnavailableDates) > 0 || len(now.UnavailableDates) > 0 {
+		add("出られない日", datesLabel(old.UnavailableDates), datesLabel(now.UnavailableDates))
+	}
+	if old.DeclinedPresentation || now.DeclinedPresentation {
+		add("説明の担当", declinedLabel(old.DeclinedPresentation), declinedLabel(now.DeclinedPresentation))
 	}
 	return lines
+}
+
+func datesLabel(dates []string) string {
+	if len(dates) == 0 {
+		return "なし"
+	}
+	return strings.Join(dates, "、")
+}
+
+func declinedLabel(v bool) string {
+	if v {
+		return "今回は辞退"
+	}
+	return "割り振り可"
 }
 
 func attendanceLabel(a string) string {
@@ -566,15 +524,6 @@ func attendanceLabel(a string) string {
 	}
 	return "参加"
 }
-
-func willingLabel(v bool) string {
-	if v {
-		return "できる"
-	}
-	return "できない"
-}
-
-func minutesLabel(n int) string { return fmt.Sprintf("%d分", n) }
 
 // sectionsLabel は節IDを題名に直して並べる。題名が分からないIDはそのまま出す。
 func sectionsLabel(titles map[string]string, ids []string) string {

@@ -22,12 +22,14 @@ type SessionData struct {
 	TargetSectionIDs    []string  `json:"target_section_ids"`
 }
 
-// PreparationData は参加条件の輪読用の型。準備状況と担当できる範囲、出られない日。
+// PreparationData は参加条件の輪読用の型。参加できる時間帯と、担当の辞退。
+//
+// 輪読は日程を決めてから範囲を読んでくるので、準備状況（読んできた範囲・説明できる範囲）は聞かない。
+// 説明の担当は AI が割り振り、割り振られた本人が引き受けるかを答える。
 type PreparationData struct {
-	WillingToPresent       bool     `json:"willing_to_present"`
-	PreparedSectionIDs     []string `json:"prepared_section_ids"`
-	ExplainableSectionIDs  []string `json:"explainable_section_ids"`
-	MaxPresentationMinutes int      `json:"max_presentation_minutes"`
+	// DeclinedPresentation は本人が今回の説明の担当を辞退したこと（「担当を辞退する」）。
+	// true の人には担当を割り振らない。
+	DeclinedPresentation bool `json:"declined_presentation"`
 	// UnavailableDates は出られない日（YYYY-MM-DD、JST）。日時がまだ決まっていない回で使う。
 	// 参加可能時間の申告より優先する終日不可の例外。
 	UnavailableDates []string              `json:"unavailable_dates"`
@@ -37,10 +39,12 @@ type PreparationData struct {
 // ScheduleAvailability contains only the member's confirmed scheduling constraints.
 // Times are JST; free-form explanations never cross this boundary.
 type ScheduleAvailability struct {
-	Status             string         `json:"status"`
-	WeeklyWindows      []WeeklyWindow `json:"weekly_windows"`
-	DateWindows        []DateWindow   `json:"date_windows"`
-	MaxDurationMinutes int            `json:"max_duration_minutes"`
+	Status        string         `json:"status"`
+	WeeklyWindows []WeeklyWindow `json:"weekly_windows"`
+	DateWindows   []DateWindow   `json:"date_windows"`
+	// MaxDurationMinutes は本人が自分から言った1回の参加時間の上限。0 は指定なし（聞かない）。
+	// 会の長さより短い時間帯は、上限がなくても候補にならない。
+	MaxDurationMinutes int `json:"max_duration_minutes"`
 }
 
 type WeeklyWindow struct {

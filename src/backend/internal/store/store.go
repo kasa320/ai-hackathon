@@ -53,6 +53,12 @@ func open(ctx context.Context, dsn string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	// 以前は自動の回名が「第N回」だけだった。会の名前を前に付ける（付け済みの回は対象外）。
+	if _, err := db.ExecContext(ctx, `UPDATE sessions SET title = (SELECT name FROM groups WHERE groups.id = sessions.group_id) || ' ' || title
+		WHERE title GLOB '第[0-9]*回' AND EXISTS (SELECT 1 FROM groups WHERE groups.id = sessions.group_id)`); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("回名の更新: %w", err)
+	}
 	return &Store{db: db}, nil
 }
 

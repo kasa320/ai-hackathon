@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/kasa320/ai-hackathon/src/backend/internal/apitypes"
@@ -65,6 +66,30 @@ type Interpretation struct {
 	// OutOfScope は参加条件の変更では扱えない依頼の分類。空なら扱える。
 	// 空でないとき、このターンの候補は全体を捨てて値を変えない。
 	OutOfScope string `json:"out_of_scope"`
+	// Question は AI が書いた、未確定の項目を本人に聞く質問文。対話でだけ使い、
+	// 送る前に CleanQuestion を通す。空なら用途の既定の文を使う。
+	Question string `json:"-"`
+}
+
+// CleanQuestion は AI が書いた質問文を、本人へ送れる形に整える。使えなければ空を返す。
+// 改行・メンション記号・URL・制御文字を落とし、長すぎる文は使わない（既定の文に戻す）。
+func CleanQuestion(q string) string {
+	q = strings.Join(strings.Fields(q), " ")
+	if q == "" || utf8.RuneCountInString(q) > 200 {
+		return ""
+	}
+	lower := strings.ToLower(q)
+	for _, bad := range []string{"http", "://", "www.", "discord.gg", "@", "<", ">", "`"} {
+		if strings.Contains(lower, bad) {
+			return ""
+		}
+	}
+	for _, r := range q {
+		if unicode.IsControl(r) {
+			return ""
+		}
+	}
+	return q
 }
 
 // InterpretRequest は1回の解釈への入力。

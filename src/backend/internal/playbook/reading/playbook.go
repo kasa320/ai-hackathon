@@ -56,6 +56,7 @@ type aiMember struct {
 	Attendance           string           `json:"attendance,omitempty"`
 	Preparation          *PreparationData `json:"preparation,omitempty"`
 	ConsecutiveSubstitue int              `json:"consecutive_substitute_count"`
+	PastPresentations    int              `json:"past_presentation_count"`
 	CurrentPresenter     bool             `json:"presenter_in_current_plan"`
 }
 
@@ -84,7 +85,7 @@ func (Playbook) BuildContext(_ context.Context, s coord.Snapshot) (json.RawMessa
 		}
 	}
 	for _, m := range s.Members {
-		am := aiMember{ID: m.ID, DisplayName: m.DisplayName, Role: m.Role, ConsecutiveSubstitue: consecutiveSubstituteCount(s, m.ID), CurrentPresenter: current.has(m.ID)}
+		am := aiMember{ID: m.ID, DisplayName: m.DisplayName, Role: m.Role, ConsecutiveSubstitue: consecutiveSubstituteCount(s, m.ID), PastPresentations: pastPresentations(s, m.ID), CurrentPresenter: current.has(m.ID)}
 		if p, pd := preparationData(s, m.ID); p != nil {
 			am.Answered = true
 			am.Attendance = p.Attendance

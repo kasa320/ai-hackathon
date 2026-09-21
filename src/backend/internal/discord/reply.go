@@ -24,7 +24,7 @@ const (
 	msgStarted     = "この開催回は開催時刻を過ぎているため、変更できません。"
 	msgConfirmAsk  = "上の参加条件が合っていれば「参加条件を保存する」を押してください。直したい項目は、このDMに訂正内容を返信してください。日程案への同意・担当の引き受けは「回答」から別に行います。"
 	msgOutOfScope  = "その内容は参加条件の項目では扱えません。"
-	msgHelp        = "「参加条件」で予定・準備状況の入力、「回答」で日程案の確認・同意・担当の引き受け、「予定」で今の参加条件、「取消」で下書きの取り消し、「変更」で対象の選び直しができます。"
+	msgHelp        = "「参加条件」で参加できる日時の入力、「回答」で日程案の確認・同意・担当の引き受け、「予定」で今の参加条件、「取消」で下書きの取り消し、「変更」で対象の選び直しができます。"
 )
 
 // outOfScopeHint は扱えない依頼の種類ごとの案内。分類は案内にだけ使い、認可の代わりにはしない。
@@ -33,11 +33,11 @@ func outOfScopeHint(kind string) string {
 	case coord.OutOfScopeScheduleChange:
 		return msgOutOfScope + "日程の変更は管理者に相談してください。"
 	case coord.OutOfScopePartialAttendance:
-		return msgOutOfScope + "日時調整中なら、本人の参加できる時間帯と最大参加時間を教えてください。"
+		return msgOutOfScope + "日時調整中なら、ご自身の参加できる日や時間帯を教えてください。"
 	case coord.OutOfScopeOtherMember:
 		return msgOutOfScope + "登録できるのはご本人の予定だけです。"
 	default:
-		return msgOutOfScope + "本人の参加可否・参加可能時間・準備状況だけを送ってください。案への同意は「回答」からボタンで行えます。"
+		return msgOutOfScope + "ご自身が参加できるかと、参加できる日や時間帯を送ってください。案への同意は「回答」からボタンで行えます。"
 	}
 }
 

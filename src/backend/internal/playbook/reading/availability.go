@@ -77,8 +77,9 @@ func validateAvailability(v *coord.ValidationError, a *ScheduleAvailability) {
 		if len(a.WeeklyWindows)+len(a.DateWindows) == 0 {
 			v.Add(SlotSchedule, "参加できる時間帯を1つ以上指定してください")
 		}
-		if a.MaxDurationMinutes < 1 || a.MaxDurationMinutes > 480 {
-			v.Add(SlotSchedule, "最大参加時間は1〜480分です")
+		// 最大参加時間は聞かない。本人が言ったときだけ入る（0 は指定なし）
+		if a.MaxDurationMinutes < 0 || a.MaxDurationMinutes > 480 {
+			v.Add(SlotSchedule, "最大参加時間は0（指定なし）〜480分です")
 		}
 	case "unknown", "unavailable":
 		if len(a.WeeklyWindows)+len(a.DateWindows) != 0 || a.MaxDurationMinutes != 0 {
@@ -112,7 +113,7 @@ type minuteWindow struct{ start, end int }
 
 func availableWindows(d PreparationData, day time.Time, duration int) []minuteWindow {
 	a := d.Schedule
-	if a == nil || a.Status != "provided" || a.MaxDurationMinutes < duration {
+	if a == nil || a.Status != "provided" || (a.MaxDurationMinutes > 0 && a.MaxDurationMinutes < duration) {
 		return nil
 	}
 	date := day.Format(dateLayout)
@@ -199,7 +200,10 @@ func scheduleLines(a *ScheduleAvailability) []string {
 	if a.Status == "unavailable" {
 		return []string{"参加できる時間帯：期間内は参加できません"}
 	}
-	out := []string{fmt.Sprintf("最大参加時間：%d分（JST）", a.MaxDurationMinutes)}
+	var out []string
+	if a.MaxDurationMinutes > 0 {
+		out = append(out, fmt.Sprintf("最大参加時間：%d分", a.MaxDurationMinutes))
+	}
 	for _, w := range a.WeeklyWindows {
 		out = append(out, fmt.Sprintf("毎週%s曜 %s〜%s", weekdayJA[w.Weekday], w.Start, w.End))
 	}
@@ -213,25 +217,28 @@ func scheduleLines(a *ScheduleAvailability) []string {
 func parseScheduleText(text string) (*ScheduleAvailability, bool) {
 	t := strings.TrimSpace(text)
 	if t == "未定" {
-		return &ScheduleAvailability{Status: "unknown"}, true
+		return &ScheduleAvailability{Status: "unknown", WeeklyWindows: []WeeklyWindow{}, DateWindows: []DateWindow{}}, true
 	}
 	if t == "期間内は参加不可" {
-		return &ScheduleAvailability{Status: "unavailable"}, true
+		return &ScheduleAvailability{Status: "unavailable", WeeklyWindows: []WeeklyWindow{}, DateWindows: []DateWindow{}}, true
 	}
-	// Example: 水 20:00-22:00 60分 / 2026-10-07 21:00-22:00 60分
+	// Example: 水 20:00-22:00 ／ 2026-10-07 21:00-22:00（末尾に「60分」があれば最大参加時間）
 	parts := strings.Fields(t)
-	if len(parts) != 3 {
+	if len(parts) != 2 && len(parts) != 3 {
 		return nil, false
 	}
 	span := strings.Split(parts[1], "-")
 	if len(span) != 2 {
 		return nil, false
 	}
-	n, err := strconv.Atoi(strings.TrimSuffix(parts[2], "分"))
-	if err != nil {
-		return nil, false
+	n := 0
+	if len(parts) == 3 {
+		var err error
+		if n, err = strconv.Atoi(strings.TrimSuffix(parts[2], "分")); err != nil {
+			return nil, false
+		}
 	}
-	a := &ScheduleAvailability{Status: "provided", MaxDurationMinutes: n}
+	a := &ScheduleAvailability{Status: "provided", MaxDurationMinutes: n, WeeklyWindows: []WeeklyWindow{}, DateWindows: []DateWindow{}}
 	for day, label := range weekdayJA {
 		if parts[0] == label || parts[0] == label+"曜" || parts[0] == label+"曜日" {
 			a.WeeklyWindows = []WeeklyWindow{{day, span[0], span[1]}}

@@ -16,16 +16,16 @@ func TestAccessControl(t *testing.T) {
 	id := seed.SessionID
 	p["B"].withdraw(id, "assignment").mustStatus(t, 202)
 	s.process()
-	cTask := p["C"].openTask(id, "preparation")
+	cTask := p["C"].openTask(id, "assignment")
 	before := p["C"].detail(id).Session.Revision
 
-	// 同じグループのメンバーでも、他人のタスクは 404（存在も明かさない）。
-	r := p["D"].send(http.MethodPost, "/api/tasks/"+cTask.ID+"/responses", map[string]any{"decision": "submit", "expected_revision": before,
-		"preparation": map[string]any{"attendance": "attending", "data": prepData(true, []string{"sec_2"}, []string{"sec_2"}, 60)}})
+	// 同じグループのメンバーでも、他人のタスクは 404（存在も明かさない）。代理で引き受けられない。
+	r := p["D"].send(http.MethodPost, "/api/tasks/"+cTask.ID+"/responses", map[string]any{"decision": "accept",
+		"proposal_id": cTask.ProposalID, "proposal_version": cTask.ProposalVersion})
 	if r.status != 404 || r.errorCode(t) != "not_found" {
 		t.Fatalf("他人のタスク: %d", r.status)
 	}
-	if d := p["C"].detail(id); d.Session.Revision != before || p["C"].openTask(id, "preparation") == nil {
+	if d := p["C"].detail(id); d.Session.Revision != before || p["C"].openTask(id, "assignment") == nil {
 		t.Fatal("他人の回答で記録が変わった")
 	}
 
@@ -101,7 +101,6 @@ func TestNoConsentWithoutExplicitAction(t *testing.T) {
 
 	p["B"].withdraw(id, "assignment").mustStatus(t, 202)
 	s.process()
-	p["C"].submitPreparation(id, "attending", prepData(true, []string{"sec_1", "sec_2"}, []string{"sec_2"}, 15)).mustStatus(t, 202)
 	s.process()
 	d := p["A"].detail(id)
 	if d.CurrentProposal == nil || d.Session.Status == "confirmed" {

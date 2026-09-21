@@ -9,91 +9,128 @@ import (
 	"github.com/kasa320/ai-hackathon/src/backend/internal/playbook/reading"
 )
 
-func TestDraftInitialPlanUsesWillingPresenter(t *testing.T) {
-	pb := reading.New()
-	s := baseSnapshot()
-	d, err := pb.DraftPlan(ctx, s)
-	if err != nil {
+// presenters は案の説明の担当者を、進行表の順に節ごとに返す。
+func presenters(t *testing.T, raw json.RawMessage) map[string]string {
+	t.Helper()
+	var p reading.PlanData
+	if err := json.Unmarshal(raw, &p); err != nil {
 		t.Fatal(err)
 	}
-	if d.Kind != coord.DraftProposal {
-		t.Fatalf("kind = %s (%s)", d.Kind, d.Summary)
+	out := map[string]string{}
+	for _, item := range p.Agenda {
+		if item.Activity == reading.ActivityPresentation {
+			for _, sec := range item.SectionIDs {
+				out[sec] = *item.PresenterMemberID
+			}
+		}
+	}
+	return out
+}
+
+// 担当は辞退していない参加予定者に、範囲のまとまりごとに割り振る。
+func TestDraftAssignsSectionsToAvailableMembers(t *testing.T) {
+	pb := reading.New()
+	s := baseSnapshot() // A・D は辞退、B・C に割り振れる
+	d, err := pb.DraftPlan(ctx, s)
+	if err != nil || d.Kind != coord.DraftProposal {
+		t.Fatalf("draft = %+v, %v", d, err)
+	}
+	got := presenters(t, d.Plan)
+	if !reflect.DeepEqual(got, map[string]string{"sec_2": "mem_b", "sec_3": "mem_c"}) {
+		t.Fatalf("担当 = %v", got)
 	}
 	if err := pb.ValidatePlan(ctx, s, coord.Proposal{ChangeKind: coord.ChangeInitial, Data: d.Plan}); err != nil {
-		t.Fatalf("仮の案が検証を通らない: %v", err)
-	}
-	var p reading.PlanData
-	_ = json.Unmarshal(d.Plan, &p)
-	if !reflect.DeepEqual(p.CoveredSectionIDs, []string{"sec_2", "sec_3"}) {
-		t.Fatalf("covered = %v", p.CoveredSectionIDs)
+		t.Fatalf("自分の案が検証を通らない: %v", err)
 	}
 }
 
-// E02：B が辞退し、C は第2節のみ15分可能。範囲を縮めて60分以内に収め、残りを持ち越す。
+// 担当した回数が少ない人を優先する。
+func TestDraftPrefersMembersWhoPresentedLess(t *testing.T) {
+	s := baseSnapshot()
+	// B は過去2回担当している
+	past := coord.PastSession{ConfirmedPlans: []coord.PlanRecord{{ChangeKind: coord.ChangeInitial, Data: json.RawMessage(initialPlanJSON)}}}
+	s.History = []coord.PastSession{past, past}
+	setPrep(&s, "mem_a", prep("attending", false))
+	d, err := reading.New().DraftPlan(ctx, s)
+	if err != nil || d.Kind != coord.DraftProposal {
+		t.Fatalf("draft = %+v, %v", d, err)
+	}
+	got := presenters(t, d.Plan)
+	if got["sec_2"] == "mem_b" || got["sec_3"] == "mem_b" {
+		t.Fatalf("担当の多い B を優先した: %v", got)
+	}
+}
+
+// 担当を辞退した人を外して組み直す。今の担当者は同じ範囲を維持する。
 func TestDraftReplanAfterWithdrawal(t *testing.T) {
 	pb := reading.New()
-	s := withConfirmed(baseSnapshot(), initialPlanJSON)
-	withdrawn, _ := pb.ApplyWithdrawal(ctx, s, coord.WithdrawAssignment, s.Preparation("mem_b").Data)
-	setPrep(&s, "mem_b", &coord.Preparation{Attendance: "attending", Data: withdrawn})
-	s.Case.WithdrawnMemberIDs = []string{"mem_b"}
-
+	confirmed := `{
+  "covered_section_ids": ["sec_2", "sec_3"], "deferred_section_ids": [],
+  "agenda": [
+    {"id": "item_1", "activity": "presentation", "section_ids": ["sec_2"], "presenter_member_id": "mem_b", "minutes": 13},
+    {"id": "item_2", "activity": "presentation", "section_ids": ["sec_3"], "presenter_member_id": "mem_c", "minutes": 13},
+    {"id": "item_3", "activity": "review", "section_ids": ["sec_1"], "presenter_member_id": null, "minutes": 20},
+    {"id": "item_4", "activity": "discussion", "section_ids": ["sec_2", "sec_3"], "presenter_member_id": null, "minutes": 14}
+  ]}`
+	s := withConfirmed(baseSnapshot(), confirmed)
+	setPrep(&s, "mem_b", prep("attending", true)) // B が担当を辞退
 	d, err := pb.DraftPlan(ctx, s)
-	if err != nil {
-		t.Fatal(err)
+	if err != nil || d.Kind != coord.DraftProposal {
+		t.Fatalf("draft = %+v, %v", d, err)
 	}
-	if d.Kind != coord.DraftProposal {
-		t.Fatalf("kind = %s (%s)", d.Kind, d.Summary)
-	}
-	var p reading.PlanData
-	_ = json.Unmarshal(d.Plan, &p)
-	var got reading.PlanData
-	_ = json.Unmarshal([]byte(replanJSON), &got)
-	// C 15分、復習20分、議論25分、sec_3 持ち越しになる。
-	if !reflect.DeepEqual(p.CoveredSectionIDs, got.CoveredSectionIDs) || !reflect.DeepEqual(p.DeferredSectionIDs, got.DeferredSectionIDs) {
-		t.Fatalf("範囲: %+v", p)
-	}
-	total := 0
-	for _, item := range p.Agenda {
-		total += item.Minutes
-	}
-	if total > 60 || p.Agenda[0].Minutes != 15 || *p.Agenda[0].PresenterMemberID != "mem_c" {
-		t.Fatalf("進行表: %+v", p.Agenda)
+	got := presenters(t, d.Plan)
+	if got["sec_2"] != "mem_c" || got["sec_3"] != "mem_c" {
+		t.Fatalf("C が全範囲を引き継ぐ: %v", got)
 	}
 	if err := pb.ValidatePlan(ctx, s, coord.Proposal{ChangeKind: coord.ChangeReplan, Data: d.Plan}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("自分の案が検証を通らない: %v", err)
 	}
 }
 
-func TestDraftAsksThenStops(t *testing.T) {
-	pb := reading.New()
-	s := withConfirmed(baseSnapshot(), initialPlanJSON)
-	withdrawn, _ := pb.ApplyWithdrawal(ctx, s, coord.WithdrawAssignment, s.Preparation("mem_b").Data)
-	setPrep(&s, "mem_b", &coord.Preparation{Attendance: "attending", Data: withdrawn})
-	setPrep(&s, "mem_c", prep("attending", false, []string{"sec_1", "sec_2"}, []string{}, 0))
-	s.Case.WithdrawnMemberIDs = []string{"mem_b"}
-
-	d, _ := pb.DraftPlan(ctx, s)
-	if d.Kind != coord.DraftAsk || !reflect.DeepEqual(d.AskMemberIDs, []string{"mem_c"}) {
-		t.Fatalf("辞退者以外で準備済みの C に確認すべき: %+v", d)
-	}
-
-	// E03：確認済みでも担当できる人がいなければ、同じ依頼を繰り返さずに管理者へ戻す。
-	s.Case.AskedMemberIDs = []string{"mem_c"}
-	d, _ = pb.DraftPlan(ctx, s)
-	if d.Kind != coord.DraftNoFeasible {
-		t.Fatalf("管理者判断待ちにすべき: %+v", d)
+// 誰にも割り振れなければ管理者判断待ちにする。
+func TestDraftStopsWhenNobodyCanPresent(t *testing.T) {
+	s := baseSnapshot()
+	setPrep(&s, "mem_b", prep("attending", true))
+	setPrep(&s, "mem_c", prep("absent", false))
+	d, err := reading.New().DraftPlan(ctx, s)
+	if err != nil || d.Kind != coord.DraftNoFeasible {
+		t.Fatalf("draft = %+v, %v", d, err)
 	}
 }
 
+// この案件で引き受けを断った人には、同じ案件で再び割り振らない。
 func TestDraftSkipsDeclinedMember(t *testing.T) {
-	pb := reading.New()
-	s := withConfirmed(baseSnapshot(), initialPlanJSON)
-	withdrawn, _ := pb.ApplyWithdrawal(ctx, s, coord.WithdrawAssignment, s.Preparation("mem_b").Data)
-	setPrep(&s, "mem_b", &coord.Preparation{Attendance: "attending", Data: withdrawn})
-	s.Case.WithdrawnMemberIDs = []string{"mem_b"}
-	s.Case.DeclinedMemberIDs = []string{"mem_c"}
-	d, _ := pb.DraftPlan(ctx, s)
-	if d.Kind != coord.DraftNoFeasible {
-		t.Fatalf("断った C に再依頼してはいけない: %+v", d)
+	s := baseSnapshot()
+	s.Case.DeclinedMemberIDs = []string{"mem_b"}
+	d, err := reading.New().DraftPlan(ctx, s)
+	if err != nil || d.Kind != coord.DraftProposal {
+		t.Fatalf("draft = %+v, %v", d, err)
+	}
+	for sec, id := range presenters(t, d.Plan) {
+		if id == "mem_b" {
+			t.Fatalf("%s を断った人に割り振った", sec)
+		}
+	}
+}
+
+// 担当を辞退した人の分だけを別の人に回し、ほかの人は今の範囲を続ける。
+func TestDraftKeepsOtherPresentersInPlace(t *testing.T) {
+	confirmed := `{
+  "covered_section_ids": ["sec_2", "sec_3"], "deferred_section_ids": [],
+  "agenda": [
+    {"id": "item_1", "activity": "presentation", "section_ids": ["sec_2"], "presenter_member_id": "mem_b", "minutes": 13},
+    {"id": "item_2", "activity": "presentation", "section_ids": ["sec_3"], "presenter_member_id": "mem_c", "minutes": 13},
+    {"id": "item_3", "activity": "review", "section_ids": ["sec_1"], "presenter_member_id": null, "minutes": 20},
+    {"id": "item_4", "activity": "discussion", "section_ids": ["sec_2", "sec_3"], "presenter_member_id": null, "minutes": 14}
+  ]}`
+	s := withConfirmed(baseSnapshot(), confirmed)
+	setPrep(&s, "mem_b", prep("attending", true))  // B が辞退
+	setPrep(&s, "mem_d", prep("attending", false)) // D は割り振れる
+	d, err := reading.New().DraftPlan(ctx, s)
+	if err != nil || d.Kind != coord.DraftProposal {
+		t.Fatalf("draft = %+v, %v", d, err)
+	}
+	if got := presenters(t, d.Plan); !reflect.DeepEqual(got, map[string]string{"sec_2": "mem_d", "sec_3": "mem_c"}) {
+		t.Fatalf("C は sec_3 を続け、D が sec_2 を引き継ぐ: %v", got)
 	}
 }

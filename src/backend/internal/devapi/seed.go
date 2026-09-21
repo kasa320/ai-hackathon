@@ -64,15 +64,16 @@ const demoSessionData = `{
   "target_section_ids": ["sec_2", "sec_3"]
 }`
 
-func prep(willing bool, prepared, explainable []string, minutes int) *apitypes.Preparation {
-	data, _ := json.Marshal(map[string]any{"willing_to_present": willing, "prepared_section_ids": prepared, "explainable_section_ids": explainable, "max_presentation_minutes": minutes})
+// prep は参加予定の参加条件。declined なら今回の説明の担当を辞退している。
+func prep(declined bool) *apitypes.Preparation {
+	data, _ := json.Marshal(map[string]any{"declined_presentation": declined})
 	return &apitypes.Preparation{Attendance: "attending", Data: data}
 }
 
 // Seed は DB を初期化してシナリオを投入する。
 //   - initial_demo：開催回を登録した直後（全員の参加条件が未回答）。
-//   - replan_demo：B が全範囲を担当する初回計画が確定済み。C は第2節を読んできたが担当の申し出はまだ。
-//     B の辞退 → AI が C に確認 → C が第2節15分と回答 → 再計画 → 引き受け・投票 → 確定、を実演する。
+//   - replan_demo：B が前半、C が後半を担当する初回計画が確定済み（A・D は今回の担当を辞退）。
+//     B の担当辞退 → 再計画（C が全範囲）→ 引き受け・投票 → 確定、を実演する。
 func (s *Seeder) Seed(ctx context.Context, scenario string) (SeedResult, error) {
 	if scenario != "replan_demo" && scenario != "initial_demo" {
 		return SeedResult{}, apperr.Validation(apperr.Field{Path: "scenario", Message: "replan_demo または initial_demo を指定してください"})
@@ -112,7 +113,7 @@ func (s *Seeder) Seed(ctx context.Context, scenario string) (SeedResult, error) 
 
 	startsAt := now.Add(72 * time.Hour).Truncate(time.Hour)
 	res, err = s.coord.CreateSession(ctx, users["A"], g.ID, apitypes.CreateSessionInput{
-		PlaybookID: "reading", Title: "第2回", StartsAt: startsAt.Format(time.RFC3339), DurationMinutes: 60, Data: json.RawMessage(demoSessionData),
+		PlaybookID: "reading", Title: g.Name + " 第2回", StartsAt: startsAt.Format(time.RFC3339), DurationMinutes: 60, Data: json.RawMessage(demoSessionData),
 	}, nil)
 	if err != nil {
 		return SeedResult{}, err
@@ -123,10 +124,10 @@ func (s *Seeder) Seed(ctx context.Context, scenario string) (SeedResult, error) 
 
 	if scenario == "replan_demo" {
 		preps := map[string]*apitypes.Preparation{
-			"A": prep(false, []string{"sec_1"}, []string{}, 0),
-			"B": prep(true, []string{"sec_1", "sec_2", "sec_3"}, []string{"sec_2", "sec_3"}, 40),
-			"C": prep(false, []string{"sec_1", "sec_2"}, []string{}, 0),
-			"D": prep(false, []string{"sec_1"}, []string{}, 0),
+			"A": prep(true),
+			"B": prep(false),
+			"C": prep(false),
+			"D": prep(true),
 		}
 		for _, name := range []string{"A", "B", "C", "D"} {
 			if err := s.putPrep(ctx, users[name], sessionID, preps[name]); err != nil {
@@ -136,7 +137,7 @@ func (s *Seeder) Seed(ctx context.Context, scenario string) (SeedResult, error) 
 		if _, err := s.coord.ProcessDue(ctx); err != nil {
 			return SeedResult{}, err
 		}
-		for _, step := range []struct{ name, kind, decision string }{{"B", "assignment", "accept"}, {"A", "owner_approval", "approve"}} {
+		for _, step := range []struct{ name, kind, decision string }{{"B", "assignment", "accept"}, {"C", "assignment", "accept"}, {"A", "owner_approval", "approve"}} {
 			if err := s.respond(ctx, users[step.name], sessionID, step.kind, step.decision); err != nil {
 				return SeedResult{}, fmt.Errorf("%s の回答: %w", step.name, err)
 			}

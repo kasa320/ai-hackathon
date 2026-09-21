@@ -232,7 +232,7 @@ func (c *Coordinator) ask(ctx context.Context, tx *store.Tx, sess store.Session,
 		if err != nil {
 			return err
 		}
-		if err := c.createTask(ctx, tx, sess, *cs, m, store.TaskPreparation, "今回担当できる範囲と時間を確認させてください。", nil, "agent", due, now); err != nil {
+		if err := c.createTask(ctx, tx, sess, *cs, m, store.TaskPreparation, "参加できる日時を確認させてください。", nil, "agent", due, now); err != nil {
 			return err
 		}
 	}

@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -40,7 +41,7 @@ func TestPeriodOnlyRegistrationDecidesTheDate(t *testing.T) {
 	res.decode(t, &created)
 	id := created.Session.ID
 
-	if created.Session.Title != "第1回" {
+	if !strings.HasSuffix(created.Session.Title, " 第1回") || created.Session.Title == " 第1回" {
 		t.Fatalf("名前を省いたら通し番号を振る: %q", created.Session.Title)
 	}
 	if created.Session.ScheduleStatus != "proposed" {
@@ -53,7 +54,7 @@ func TestPeriodOnlyRegistrationDecidesTheDate(t *testing.T) {
 	// 全員が参加条件を出す。Bは 9/20〜9/23 に出られない。
 	busy := []string{"2026-09-20", "2026-09-21", "2026-09-22", "2026-09-23"}
 	prep := func(c *client, unavailable []string) {
-		d := prepData(true, []string{"sec_2", "sec_3"}, []string{"sec_2", "sec_3"}, 20)
+		d := prepData(false)
 		d["unavailable_dates"] = unavailable
 		d["schedule"] = map[string]any{"status": "provided", "weekly_windows": []any{}, "date_windows": []any{
 			map[string]any{"date": "2026-09-24", "start": "20:00", "end": "22:00"},

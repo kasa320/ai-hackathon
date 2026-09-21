@@ -69,26 +69,29 @@ func TestValidateSessionDataRejectsInvalidInput(t *testing.T) {
 func TestValidatePreparation(t *testing.T) {
 	pb := reading.New()
 	s := baseSnapshot()
-	ok := `{"willing_to_present":true,"prepared_section_ids":["sec_1","sec_2"],"explainable_section_ids":["sec_2"],"max_presentation_minutes":15}`
-	if _, err := pb.ValidatePreparation(ctx, s, "attending", json.RawMessage(ok)); err != nil {
-		t.Fatalf("R6 の例を拒否した: %v", err)
+	for _, ok := range []string{`{}`, `{"declined_presentation":true}`, `{"unavailable_dates":["2026-09-30"]}`} {
+		if _, err := pb.ValidatePreparation(ctx, s, "attending", json.RawMessage(ok)); err != nil {
+			t.Fatalf("%s を拒否した: %v", ok, err)
+		}
 	}
-	notPresenting := `{"willing_to_present":false,"prepared_section_ids":[],"explainable_section_ids":[],"max_presentation_minutes":0}`
-	if _, err := pb.ValidatePreparation(ctx, s, "absent", json.RawMessage(notPresenting)); err != nil {
-		t.Fatalf("欠席の回答を拒否した: %v", err)
+	// 欠席なら担当の辞退の印は要らない
+	out, err := pb.ValidatePreparation(ctx, s, "absent", json.RawMessage(`{"declined_presentation":true}`))
+	if err != nil || strings.Contains(string(out), `"declined_presentation":true`) {
+		t.Fatalf("欠席の回答: %s %v", out, err)
+	}
+	// 以前の準備状況の項目は無視して受け付ける（保存済みの値・古い画面との互換）
+	legacy := `{"willing_to_present":true,"prepared_section_ids":["sec_2"],"explainable_section_ids":["sec_2"],"max_presentation_minutes":15}`
+	out, err = pb.ValidatePreparation(ctx, s, "attending", json.RawMessage(legacy))
+	if err != nil || strings.Contains(string(out), "willing_to_present") {
+		t.Fatalf("以前の項目: %s %v", out, err)
 	}
 
 	cases := map[string]struct {
 		attendance, json, path string
 	}{
-		"持ち時間超過":       {"attending", `{"willing_to_present":true,"prepared_section_ids":["sec_2"],"explainable_section_ids":["sec_2"],"max_presentation_minutes":61}`, "max_presentation_minutes"},
-		"説明できる節が準備外":   {"attending", `{"willing_to_present":true,"prepared_section_ids":["sec_1"],"explainable_section_ids":["sec_2"],"max_presentation_minutes":10}`, "explainable_section_ids[0]"},
-		"担当可能なのに節が空":   {"attending", `{"willing_to_present":true,"prepared_section_ids":["sec_1"],"explainable_section_ids":[],"max_presentation_minutes":10}`, "explainable_section_ids"},
-		"欠席で担当可能":      {"absent", `{"willing_to_present":true,"prepared_section_ids":["sec_2"],"explainable_section_ids":["sec_2"],"max_presentation_minutes":10}`, "willing_to_present"},
-		"担当しないのに時間あり":  {"attending", `{"willing_to_present":false,"prepared_section_ids":["sec_2"],"explainable_section_ids":[],"max_presentation_minutes":10}`, "max_presentation_minutes"},
-		"未登録の節":        {"attending", `{"willing_to_present":false,"prepared_section_ids":["sec_9"],"explainable_section_ids":[],"max_presentation_minutes":0}`, "prepared_section_ids[0]"},
-		"重複":           {"attending", `{"willing_to_present":false,"prepared_section_ids":["sec_1","sec_1"],"explainable_section_ids":[],"max_presentation_minutes":0}`, "prepared_section_ids[1]"},
-		"本人以外のIDを含む本文": {"attending", `{"member_id":"mem_b","willing_to_present":false,"prepared_section_ids":[],"explainable_section_ids":[],"max_presentation_minutes":0}`, ""},
+		"日付の形":         {"attending", `{"unavailable_dates":["9/30"]}`, "unavailable_dates[0]"},
+		"本人以外のIDを含む本文": {"attending", `{"member_id":"mem_b"}`, ""},
+		"未知のフィールド":     {"attending", `{"note":"x"}`, ""},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -100,21 +103,20 @@ func TestValidatePreparation(t *testing.T) {
 	}
 }
 
-func TestApplyWithdrawalKeepsPreparedSections(t *testing.T) {
+func TestApplyWithdrawalMarksDeclined(t *testing.T) {
 	pb := reading.New()
 	s := baseSnapshot()
-	cur := s.Preparation("mem_b").Data
-	out, err := pb.ApplyWithdrawal(ctx, s, coord.WithdrawAssignment, cur)
+	withSchedule := json.RawMessage(`{"declined_presentation":false,"unavailable_dates":["2026-09-30"],"schedule":{"status":"unknown","weekly_windows":[],"date_windows":[],"max_duration_minutes":0}}`)
+	out, err := pb.ApplyWithdrawal(ctx, s, coord.WithdrawAssignment, withSchedule)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var d reading.PreparationData
 	_ = json.Unmarshal(out, &d)
-	want := reading.PreparationData{WillingToPresent: false, PreparedSectionIDs: []string{"sec_1", "sec_2", "sec_3"}, ExplainableSectionIDs: []string{}, MaxPresentationMinutes: 0, UnavailableDates: []string{}}
-	if !reflect.DeepEqual(d, want) {
-		t.Fatalf("got %+v, want %+v", d, want)
+	if !d.DeclinedPresentation || !reflect.DeepEqual(d.UnavailableDates, []string{"2026-09-30"}) || d.Schedule == nil {
+		t.Fatalf("辞退の印を付け、予定は残す: %+v", d)
 	}
-	// 変換結果は欠席・担当なしのどちらでも検証を通る。
+	// 変換結果は欠席・参加のどちらでも検証を通る。
 	for _, att := range []string{"attending", "absent"} {
 		if _, err := pb.ValidatePreparation(ctx, s, att, out); err != nil {
 			t.Fatalf("%s: 変換結果が検証を通らない: %v", att, err)
@@ -125,7 +127,7 @@ func TestApplyWithdrawalKeepsPreparedSections(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(out) != `{"willing_to_present":false,"prepared_section_ids":[],"explainable_section_ids":[],"max_presentation_minutes":0,"unavailable_dates":[]}` {
+	if string(out) != `{"declined_presentation":true,"unavailable_dates":[]}` {
 		t.Fatalf("未回答からの既定値が違う: %s", out)
 	}
 }
@@ -159,8 +161,6 @@ func TestValidatePlanRejectsViolations(t *testing.T) {
 		path string
 	}{
 		"合計が持ち時間超過": {plan: mutate(func(p map[string]any) { agenda(p, 2)["minutes"] = 26 }), path: "agenda"},
-		"担当時間超過":    {plan: mutate(func(p map[string]any) { agenda(p, 0)["minutes"] = 16; agenda(p, 2)["minutes"] = 24 }), path: "agenda[0].minutes"},
-		"説明できない節":   {plan: mutate(func(p map[string]any) { agenda(p, 1)["presenter_member_id"] = "mem_c" }), path: "agenda[1].section_ids[0]"},
 		"発表に担当者なし":  {plan: mutate(func(p map[string]any) { agenda(p, 0)["presenter_member_id"] = nil }), path: "agenda[0].presenter_member_id"},
 		"範囲の和が不一致":  {plan: mutate(func(p map[string]any) { p["deferred_section_ids"] = []any{} }), path: "covered_section_ids"},
 		"扱う節が進行表にない": {plan: mutate(func(p map[string]any) {
@@ -171,10 +171,13 @@ func TestValidatePlanRejectsViolations(t *testing.T) {
 		"分数が0":     {plan: mutate(func(p map[string]any) { agenda(p, 1)["minutes"] = 0 }), path: "agenda[1].minutes"},
 		"進行項目ID重複": {plan: mutate(func(p map[string]any) { agenda(p, 1)["id"] = "item_1" }), path: "agenda[1].id"},
 		"不明な活動":    {plan: mutate(func(p map[string]any) { agenda(p, 1)["activity"] = "party" }), path: "agenda[1].activity"},
-		"欠席者を担当":   {plan: json.RawMessage(replanJSON), prep: func(s *coord.Snapshot) { setPrep(s, "mem_c", prep("absent", false, []string{"sec_2"}, []string{}, 0)) }, path: "agenda[0].presenter_member_id"},
+		"欠席者を担当":   {plan: json.RawMessage(replanJSON), prep: func(s *coord.Snapshot) { setPrep(s, "mem_c", prep("absent", false)) }, path: "agenda[0].presenter_member_id"},
 		"未回答者を担当":  {plan: json.RawMessage(replanJSON), prep: func(s *coord.Snapshot) { setPrep(s, "mem_c", nil) }, path: "agenda[0].presenter_member_id"},
-		"担当しない人": {plan: json.RawMessage(replanJSON), prep: func(s *coord.Snapshot) {
-			setPrep(s, "mem_c", prep("attending", false, []string{"sec_2"}, []string{}, 0))
+		"担当を辞退した人": {plan: json.RawMessage(replanJSON), prep: func(s *coord.Snapshot) {
+			setPrep(s, "mem_c", prep("attending", true))
+		}, path: "agenda[0].presenter_member_id"},
+		"この案件で引き受けを断った人": {plan: json.RawMessage(replanJSON), prep: func(s *coord.Snapshot) {
+			s.Case.DeclinedMemberIDs = []string{"mem_c"}
 		}, path: "agenda[0].presenter_member_id"},
 		"未知のフィールド": {plan: mutate(func(p map[string]any) { p["note"] = "x" }), path: ""},
 	}
@@ -246,7 +249,7 @@ func TestApprovalRequirements(t *testing.T) {
 
 	t.Run("範囲の変更は参加予定者の過半数", func(t *testing.T) {
 		s := withConfirmed(baseSnapshot(), initialPlanJSON)
-		setPrep(&s, "mem_d", prep("absent", false, []string{}, []string{}, 0))
+		setPrep(&s, "mem_d", prep("absent", false))
 		req, err := pb.ApprovalRequirements(ctx, s, coord.Proposal{ChangeKind: coord.ChangeReplan, Data: json.RawMessage(replanJSON)})
 		if err != nil {
 			t.Fatal(err)
@@ -310,109 +313,38 @@ func TestBuildContextHasNoUnsharedFields(t *testing.T) {
 	}
 }
 
-// 対話の途中の値は未確定を許すが、型・登録済みの節ID・分数の範囲は毎ターン確かめる。
+// 対話の途中の値は未確定を許す。聞くのは参加と（日時未定の回の）時間帯だけ。
 func TestValidatePartialPreparation(t *testing.T) {
 	pb := reading.New()
 	s := baseSnapshot()
-	all := []string{"attendance", "willing_to_present", "prepared_section_ids", "explainable_section_ids", "max_presentation_minutes"}
+	all := []string{"attendance", "schedule", "unavailable_dates", "declined_presentation"}
 
-	// 「説明できます」とだけ答えた段階は保存時の検証では拒否されるが、対話では通る。
-	partial := `{"willing_to_present":true,"prepared_section_ids":["sec_2"],"explainable_section_ids":["sec_2"],"max_presentation_minutes":0}`
-	if _, err := pb.ValidatePreparation(ctx, s, "attending", json.RawMessage(partial)); err == nil {
-		t.Fatal("保存時の検証が未確定の値を通した")
+	// 日時が決まっている回では、時間帯・出られない日・担当の辞退は聞かない
+	_, unclear, err := pb.ValidatePartialPreparation(ctx, s, "attending", json.RawMessage(`{}`), all)
+	if err != nil || !reflect.DeepEqual(unclear, []string{"attendance"}) {
+		t.Fatalf("日時決定済みの回の未確定 = %v %v", unclear, err)
 	}
-	data, unclear, err := pb.ValidatePartialPreparation(ctx, s, "attending", json.RawMessage(partial), []string{"max_presentation_minutes"})
-	if err != nil {
-		t.Fatalf("対話の途中の値を拒否した: %v", err)
+	// 日時未定の回では時間帯を聞く。欠席と決まれば聞かない
+	s.ScheduleStatus = coord.ScheduleProposed
+	if _, unclear, _ = pb.ValidatePartialPreparation(ctx, s, "attending", json.RawMessage(`{}`), all); !reflect.DeepEqual(unclear, []string{"attendance", "schedule"}) {
+		t.Fatalf("日時未定の回の未確定 = %v", unclear)
 	}
-	if len(unclear) != 1 || unclear[0] != "max_presentation_minutes" {
-		t.Fatalf("未確定の項目 = %v", unclear)
-	}
-	var d reading.PreparationData
-	_ = json.Unmarshal(data, &d)
-	if !d.WillingToPresent || len(d.ExplainableSectionIDs) != 1 {
-		t.Fatalf("確定済みの値が失われた: %+v", d)
-	}
-
-	// 部分集合の関係は両方が確定してから見る。片方が未確定なら勝手に足さない。
-	cross := `{"willing_to_present":true,"prepared_section_ids":["sec_2"],"explainable_section_ids":["sec_3"],"max_presentation_minutes":10}`
-	if _, _, err := pb.ValidatePartialPreparation(ctx, s, "attending", json.RawMessage(cross), []string{"prepared_section_ids"}); err != nil {
-		t.Fatalf("未確定の段階で部分集合を当てた: %v", err)
-	}
-	if _, _, err := pb.ValidatePartialPreparation(ctx, s, "attending", json.RawMessage(cross), nil); err == nil {
-		t.Fatal("両方確定しても部分集合違反を通した")
+	if _, unclear, _ = pb.ValidatePartialPreparation(ctx, s, "absent", json.RawMessage(`{}`), nil); len(unclear) != 0 {
+		t.Fatalf("欠席なら時間帯は聞かない: %v", unclear)
 	}
 
 	cases := map[string]struct {
 		json, path string
-		unclear    []string
 	}{
-		"未登録の節":      {`{"willing_to_present":false,"prepared_section_ids":["sec_9"],"explainable_section_ids":[],"max_presentation_minutes":0}`, "prepared_section_ids[0]", all},
-		"節の重複":       {`{"willing_to_present":false,"prepared_section_ids":["sec_2","sec_2"],"explainable_section_ids":[],"max_presentation_minutes":0}`, "prepared_section_ids[1]", all},
-		"持ち時間超過":     {`{"willing_to_present":false,"prepared_section_ids":[],"explainable_section_ids":[],"max_presentation_minutes":61}`, "max_presentation_minutes", all},
-		"負の分数":       {`{"willing_to_present":false,"prepared_section_ids":[],"explainable_section_ids":[],"max_presentation_minutes":-1}`, "max_presentation_minutes", all},
-		"未知のキー":      {`{"willing_to_present":false,"prepared_section_ids":[],"explainable_section_ids":[],"max_presentation_minutes":0,"note":"x"}`, "", all},
-		"本人以外のIDの混入": {`{"member_id":"mem_b","willing_to_present":false,"prepared_section_ids":[],"explainable_section_ids":[],"max_presentation_minutes":0}`, "", all},
+		"未知のキー":      {`{"note":"x"}`, ""},
+		"本人以外のIDの混入": {`{"member_id":"mem_b"}`, ""},
+		"日付の形":       {`{"unavailable_dates":["明日"]}`, "unavailable_dates[0]"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, _, err := pb.ValidatePartialPreparation(ctx, s, "attending", json.RawMessage(tc.json), tc.unclear)
+			_, _, err := pb.ValidatePartialPreparation(ctx, s, "attending", json.RawMessage(tc.json), all)
 			if paths := validationPaths(t, err); !hasPath(paths, tc.path) {
 				t.Fatalf("パス %q のエラーを期待したが %v", tc.path, paths)
-			}
-		})
-	}
-}
-
-// 確定した値から決まる従属値は正規化し、聞き直さない。
-func TestValidatePartialPreparationNormalizes(t *testing.T) {
-	pb := reading.New()
-	s := baseSnapshot()
-	tests := []struct {
-		name        string
-		attendance  string
-		json        string
-		unclear     []string
-		wantWilling bool
-		wantMinutes int
-		wantUnclear []string
-	}{
-		{
-			name: "欠席なら担当しない", attendance: "absent",
-			json:        `{"willing_to_present":true,"prepared_section_ids":["sec_2"],"explainable_section_ids":["sec_2"],"max_presentation_minutes":30}`,
-			unclear:     []string{"willing_to_present", "explainable_section_ids", "max_presentation_minutes"},
-			wantUnclear: []string{},
-		},
-		{
-			name: "担当しないなら時間は0", attendance: "attending",
-			json:        `{"willing_to_present":false,"prepared_section_ids":["sec_2"],"explainable_section_ids":["sec_2"],"max_presentation_minutes":30}`,
-			unclear:     []string{"max_presentation_minutes"},
-			wantUnclear: []string{},
-		},
-		{
-			name: "節と時間が決まれば担当も決まる", attendance: "attending",
-			json:        `{"willing_to_present":false,"prepared_section_ids":["sec_2"],"explainable_section_ids":["sec_2"],"max_presentation_minutes":20}`,
-			unclear:     []string{"willing_to_present"},
-			wantWilling: true, wantMinutes: 20, wantUnclear: []string{},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			data, unclear, err := pb.ValidatePartialPreparation(ctx, s, tt.attendance, json.RawMessage(tt.json), tt.unclear)
-			if err != nil {
-				t.Fatal(err)
-			}
-			var d reading.PreparationData
-			_ = json.Unmarshal(data, &d)
-			if d.WillingToPresent != tt.wantWilling || d.MaxPresentationMinutes != tt.wantMinutes {
-				t.Fatalf("正規化の結果 = %+v", d)
-			}
-			if !reflect.DeepEqual(unclear, tt.wantUnclear) {
-				t.Fatalf("未確定の項目 = %v, want %v", unclear, tt.wantUnclear)
-			}
-			// 正規化した結果はそのまま保存できる。
-			if _, err := pb.ValidatePreparation(ctx, s, tt.attendance, data); err != nil {
-				t.Fatalf("正規化の結果が保存時の検証を通らない: %v", err)
 			}
 		})
 	}
@@ -422,23 +354,15 @@ func TestValidatePartialPreparationNormalizes(t *testing.T) {
 func TestDiffPreparation(t *testing.T) {
 	pb := reading.New()
 	s := baseSnapshot()
-	before := prep("attending", true, []string{"sec_2", "sec_3"}, []string{"sec_2"}, 40)
+	before := prep("attending", false)
 
-	first := pb.DiffPreparation(s, nil, *before)
-	if len(first) != 5 {
-		t.Fatalf("初回は全項目を出す: %v", first)
+	if first := pb.DiffPreparation(s, nil, *before); !reflect.DeepEqual(first, []string{"参加：参加"}) {
+		t.Fatalf("初回: %v", first)
 	}
-	if !strings.Contains(strings.Join(first, "\n"), "今回の前半") {
-		t.Fatalf("節IDが題名になっていない: %v", first)
+	after := prep("attending", true)
+	if got := pb.DiffPreparation(s, before, *after); !reflect.DeepEqual(got, []string{"説明の担当：割り振り可 → 今回は辞退"}) {
+		t.Fatalf("差分 = %v", got)
 	}
-
-	after := prep("attending", false, []string{"sec_2", "sec_3"}, []string{}, 0)
-	got := pb.DiffPreparation(s, before, *after)
-	want := []string{"説明の担当：できる → できない", "説明できる範囲：今回の前半 → なし", "説明できる時間：40分 → 0分"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("差分 = %v, want %v", got, want)
-	}
-
 	if got := pb.DiffPreparation(s, before, *before); len(got) != 0 {
 		t.Fatalf("変更がないのに差分が出た: %v", got)
 	}

@@ -458,8 +458,9 @@ func (c *client) withdraw(sessionID, scope string) response {
 	return c.send(http.MethodPost, "/api/sessions/"+sessionID+"/withdrawals", map[string]any{"expected_revision": rev, "scope": scope})
 }
 
-func prepData(willing bool, prepared, explainable []string, minutes int) map[string]any {
-	return map[string]any{"willing_to_present": willing, "prepared_section_ids": prepared, "explainable_section_ids": explainable, "max_presentation_minutes": minutes}
+// prepData は参加条件。declined なら今回の説明の担当を辞退している。
+func prepData(declined bool) map[string]any {
+	return map[string]any{"declined_presentation": declined}
 }
 
 // memberID は表示名からメンバーIDを引く。

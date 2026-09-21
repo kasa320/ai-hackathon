@@ -48,8 +48,8 @@ func TestSessionCreationStartsCollecting(t *testing.T) {
 func TestNoProposalUntilAllPrepared(t *testing.T) {
 	h := newHarness(t, nil)
 	h.createSession()
-	h.mustPrep("A", "attending", prepData(false, []string{"sec_1"}, []string{}, 0))
-	h.mustPrep("B", "attending", prepData(true, []string{"sec_2", "sec_3"}, []string{"sec_2", "sec_3"}, 40))
+	h.mustPrep("A", "attending", prepData(true))
+	h.mustPrep("B", "attending", prepData(false))
 	h.process()
 	if d := h.detail("A"); d.CurrentProposal != nil || d.ActiveCase.Status != "collecting" {
 		t.Fatalf("回答が揃う前に案が作られた: %+v", d.ActiveCase)
@@ -92,11 +92,17 @@ func TestInitialPlanNeedsAcceptanceAndOwnerApproval(t *testing.T) {
 	}
 }
 
-// E01・E02：B が辞退し、AI が C に確認、C が第2節15分と回答すると、再計画して過半数で確定する。
-func TestWithdrawalReplanAndMajority(t *testing.T) {
+// E01・E02：B が担当を辞退すると、辞退していない C に割り振り直す。担当だけの変更なので、
+// C の引き受けだけで確定する（範囲や時間配分が変わる場合の過半数は reading のテストで確かめる）。
+func TestWithdrawalReassignsToAvailableMember(t *testing.T) {
 	h := newHarness(t, nil)
 	h.confirmInitial()
+	// C はあとから「担当もできる」に変えた（確定した計画はそのまま有効なので、再計画しない）
 	before := h.detail("A")
+	h.mustPrep("C", "attending", prepData(false))
+	if d := h.detail("A"); d.ActiveCase.ID != before.ActiveCase.ID || d.Session.Status != "confirmed" {
+		t.Fatalf("計画が有効なら再計画しない: %+v", d.ActiveCase)
+	}
 
 	if _, err := h.withdraw("B", "assignment"); err != nil {
 		t.Fatal(err)
@@ -106,68 +112,31 @@ func TestWithdrawalReplanAndMajority(t *testing.T) {
 		t.Fatalf("辞退後は要調整・新しい案件になるはず: %+v %+v", d.Session, d.ActiveCase)
 	}
 	h.process()
-	// 担当できる人がいないため、準備済みの C に確認する（辞退した B には依頼しない）。
-	if h.openTask("C", "preparation") == nil || h.openTask("B", "preparation") != nil {
-		t.Fatalf("C への確認依頼がない: %+v", h.detail("A").ActiveCase)
-	}
-	rev := h.detail("C").Session.Revision
-	tk := h.openTask("C", "preparation")
-	_, err := h.c.RespondTask(ctx, h.users["C"], tk.ID, apitypes.TaskResponseInput{
-		Decision: "submit", ExpectedRevision: &rev,
-		Preparation: &apitypes.Preparation{Attendance: "attending", Data: prepData(true, []string{"sec_1", "sec_2"}, []string{"sec_2"}, 15)},
-	}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	h.process()
 	d = h.detail("C")
 	p := d.CurrentProposal
 	if p == nil || p.ChangeKind != "replan" || p.Status != "pending" {
 		t.Fatalf("再計画の案がない: %+v", d.ActiveCase)
 	}
-	if len(p.Approvals) != 1 || p.Approvals[0].Kind != "majority" || p.Approvals[0].RequiredCount != 3 || len(p.Approvals[0].EligibleMemberIDs) != 4 {
-		t.Fatalf("過半数の条件が違う: %+v", p.Approvals)
+	if len(p.Assignments) != 1 || p.Assignments[0].MemberID != h.memberID("C") || len(p.Approvals) != 0 {
+		t.Fatalf("C の引き受けだけが必要: %+v %+v", p.Assignments, p.Approvals)
 	}
-	// C には assignment と approval の2つのタスクがある。
-	if h.openTask("C", "assignment") == nil || h.openTask("C", "approval") == nil {
-		t.Fatal("C の引き受けと投票が必要")
-	}
-	// 多数決だけでは担当を割り当てない。
-	h.mustRespond("A", "approval", "approve")
-	h.mustRespond("B", "approval", "approve")
-	h.mustRespond("D", "approval", "approve")
-	if h.detail("A").Session.Status == "confirmed" {
-		t.Fatal("C の引き受けなしに確定した")
+	// 準備状況の確認依頼は出さない
+	if h.openTask("C", "preparation") != nil || h.openTask("B", "preparation") != nil {
+		t.Fatal("確認依頼を出した")
 	}
 	h.mustRespond("C", "assignment", "accept")
 	d = h.detail("A")
 	if d.Session.Status != "confirmed" || d.ConfirmedPlan.ID != p.ID {
 		t.Fatalf("再計画が確定していない: %+v", d.Session)
 	}
-	// 残りの C の投票タスクは無効になり、確定後の投票で結果を変えない。
-	if h.openTask("C", "approval") != nil {
-		t.Fatal("確定後に投票タスクが残っている")
-	}
-	var plan map[string]any
-	_ = json.Unmarshal(d.ConfirmedPlan.Data, &plan)
-	if deferred := plan["deferred_section_ids"].([]any); len(deferred) != 1 || deferred[0] != "sec_3" {
-		t.Fatalf("未消化範囲が保存されていない: %v", plan)
-	}
 }
 
-// E03：確認した C も担当できず、成立する代案がなければ同じ依頼を繰り返さずに管理者判断待ちにする。
+// E03：担当を割り振れる人がいなければ、確認依頼を出さずに管理者判断待ちにする。管理者は代案を出せる。
 func TestNoFeasiblePlanGoesToOwnerAndOwnerProposal(t *testing.T) {
 	h := newHarness(t, nil)
 	h.confirmInitial()
+	// B 以外は担当を辞退している。B も辞退すると割り振れる人がいない
 	if _, err := h.withdraw("B", "assignment"); err != nil {
-		t.Fatal(err)
-	}
-	h.process()
-	// C は確認に対して「変更なし」（担当できない）と回答する。
-	rev := h.detail("C").Session.Revision
-	tk := h.openTask("C", "preparation")
-	if _, err := h.c.RespondTask(ctx, h.users["C"], tk.ID, apitypes.TaskResponseInput{Decision: "submit", ExpectedRevision: &rev,
-		Preparation: &apitypes.Preparation{Attendance: "attending", Data: prepData(false, []string{"sec_1", "sec_2"}, []string{}, 0)}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	h.process()
@@ -176,7 +145,7 @@ func TestNoFeasiblePlanGoesToOwnerAndOwnerProposal(t *testing.T) {
 		t.Fatalf("管理者判断待ちになっていない: %+v", d.ActiveCase)
 	}
 	if h.openTask("C", "preparation") != nil {
-		t.Fatal("同じ確認依頼を繰り返した")
+		t.Fatal("確認依頼を出した")
 	}
 	if !d.Permissions.CanSubmitProposal || h.detail("B").Permissions.CanSubmitProposal {
 		t.Fatal("代案を出せるのは判断待ちの管理者だけ")
@@ -185,7 +154,7 @@ func TestNoFeasiblePlanGoesToOwnerAndOwnerProposal(t *testing.T) {
 	// 管理者の代案：復習回にする。範囲の変更なので過半数の承認が必要。
 	plan := `{"covered_section_ids":[],"deferred_section_ids":["sec_2","sec_3"],"agenda":[{"id":"r","activity":"review","section_ids":["sec_1"],"presenter_member_id":null,"minutes":60}]}`
 	bad := `{"covered_section_ids":[],"deferred_section_ids":["sec_2","sec_3"],"agenda":[{"id":"r","activity":"review","section_ids":["sec_1"],"presenter_member_id":null,"minutes":61}]}`
-	rev = d.Session.Revision
+	rev := d.Session.Revision
 	if _, err := h.c.SubmitProposal(ctx, h.users["B"], h.sess, apitypes.SubmitProposalInput{ExpectedRevision: &rev, Data: json.RawMessage(plan)}, nil); code(err) != apperr.Forbidden {
 		t.Fatalf("管理者以外の代案は 403: %v", err)
 	}
@@ -215,7 +184,7 @@ func TestStaleVoteIsRejected(t *testing.T) {
 	oldOwner := h.openTask("A", "owner_approval")
 
 	// D が参加条件を変えると、現在の案は旧版になる。
-	h.mustPrep("D", "absent", prepData(false, []string{}, []string{}, 0))
+	h.mustPrep("D", "absent", prepData(true))
 	if _, err := h.c.RespondTask(ctx, h.users["B"], old.ID, apitypes.TaskResponseInput{Decision: "accept", ProposalID: old.ProposalID, ProposalVersion: old.ProposalVersion}, nil); code(err) != apperr.ProposalSuperseded {
 		t.Fatalf("旧版への回答は 409 proposal_superseded: %v", err)
 	}
@@ -234,7 +203,7 @@ func TestRevisionConflictAndPermissions(t *testing.T) {
 	h.createSession()
 	stale := int64(99)
 	_, err := h.c.PutPreparation(ctx, h.users["B"], h.sess, apitypes.PutPreparationInput{ExpectedRevision: &stale,
-		Preparation: &apitypes.Preparation{Attendance: "attending", Data: prepData(false, []string{}, []string{}, 0)}}, nil)
+		Preparation: &apitypes.Preparation{Attendance: "attending", Data: prepData(true)}}, nil)
 	var e *apperr.Error
 	if !errors.As(err, &e) || e.Code != apperr.RevisionConflict || e.Details["current_revision"] != int64(1) {
 		t.Fatalf("revision_conflict と現在の revision を返すはず: %v", err)
@@ -390,7 +359,7 @@ func TestStalePlannerResultIsDiscarded(t *testing.T) {
 		return coord.DraftOnlyPlanner{}.Plan(ctx, req)
 	}), coord.Options{PublicBaseURL: "http://localhost"})
 	// 計画中に D が欠席に変える（計画処理は Tx の外なので更新できる）。
-	hook = func() { h.mustPrep("D", "absent", prepData(false, []string{}, []string{}, 0)) }
+	hook = func() { h.mustPrep("D", "absent", prepData(true)) }
 	h.process()
 	d := h.detail("A")
 	if d.CurrentProposal == nil {

@@ -35,25 +35,13 @@ func TestDialogStepByStep(t *testing.T) {
 		t.Fatalf("未登録なら参加可否から聞く: pending=%q ready=%v", res.State.Pending, res.Ready)
 	}
 
-	// 1ターン目：参加可否だけが確定する。
+	// 日時が決まっている回では参加するかだけを聞く。答えれば確認に進める。
 	res = h.turn(t, res.State, "参加します")
-	if res.State.Pending != "willing_to_present" || res.Ready {
-		t.Fatalf("次は担当の可否: pending=%q ready=%v", res.State.Pending, res.Ready)
+	if !res.Ready || len(res.State.Unclear) != 0 {
+		t.Fatalf("確認に進めるはず: %+v", res.State)
 	}
 	if !res.Progressed {
 		t.Fatal("進捗があるのに空振り扱い")
-	}
-
-	// 2ターン目：読んできた範囲と担当の意思。時間はまだ聞いていない。
-	res = h.turn(t, res.State, "今回の前半は読んできました。説明できます。")
-	if res.State.Pending != "max_presentation_minutes" || res.Ready {
-		t.Fatalf("次は時間: pending=%q ready=%v", res.State.Pending, res.Ready)
-	}
-
-	// 3ターン目：時間が決まれば全体検証を通り、確認に進める。
-	res = h.turn(t, res.State, "15分です")
-	if !res.Ready || len(res.State.Unclear) != 0 {
-		t.Fatalf("確認に進めるはず: %+v", res.State)
 	}
 	if len(res.Confirm) == 0 {
 		t.Fatal("確認表示に全項目が入っていない")
@@ -75,7 +63,7 @@ func TestDialogStepByStep(t *testing.T) {
 	if err := json.Unmarshal(p.Data, &d); err != nil {
 		t.Fatal(err)
 	}
-	if p.Attendance != "attending" || d["willing_to_present"] != true || d["max_presentation_minutes"].(float64) != 15 {
+	if p.Attendance != "attending" || d["declined_presentation"] != false {
 		t.Fatalf("保存された値 = %s %s", p.Attendance, p.Data)
 	}
 	if tk := h.openTask("B", "preparation"); tk != nil {
@@ -88,10 +76,10 @@ func TestDialogStepByStep(t *testing.T) {
 	}
 	found := false
 	for _, a := range act.Items {
-		if strings.Contains(a.Summary, "（Discord）") && strings.Contains(a.Summary, "説明できる時間") {
+		if strings.Contains(a.Summary, "（Discord）") && strings.Contains(a.Summary, "参加：参加") {
 			found = true
 		}
-		if strings.Contains(a.Summary, "15分です") {
+		if strings.Contains(a.Summary, "参加します") {
 			t.Fatalf("原文が記録に残っている: %q", a.Summary)
 		}
 	}
@@ -104,7 +92,7 @@ func TestDialogStepByStep(t *testing.T) {
 func TestDialogKeepsUntouchedValues(t *testing.T) {
 	h := newHarness(t, nil)
 	h.createSession()
-	h.mustPrep("B", "attending", prepData(true, []string{"sec_2", "sec_3"}, []string{"sec_2"}, 40))
+	h.mustPrep("B", "attending", prepData(true))
 
 	res, err := h.c.StartDialog(ctx, h.users["B"], h.sess)
 	if err != nil {
@@ -113,20 +101,19 @@ func TestDialogKeepsUntouchedValues(t *testing.T) {
 	if !res.Ready {
 		t.Fatalf("保存済みの値は確定扱い: %+v", res.State)
 	}
-	res = h.turn(t, res.State, "20分にしてください")
-	if !res.Ready {
+	res = h.turn(t, res.State, "やっぱり欠席します")
+	if !res.Ready || res.State.Attendance != "absent" {
 		t.Fatalf("1項目の変更で確認に進めるはず: %+v", res.State)
 	}
+	res = h.turn(t, res.State, "参加します")
 	var d map[string]any
 	if err := json.Unmarshal(res.State.Data, &d); err != nil {
 		t.Fatal(err)
 	}
-	if d["max_presentation_minutes"].(float64) != 20 {
-		t.Fatalf("時間が変わっていない: %s", res.State.Data)
+	if res.State.Attendance != "attending" {
+		t.Fatalf("参加に戻っていない: %+v", res.State)
 	}
-	if ids, _ := d["prepared_section_ids"].([]any); len(ids) != 2 {
-		t.Fatalf("触れていない項目が失われた: %s", res.State.Data)
-	}
+	_ = d
 }
 
 // 表示した下書きより保存済みの状態が新しければ、古い値で保存しない。
@@ -144,7 +131,7 @@ func TestDialogRejectsStaleRevision(t *testing.T) {
 		t.Fatalf("確認に進めるはず: %+v", res.State)
 	}
 	// 別の人の更新で版が進む。
-	h.mustPrep("C", "attending", prepData(false, []string{"sec_2"}, []string{}, 0))
+	h.mustPrep("C", "attending", prepData(true))
 	if _, err := h.c.SaveDialogPreparation(ctx, h.users["B"], res.State, nil); err == nil {
 		t.Fatal("古い版のまま保存された")
 	}
@@ -192,14 +179,14 @@ func TestDialogRejectsInvalidOutput(t *testing.T) {
 		name string
 		out  coord.Interpretation
 	}{
-		{"未知の項目名", coord.Interpretation{Attendance: "attending", Data: prepData(false, []string{}, []string{}, 0),
+		{"未知の項目名", coord.Interpretation{Attendance: "attending", Data: prepData(true),
 			Unclear: []string{"secret_field"}, NeedsFollowup: true}},
-		{"登録されていない節ID", coord.Interpretation{Attendance: "attending", Data: prepData(true, []string{"sec_9"}, []string{"sec_9"}, 10)}},
-		{"読んでいない節を説明できる", coord.Interpretation{Attendance: "attending", Data: prepData(true, []string{"sec_2"}, []string{"sec_3"}, 10)}},
-		{"持ち時間を超える", coord.Interpretation{Attendance: "attending", Data: prepData(true, []string{"sec_2"}, []string{"sec_2"}, 999)}},
-		{"未知の out_of_scope", coord.Interpretation{Attendance: "attending", Data: prepData(false, []string{}, []string{}, 0), OutOfScope: "whatever"}},
-		{"未知のキー", coord.Interpretation{Attendance: "attending", Data: json.RawMessage(`{"willing_to_present":false,"prepared_section_ids":[],"explainable_section_ids":[],"max_presentation_minutes":0,"note":"x"}`)}},
-		{"列挙にない参加可否", coord.Interpretation{Attendance: "maybe", Data: prepData(false, []string{}, []string{}, 0)}},
+		{"日付の形が違う", coord.Interpretation{Attendance: "attending", Data: json.RawMessage(`{"unavailable_dates":["来週"]}`)}},
+		{"型が違う", coord.Interpretation{Attendance: "attending", Data: json.RawMessage(`{"declined_presentation":"yes"}`)}},
+		{"時間帯の形が違う", coord.Interpretation{Attendance: "attending", Data: json.RawMessage(`{"schedule":{"status":"provided","weekly_windows":[{"weekday":9,"start":"25:00","end":"20:00"}],"date_windows":[],"max_duration_minutes":0}}`)}},
+		{"未知の out_of_scope", coord.Interpretation{Attendance: "attending", Data: prepData(true), OutOfScope: "whatever"}},
+		{"未知のキー", coord.Interpretation{Attendance: "attending", Data: json.RawMessage(`{"declined_presentation":false,"note":"x"}`)}},
+		{"列挙にない参加可否", coord.Interpretation{Attendance: "maybe", Data: prepData(true)}},
 	}
 	for _, tt := range bad {
 		t.Run(tt.name, func(t *testing.T) {
@@ -218,10 +205,10 @@ func TestDialogRejectsInvalidOutput(t *testing.T) {
 
 // 扱えない依頼では値を変えず、そのターンの候補を捨てる。
 func TestDialogOutOfScopeKeepsValues(t *testing.T) {
-	out := coord.Interpretation{Attendance: "absent", Data: prepData(false, []string{}, []string{}, 0), OutOfScope: coord.OutOfScopeScheduleChange}
+	out := coord.Interpretation{Attendance: "absent", Data: prepData(true), OutOfScope: coord.OutOfScopeScheduleChange}
 	h := newHarnessWith(t, nil, stubInterpreter{out: out})
 	h.createSession()
-	h.mustPrep("B", "attending", prepData(true, []string{"sec_2"}, []string{"sec_2"}, 30))
+	h.mustPrep("B", "attending", prepData(false))
 
 	res, err := h.c.StartDialog(ctx, h.users["B"], h.sess)
 	if err != nil {
@@ -265,7 +252,7 @@ func (b *budgetInterpreter) Interpret(c context.Context, req coord.InterpretRequ
 
 // 開催回ごとの解釈の上限を超えたら、LLM を呼ばずに断る。枠は呼び出しの前に確保する。
 func TestDialogBudgetStopsCalls(t *testing.T) {
-	bi := &budgetInterpreter{out: coord.Interpretation{Attendance: "attending", Data: prepData(false, []string{}, []string{}, 0)}}
+	bi := &budgetInterpreter{out: coord.Interpretation{Attendance: "attending", Data: prepData(true)}}
 	h := newHarnessWith(t, nil, bi)
 	h.createSession()
 	res, err := h.c.StartDialog(ctx, h.users["B"], h.sess)
@@ -303,7 +290,7 @@ func (b *budgetInterpreter) callCount() int {
 
 // 解釈の予算は Web と Discord で共通。残り1枠に同時に入っても、その枠で2回は呼ばない。
 func TestDialogBudgetIsSharedWithWeb(t *testing.T) {
-	bi := &budgetInterpreter{out: coord.Interpretation{Attendance: "attending", Data: prepData(false, []string{}, []string{}, 0)}}
+	bi := &budgetInterpreter{out: coord.Interpretation{Attendance: "attending", Data: prepData(true)}}
 	h := newHarnessWith(t, nil, bi)
 	h.createSession()
 	res, err := h.c.StartDialog(ctx, h.users["B"], h.sess)
@@ -378,7 +365,7 @@ func TestPreparationTargetsOrder(t *testing.T) {
 	}
 
 	// 第2回に回答すると、未回答の残る第3回が先に出る。
-	h.mustPrep("B", "attending", prepData(false, []string{"sec_2"}, []string{}, 0))
+	h.mustPrep("B", "attending", prepData(true))
 	targets, _ = h.c.PreparationTargets(ctx, h.users["B"])
 	if len(targets) != 2 || targets[0].SessionID != created.Session.ID || !targets[0].HasOpenTask {
 		t.Fatalf("未回答の回が先頭にない: %+v", targets)
@@ -471,13 +458,13 @@ func TestSaveDialogIsIdempotent(t *testing.T) {
 func TestActivityRecordsEntryAndDiff(t *testing.T) {
 	h := newHarness(t, nil)
 	h.createSession()
-	h.mustPrep("B", "attending", prepData(true, []string{"sec_2"}, []string{"sec_2"}, 40))
+	h.mustPrep("B", "attending", prepData(false))
 
 	res, err := h.c.StartDialog(ctx, h.users["B"], h.sess)
 	if err != nil {
 		t.Fatal(err)
 	}
-	res = h.turn(t, res.State, "20分に変更します")
+	res = h.turn(t, res.State, "今回は欠席します")
 	if _, err := h.c.SaveDialogPreparation(ctx, h.users["B"], res.State, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -495,14 +482,62 @@ func TestActivityRecordsEntryAndDiff(t *testing.T) {
 			dm = a.Summary
 		}
 	}
-	if web == "" || !strings.Contains(web, "説明できる時間：40分") {
+	if web == "" || !strings.Contains(web, "参加：参加") {
 		t.Fatalf("Web からの保存の記録 = %q", web)
 	}
-	if dm == "" || !strings.Contains(dm, "説明できる時間：40分 → 20分") {
+	if dm == "" || !strings.Contains(dm, "参加：参加 → 欠席") {
 		t.Fatalf("対話からの保存の記録 = %q", dm)
 	}
-	// 変わっていない項目は書かない。
-	if strings.Contains(dm, "読んできた範囲") {
-		t.Fatalf("変更のない項目まで記録している: %q", dm)
+	// 原文は残さない。
+	if strings.Contains(dm, "今回は欠席します") {
+		t.Fatalf("原文が記録に残っている: %q", dm)
+	}
+}
+
+// AI が書いた聞き直しの質問は、整えてから使う。使えなければ既定の文に戻す。
+func TestDialogUsesCleanedAIQuestion(t *testing.T) {
+	ask := func(q string) string {
+		t.Helper()
+		out := coord.Interpretation{Attendance: "attending", Data: json.RawMessage(`{}`), Unclear: []string{"schedule"}, NeedsFollowup: true, Question: q}
+		h := newHarnessWith(t, nil, stubInterpreter{out: out})
+		h.createPeriodSession()
+		res, err := h.c.StartDialog(ctx, h.users["B"], h.sess)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err = h.c.ContinueDialog(ctx, h.users["B"], res.State, "参加したいです")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.State.Pending != "schedule" {
+			t.Fatalf("pending = %q", res.State.Pending)
+		}
+		return res.Question
+	}
+	if got := ask("ありがとうございます！\n何曜日の何時ごろが都合よさそうですか？"); got != "ありがとうございます！ 何曜日の何時ごろが都合よさそうですか？" {
+		t.Fatalf("AI の質問を使っていない: %q", got)
+	}
+	fallback := ask("")
+	if fallback == "" || !strings.Contains(fallback, "曜日") {
+		t.Fatalf("既定の文: %q", fallback)
+	}
+	for _, bad := range []string{"詳しくは https://evil.example を見てください", "@everyone いつがいいですか？", strings.Repeat("あ", 201)} {
+		if got := ask(bad); got != fallback {
+			t.Fatalf("%q を使った: %q", bad, got)
+		}
+	}
+}
+
+func TestCleanQuestion(t *testing.T) {
+	for in, want := range map[string]string{
+		"  いつが\tいいですか？ ":  "いつが いいですか？",
+		"<script>":        "",
+		"`code`":          "",
+		"www.example.com": "",
+		"":                "",
+	} {
+		if got := coord.CleanQuestion(in); got != want {
+			t.Fatalf("CleanQuestion(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

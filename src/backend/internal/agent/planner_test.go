@@ -60,8 +60,9 @@ const sessionData = `{"book_title":"本","isbn":null,"toc_source":{"kind":"manua
  "completed_section_ids":["sec_1"],"target_section_ids":["sec_2","sec_3"]}`
 
 func request(check func(context.Context, coord.Outcome) error) coord.PlanRequest {
-	prep := func(willing bool, explainable []string, minutes int) *coord.Preparation {
-		d, _ := json.Marshal(map[string]any{"willing_to_present": willing, "prepared_section_ids": explainable, "explainable_section_ids": explainable, "max_presentation_minutes": minutes})
+	// prep は参加条件。declined なら今回の説明の担当を辞退している。
+	prep := func(declined bool) *coord.Preparation {
+		d, _ := json.Marshal(map[string]any{"declined_presentation": declined})
 		return &coord.Preparation{Attendance: "attending", Data: d}
 	}
 	return coord.PlanRequest{
@@ -70,8 +71,8 @@ func request(check func(context.Context, coord.Outcome) error) coord.PlanRequest
 			Members:     []coord.SnapshotMember{{ID: "mem_a", DisplayName: "A", Role: "owner"}, {ID: "mem_c", DisplayName: "C", Role: "member"}},
 			SessionData: json.RawMessage(sessionData),
 			Preparations: []coord.MemberPreparation{
-				{MemberID: "mem_a", Value: prep(false, []string{}, 0)},
-				{MemberID: "mem_c", Value: prep(true, []string{"sec_2"}, 15)},
+				{MemberID: "mem_a", Value: prep(true)},
+				{MemberID: "mem_c", Value: prep(false)},
 			},
 		},
 		Playbook: reading.New(), ChangeKind: coord.ChangeInitial, MaxLLMCalls: 8, Check: check,

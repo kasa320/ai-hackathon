@@ -199,12 +199,13 @@ func (c *Coordinator) CreateSession(ctx context.Context, userID, groupID string,
 		var fields []apperr.Field
 		title := strings.TrimSpace(in.Title)
 		if title == "" {
-			// 入力を最小にする。名前を書かなければ通し番号を振る。
+			// 入力を最小にする。名前を書かなければ「会の名前 第N回」にする。
+			// 「第N回」だけでは、Discord の通知や会の一覧でどの会の回か分からないため。
 			n, err := tx.CountSessions(ctx, g.ID)
 			if err != nil {
 				return store.Response{}, err
 			}
-			title = fmt.Sprintf("第%d回", n+1)
+			title = fmt.Sprintf("%s 第%d回", g.Name, n+1)
 		} else if _, ok := validName(title); !ok {
 			fields = append(fields, apperr.Field{Path: "title", Message: fmt.Sprintf("1〜%d文字で入力してください", MaxNameLen)})
 		}
@@ -258,11 +259,11 @@ func (c *Coordinator) CreateSession(ctx context.Context, userID, groupID string,
 		if err := tx.CreateSession(ctx, sess, ids); err != nil {
 			return store.Response{}, err
 		}
-		summary := "参加条件を確認しています。"
-		ask := "今回の準備状況を教えてください。"
+		summary := "参加できるかを確認しています。"
+		ask := "今回の会に参加できるか教えてください。"
 		if schedule == store.ScheduleProposed {
-			summary = "参加条件と、出られない日を確認しています。"
-			ask = "準備状況と、出られない日を教えてください。日時はこのあと提案します。"
+			summary = "参加できる日時を確認しています。"
+			ask = "参加できそうな日や時間帯を教えてください。日時はこのあと提案します。"
 		}
 		cs := store.Case{ID: store.NewID("case"), SessionID: sess.ID, Status: store.CaseCollecting, Summary: summary, CreatedAt: now, UpdatedAt: now}
 		if err := tx.CreateCase(ctx, cs); err != nil {

@@ -138,8 +138,9 @@ func TestIdemKeyBindsToDraft(t *testing.T) {
 	}
 }
 
-func coordState(attendance string, minutes int) coord.DialogState {
-	data := fmt.Sprintf(`{"willing_to_present":true,"prepared_section_ids":["sec_2"],"explainable_section_ids":["sec_2"],"max_presentation_minutes":%d}`, minutes)
+// coordState は確認待ちの下書き。day は出られない日（下書きどうしを区別するため）。
+func coordState(attendance string, day int) coord.DialogState {
+	data := fmt.Sprintf(`{"declined_presentation":false,"unavailable_dates":["2026-10-%02d"]}`, day)
 	return coord.DialogState{SessionID: "ses_1", Revision: 3, Attendance: attendance, Data: []byte(data), Unclear: []string{}}
 }
 

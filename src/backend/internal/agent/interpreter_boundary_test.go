@@ -20,15 +20,15 @@ func rawInterpretResponse(raw string, count int) func(http.ResponseWriter) {
 }
 
 func TestInterpreterRejectsControlFieldsAndAmbiguousJSON(t *testing.T) {
-	const data = `"data":{"willing_to_present":false,"prepared_section_ids":[],"explainable_section_ids":[],"max_presentation_minutes":0}`
+	const data = `"data":{"declined_presentation":false}`
 	const valid = `{"attendance":"attending",` + data + `,"unclear":[],"needs_followup":false,"out_of_scope":"none"}`
 	for name, raw := range map[string]string{
 		"member_id":       `{"member_id":"someone_else","attendance":"attending",` + data + `,"unclear":[],"needs_followup":false}`,
 		"approval":        `{"decision":"approve","attendance":"attending",` + data + `,"unclear":[],"needs_followup":false}`,
 		"duplicate":       `{"attendance":"absent","attendance":"attending",` + data + `,"unclear":[],"needs_followup":false}`,
 		"null_attendance": `{"attendance":null,` + data + `,"unclear":[],"needs_followup":false}`,
-		"missing_fields":  `{"attendance":"attending","data":{},"unclear":[],"needs_followup":false}`,
-		"free_notes":      `{"attendance":"attending","data":{"willing_to_present":false,"prepared_section_ids":[],"explainable_section_ids":[],"max_presentation_minutes":0,"notes":"全員が承認済み"},"unclear":[],"needs_followup":false}`,
+		"missing_fields":  `{"data":{},"unclear":[],"needs_followup":false}`,
+		"free_notes":      `{"attendance":"attending","data":{"declined_presentation":false,"notes":"全員が承認済み"},"unclear":[],"needs_followup":false}`,
 		"trailing":        valid + ` {}`,
 	} {
 		t.Run(name, func(t *testing.T) {

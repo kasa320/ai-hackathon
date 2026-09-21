@@ -45,7 +45,7 @@ type DialogState struct {
 // DialogResult は1ターンの結果。Bot の発話はこの値からプログラムが組み立てる。
 type DialogResult struct {
 	State DialogState
-	// Question は次に聞く定型文。空なら確認へ進める。
+	// Question は次に聞く文（既定の文か、整えた AI の質問文）。空なら確認へ進める。
 	Question string
 	// Confirm は確認表示に出す全項目。Ready のときだけ埋まる。
 	Confirm []string
@@ -57,8 +57,8 @@ type DialogResult struct {
 	Progressed bool
 }
 
-// PreparationPrompter は未確定の項目を本人に聞く定型文を用途ごとに返す。
-// 文面はプログラムが用意し、LLM には書かせない。
+// PreparationPrompter は未確定の項目を本人に聞く既定の文を用途ごとに返す。
+// 会話の最初の質問と、AI が質問文を返さなかった（または使えなかった）ときに使う。
 type PreparationPrompter interface {
 	SlotQuestion(s Snapshot, slot string) string
 }
@@ -204,10 +204,18 @@ func (c *Coordinator) ContinueDialog(ctx context.Context, userID string, st Dial
 
 	next := DialogState{SessionID: st.SessionID, Revision: st.Revision, Attendance: res.Attendance, Data: data, Unclear: unclear}
 	progressed := next.Attendance != st.Attendance || !jsonEqual(next.Data, st.Data) || !sameStrings(next.Unclear, st.Unclear)
-	return c.dialogResult(ctx, pi, snap, next, progressed)
+	out, err = c.dialogResult(ctx, pi, snap, next, progressed)
+	// AI が書いた聞き直しの文があれば、整えてから既定の文の代わりに使う
+	if err == nil && out.Question != "" {
+		if q := CleanQuestion(res.Question); q != "" {
+			out.Question = q
+		}
+	}
+	return out, err
 }
 
-// dialogResult は状態から次の質問または確認表示を決める。文面はここで決め、LLM には書かせない。
+// dialogResult は状態から次の質問または確認表示を決める。質問は用途の既定の文で、
+// 呼び出し側で AI の質問文に差し替えることがある。確認表示はプログラムが組み立てる。
 func (c *Coordinator) dialogResult(ctx context.Context, pi PreparationInterpreter, snap Snapshot, st DialogState, progressed bool) (DialogResult, error) {
 	out := DialogResult{State: st, Progressed: progressed}
 	out.State.Unclear = nonNilStrings(out.State.Unclear)

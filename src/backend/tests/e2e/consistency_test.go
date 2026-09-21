@@ -39,7 +39,6 @@ func TestRetriesAndDuplicates(t *testing.T) {
 	}
 
 	s.process()
-	p["C"].submitPreparation(id, "attending", prepData(true, []string{"sec_1", "sec_2"}, []string{"sec_2"}, 15)).mustStatus(t, 202)
 	s.process()
 
 	// 投票の再送は同じ結果、別のキーでの二重投票は 409。
@@ -116,7 +115,6 @@ func TestStaleVersionAndRevisionConflict(t *testing.T) {
 	id := seed.SessionID
 	p["B"].withdraw(id, "assignment").mustStatus(t, 202)
 	s.process()
-	p["C"].submitPreparation(id, "attending", prepData(true, []string{"sec_1", "sec_2"}, []string{"sec_2"}, 15)).mustStatus(t, 202)
 	s.process()
 	old := p["A"].openTask(id, "approval")
 	oldVersion := *old.ProposalVersion
@@ -124,7 +122,7 @@ func TestStaleVersionAndRevisionConflict(t *testing.T) {
 	// 古い revision での更新は 409 revision_conflict（現在の revision を返す）。
 	cur := p["D"].detail(id).Session.Revision
 	r := p["D"].send(http.MethodPut, "/api/sessions/"+id+"/preparations/me", map[string]any{"expected_revision": cur - 1,
-		"preparation": map[string]any{"attendance": "absent", "data": prepData(false, []string{}, []string{}, 0)}})
+		"preparation": map[string]any{"attendance": "absent", "data": prepData(true)}})
 	var e struct {
 		Error struct {
 			Code    string         `json:"code"`
@@ -138,7 +136,7 @@ func TestStaleVersionAndRevisionConflict(t *testing.T) {
 
 	// D が欠席に変更 → 版1は旧版になり、未回答タスクは無効。
 	p["D"].send(http.MethodPut, "/api/sessions/"+id+"/preparations/me", map[string]any{"expected_revision": cur,
-		"preparation": map[string]any{"attendance": "absent", "data": prepData(false, []string{}, []string{}, 0)}}).mustStatus(t, 202)
+		"preparation": map[string]any{"attendance": "absent", "data": prepData(true)}}).mustStatus(t, 202)
 	r = p["A"].send(http.MethodPost, "/api/tasks/"+old.ID+"/responses", map[string]any{"decision": "approve", "proposal_id": old.ProposalID, "proposal_version": old.ProposalVersion})
 	if r.status != 409 || r.errorCode(t) != "proposal_superseded" {
 		t.Fatalf("旧版への回答: %d %s", r.status, r.body)

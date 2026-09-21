@@ -93,7 +93,6 @@ func TestProposalAndActivityShape(t *testing.T) {
 	id := seed.SessionID
 	p["B"].withdraw(id, "assignment").mustStatus(t, 202)
 	s.process()
-	p["C"].submitPreparation(id, "attending", prepData(true, []string{"sec_1", "sec_2"}, []string{"sec_2"}, 15)).mustStatus(t, 202)
 	s.process()
 
 	var d map[string]any
