@@ -345,3 +345,23 @@ type SubmitProposalInput struct {
 	ExpectedRevision *int64          `json:"expected_revision"`
 	Data             json.RawMessage `json:"data"`
 }
+
+// WeeklyWindow は週間空き時間の1区間。weekday は 1=月曜〜7=日曜、時刻は timezone での HH:MM（終了のみ 24:00 可）。
+type WeeklyWindow struct {
+	Weekday int    `json:"weekday"`
+	Start   string `json:"start"`
+	End     string `json:"end"`
+}
+
+// WeeklyAvailability はユーザー共通の週間空き時間。未登録の間は windows が空で updated_at が null。
+type WeeklyAvailability struct {
+	Timezone  string         `json:"timezone"`
+	Windows   []WeeklyWindow `json:"windows"`
+	UpdatedAt *time.Time     `json:"updated_at"`
+}
+
+// PutWeeklyAvailabilityInput は週間空き時間の更新。更新日時はサーバーが決めるため入力に含めない。
+type PutWeeklyAvailabilityInput struct {
+	Timezone string          `json:"timezone"`
+	Windows  *[]WeeklyWindow `json:"windows"`
+}

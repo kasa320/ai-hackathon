@@ -56,6 +56,8 @@ func (s *Server) Handler(frontendDir string, mount ...func(mux *http.ServeMux)) 
 	mux.HandleFunc("GET /api/auth/callback", s.callback)
 	mux.HandleFunc("GET /api/me", s.authed(s.me))
 	mux.HandleFunc("POST /api/auth/logout", s.authed(s.logout))
+	mux.HandleFunc("GET /api/me/weekly-availability", s.authed(s.getWeeklyAvailability))
+	mux.HandleFunc("PUT /api/me/weekly-availability", s.authed(s.putWeeklyAvailability))
 
 	mux.HandleFunc("GET /api/groups", s.authed(s.listGroups))
 	mux.HandleFunc("POST /api/groups", s.authed(s.createGroup))
@@ -274,6 +276,31 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request, sess auth.Sessio
 	s.Auth.ClearCookie(w)
 	s.Auth.MarkLoggedOut(w)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) getWeeklyAvailability(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	out, err := s.Coord.WeeklyAvailability(r.Context(), sess.User.ID)
+	if err != nil {
+		httpx.WriteError(w, r, s.Log, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+// putWeeklyAvailability は本人の空き時間を全置換する。置き換えは何度送っても同じ結果になるため、
+// Idempotency-Key は要求しない。対象は常にログイン中の本人で、利用者IDを入力から受け取らない。
+func (s *Server) putWeeklyAvailability(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	var in apitypes.PutWeeklyAvailabilityInput
+	if _, err := httpx.ReadJSON(w, r, &in); err != nil {
+		httpx.WriteError(w, r, s.Log, err)
+		return
+	}
+	out, err := s.Coord.PutWeeklyAvailability(r.Context(), sess.User.ID, in)
+	if err != nil {
+		httpx.WriteError(w, r, s.Log, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) listGroups(w http.ResponseWriter, r *http.Request, sess auth.Session) {

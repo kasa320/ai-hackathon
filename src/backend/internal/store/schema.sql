@@ -288,3 +288,12 @@ CREATE TABLE IF NOT EXISTS reading_book_slots (
     UNIQUE (book_id, sequence_number)
 );
 CREATE INDEX IF NOT EXISTS reading_book_slots_book ON reading_book_slots(book_id, sequence_number);
+
+-- ユーザー共通の週間空き時間。複数のグループ・ブックから参照する。windows は JSON。
+-- 各セッションの「今回だけ参加不可」は参加条件（preparations）で別に集める。
+CREATE TABLE IF NOT EXISTS user_weekly_availability (
+    user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    timezone   TEXT NOT NULL,
+    windows    TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
