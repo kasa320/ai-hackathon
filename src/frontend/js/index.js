@@ -63,21 +63,21 @@ async function renderMember() {
   try {
     groups = await api.groups();
   } catch (err) {
-    mount($("member"), placeholder("会の一覧を取得できませんでした", "時間をおいて開き直してください。"));
+    mount($("member"), placeholder("サークル一覧を取得できませんでした", "時間をおいて開き直してください。"));
     return;
   }
 
   if (groups.items.length === 0) {
     mount(
       $("member"),
-      el("div", { class: "page-head" }, el("h1", {}, "会")),
+      el("div", { class: "page-head" }, el("h1", {}, "サークル")),
       placeholder(
-        "まだ会がありません",
+        "まだサークルがありません",
         el(
           "span",
           {},
-          "会を作って、参加者の Discord ユーザーIDを登録すると、ここに出ます。",
-          el("p", { style: "margin-top:16px" }, el("a", { class: "btn", href: "/setup.html" }, "会を登録する")),
+          "サークルを作って、参加者の Discord ユーザーIDを登録すると、ここに出ます。",
+          el("p", { style: "margin-top:16px" }, el("a", { class: "btn", href: "/setup.html" }, "サークルを作る")),
         ),
       ),
     );
@@ -138,7 +138,7 @@ function renderGroups(groups, sessions) {
   return el(
     "section",
     { class: "section" },
-    el("div", { class: "section__head" }, el("h2", {}, "参加中のグループ")),
+    el("div", { class: "section__head" }, el("h2", {}, "参加中のサークル")),
     el(
       "div",
       { class: "group-list" },
@@ -154,20 +154,30 @@ function renderGroups(groups, sessions) {
             type: "button",
             class: owner ? "btn btn--danger" : "btn btn--quiet",
             disabled: running,
-            title: running ? "開催中の回が終了してから操作できます" : null,
+            title: running ? "開催中のセッションが終了してから操作できます" : null,
             onClick: () => owner ? openDeleteGroup(group) : openLeaveGroup(group),
           },
-          owner ? "グループを削除" : "グループを脱退",
+            owner ? "サークルを削除" : "サークルを脱退",
         );
         return el(
           "div",
           { class: "group-row" },
-          el("div", { class: "group-row__main" }, el("strong", {}, group.name), el("small", {}, `${owner ? "管理者" : "メンバー"}・${group.member_count}人`)),
-          el("div", { class: "group-row__action" }, action, running ? el("small", {}, "開催中は操作できません") : null),
+          el("div", { class: "group-row__main" }, el("strong", {}, group.name), el("small", {}, `${owner ? "管理者" : "メンバー"}・${group.member_count}人`), bookLinks(group)),
+          el("div", { class: "group-row__action" }, action, running ? el("small", {}, "セッション中は操作できません") : null),
         );
       }),
     ),
   );
+}
+
+function bookLinks(group) {
+  const node = el("span", { class: "group-books" }, "ブックを読み込み中…");
+  api.books(group.id).then(({ items }) => {
+    mount(node, items.length
+      ? items.map((book) => el("a", { class: "link", href: `/book.html?group_id=${encodeURIComponent(group.id)}&id=${encodeURIComponent(book.id)}` }, `${book.title}（${book.status === "completed" ? "完了" : "進行中"}）`))
+      : el("span", {}, "ブックはまだありません"));
+  }).catch(() => mount(node, el("span", {}, "ブックを取得できませんでした")));
+  return node;
 }
 
 function openLeaveGroup(group) {
@@ -176,8 +186,8 @@ function openLeaveGroup(group) {
     body: el(
       "div",
       {},
-      el("p", {}, "開始前の開催回は欠席扱いとなり、残るメンバーで再調整されます。"),
-      el("p", { class: "help" }, "脱退後は、このグループの過去の開催回も閲覧できません。残るメンバーには個人DMで知らせます。"),
+      el("p", {}, "開始前のセッションは欠席扱いとなり、残るメンバーで再調整されます。"),
+      el("p", { class: "help" }, "脱退後は、このサークルの過去のセッションも閲覧できません。残るメンバーには個人DMで知らせます。"),
     ),
     submitLabel: "脱退する",
     onSubmit: async ({ showError, close }) => {
@@ -200,7 +210,7 @@ function openDeleteGroup(group) {
     body: el(
       "div",
       {},
-      el("p", {}, "メンバー全員がこのグループと開催回を閲覧できなくなります。削除のお知らせは全員の個人DMへ送ります。"),
+      el("p", { }, "メンバー全員がこのサークルとセッションを閲覧できなくなります。削除のお知らせは全員の個人DMへ送ります。"),
       el("p", { class: "help" }, "保存済みデータは論理削除として保持されます。"),
     ),
     submitLabel: "削除する",
@@ -229,7 +239,7 @@ function renderHeadline({ session, detail, task }) {
   const items = feature && proposal ? feature.planItems(proposal.data, detail.members, detail.current_member_id) : [];
   const prevItems = feature && previous ? feature.planItems(previous.data, detail.members, detail.current_member_id) : null;
 
-  const approval = proposal?.approvals?.[0] ?? null;
+  const approval = proposal?.approvals?.find((item) => item.kind !== "owner") ?? null;
 
   return el(
     "section",
@@ -246,7 +256,7 @@ function renderHeadline({ session, detail, task }) {
       { class: "headline__body" },
       el("h1", {}, session.title),
       el("p", { class: "headline__sub" }, feature ? feature.summary(detail.data) : session.group.name),
-      items.length ? renderPlanBar(items, { previous: prevItems, total: session.duration_minutes }) : null,
+      items.length ? renderPlanBar(items, { previous: prevItems, total: session.duration_minutes, animationKey: `${proposal.id}:${proposal.version}` }) : null,
       el(
         "p",
         { class: "change" },
@@ -255,7 +265,7 @@ function renderHeadline({ session, detail, task }) {
       el(
         "div",
         { class: "actions" },
-        el("a", { class: "btn", href: `/session.html?id=${encodeURIComponent(session.id)}` }, task ? "内容を見て回答する" : "会の詳細を見る"),
+        el("a", { class: "btn", href: `/session.html?id=${encodeURIComponent(session.id)}` }, task ? "内容を見て回答する" : "セッション詳細を見る"),
         approval
           ? tally({
               done: approval.approved_member_ids.length,
@@ -301,12 +311,12 @@ function renderList(sessions, details, excludeId) {
     el(
       "div",
       { class: "section__head" },
-      el("h2", {}, "ほかの会"),
-      el("a", { class: "link", href: "/setup.html" }, "会を登録する"),
+      el("h2", {}, "ほかのセッション"),
+      el("a", { class: "link", href: "/setup.html" }, "サークルを作る"),
     ),
     rows.length
       ? el("div", { class: "rows" }, rows.map((s) => renderRow(s, details.get(s.id))))
-      : placeholder("ほかの会はありません", "登録すると、ここに近い順で並びます。"),
+      : placeholder("ほかのセッションはありません", "ブックを登録すると、ここに近い順で並びます。"),
   );
 }
 

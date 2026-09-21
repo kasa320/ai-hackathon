@@ -16,7 +16,7 @@ const loginUrl = api.loginUrl("/setup.html");
 const STEPS = [
   ["01", "参加者"],
   ["02", "本と範囲"],
-  ["03", "日程"],
+  ["03", "初回セッション"],
 ];
 
 const state = {
@@ -32,6 +32,8 @@ const state = {
   periodStart: "",
   periodEnd: "",
   duration: 60,
+  plannedSessionCount: 8,
+  sessionCreationMode: "sequential",
 };
 
 let me = null;
@@ -153,8 +155,8 @@ function renderGroupStep() {
       "fieldset",
       { class: "fieldset" },
       el("legend", {}, "参加者"),
-      el("label", { class: "field", style: "margin-top:16px" }, el("span", {}, "会の名前"), name),
-      state.group ? el("p", { class: "help" }, "この会の参加者は登録済みです。続けて教材と日程を設定してください。") : null,
+      el("label", { class: "field", style: "margin-top:16px" }, el("span", {}, "サークル名"), name),
+      state.group ? el("p", { class: "help" }, "このサークルの参加者は登録済みです。続けてブックと初回セッションを設定してください。") : null,
       el(
         "details",
         { class: "form-details" },
@@ -203,7 +205,7 @@ function renderGroupStep() {
 
 async function createGroup(button) {
   const invitees = state.invitees.filter((i) => i.discord_user_id);
-  if (!state.groupName) return flash($("flash"), { title: "会の名前を入れてください", tone: "warn" });
+  if (!state.groupName) return flash($("flash"), { title: "サークル名を入れてください", tone: "warn" });
   if (invitees.length === 0) return flash($("flash"), { title: "参加者を1人以上入れてください", tone: "warn" });
 
   clearFlash($("flash"));
@@ -378,12 +380,18 @@ function renderSessionStep() {
   const from = el("input", { type: "date", value: state.periodStart, min: today(), max: DATE_MAX });
   const to = el("input", { type: "date", value: state.periodEnd, min: state.periodStart || today(), max: DATE_MAX });
   const duration = el("input", { type: "number", min: "15", max: "180", step: "5", value: String(state.duration) });
+  const count = el("input", { type: "number", min: "1", max: "52", step: "1", value: String(state.plannedSessionCount) });
+  const mode = el("div", { class: "choice-cards", role: "radiogroup", "aria-label": "セッションの作り方" },
+    modeChoice("sequential", "1回ずつ作る", "最初のセッションだけ作り、進捗に合わせて次を追加します。"),
+    modeChoice("all", "全回の枠を作る", "予定回数分の枠を作ります。調整を始めるのは最初のセッションだけです。"),
+  );
   const periodSummary = el("span", {}, `${from.value || "—"}〜${to.value || "—"}`);
   const durationSummary = el("span", {}, `${duration.value}分`);
   const syncSummary = () => {
     state.periodStart = from.value;
     state.periodEnd = to.value;
     state.duration = Number(duration.value);
+    state.plannedSessionCount = Number(count.value);
     periodSummary.textContent = `${from.value || "—"}〜${to.value || "—"}`;
     durationSummary.textContent = `${duration.value || "—"}分`;
   };
@@ -395,20 +403,29 @@ function renderSessionStep() {
   });
   to.addEventListener("input", syncSummary);
   duration.addEventListener("input", syncSummary);
+  count.addEventListener("input", syncSummary);
 
   mount(
     $("form"),
     el(
       "fieldset",
       { class: "fieldset" },
-      el("legend", {}, "開催期間"),
+      el("legend", {}, "初回セッション"),
       el(
         "div",
         { class: "grid grid--2", style: "margin-top:16px" },
         el("label", { class: "field" }, el("span", {}, "開始日"), from),
         el("label", { class: "field" }, el("span", {}, "終了日"), to),
       ),
-      el("label", { class: "field", style: "margin-top:16px" }, el("span", {}, "会の長さ（15〜180分）"), duration),
+      el("label", { class: "field", style: "margin-top:16px" }, el("span", {}, "所要時間（15〜180分）"), duration),
+      el("div", { class: "checks", style: "margin-top:20px" }, el("span", {}, "初回の対象範囲"),
+        state.sections.map((section) => el("label", {}, el("input", { type: "checkbox", value: section.id, checked: true, "data-target-section": section.id }), section.title))),
+    ),
+    el("fieldset", { class: "fieldset" },
+      el("legend", {}, "ブック全体の設定"),
+      el("label", { class: "field", style: "margin-top:16px" }, el("span", {}, "予定セッション数（1〜52回）"), count),
+      el("div", { style: "margin-top:16px" }, mode),
+      el("p", { class: "help" }, "「全回の枠を作る」を選んでも、対象範囲は自動分割されません。各セッションを始めるときに範囲を選びます。"),
     ),
     el(
       "fieldset",
@@ -417,10 +434,10 @@ function renderSessionStep() {
       el(
         "table",
         { class: "table" },
-        el("tr", {}, el("th", {}, "会"), el("td", {}, state.groupName)),
+        el("tr", {}, el("th", {}, "サークル"), el("td", {}, state.groupName)),
         el("tr", {}, el("th", {}, "参加者"), el("td", {}, `あなたを含めて ${state.invitees.filter((i) => i.discord_user_id).length + 1}人`)),
         el("tr", {}, el("th", {}, "本"), el("td", {}, state.book.title)),
-        el("tr", {}, el("th", {}, "今回の範囲"), el("td", {}, state.sections.map(s => s.title).join("、"))),
+        el("tr", {}, el("th", {}, "初回の範囲"), el("td", {}, state.sections.filter(s => $("form").querySelector(`[data-target-section=\"${s.id}\"]`)?.checked).map(s => s.title).join("、") || "—")),
         el("tr", {}, el("th", {}, "期間"), el("td", {}, periodSummary)),
         el("tr", {}, el("th", {}, "長さ"), el("td", {}, durationSummary)),
       ),
@@ -439,13 +456,21 @@ function renderSessionStep() {
             state.periodStart = from.value;
             state.periodEnd = to.value;
             state.duration = Number(duration.value);
-            createSession(event.currentTarget);
+            state.targetSectionIds = state.sections.filter(s => $("form").querySelector(`[data-target-section=\"${s.id}\"]`)?.checked).map(s => s.id);
+            createBook(event.currentTarget);
           },
         },
-        "登録して確認を送る",
+        "ブックを登録する",
       ),
     ),
   );
+}
+
+function modeChoice(value, label, description) {
+  const input = el("input", { type: "radio", name: "session-creation-mode", value, checked: state.sessionCreationMode === value,
+    onChange: () => { state.sessionCreationMode = value; },
+  });
+  return el("label", { class: "choice-card" }, input, el("span", {}, el("strong", {}, label), el("small", {}, description)));
 }
 
 /** 今日（ブラウザーの時刻）を YYYY-MM-DD で返す。日付入力の下限に使う。 */
@@ -454,35 +479,36 @@ function today() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-async function createSession(button) {
+async function createBook(button) {
   if (!state.periodStart) return flash($("flash"), { title: "開始日を入れてください", tone: "warn" });
   if (!state.periodEnd) return flash($("flash"), { title: "終了目安日を入れてください", tone: "warn" });
   if (state.periodEnd < state.periodStart) {
     return flash($("flash"), { title: "終了目安日は開始日以降にしてください", tone: "warn" });
   }
   if (!Number.isInteger(state.duration) || state.duration < 15 || state.duration > 180) {
-    return flash($("flash"), { title: "会の長さは15〜180分で入力してください", tone: "warn" });
+    return flash($("flash"), { title: "所要時間は15〜180分で入力してください", tone: "warn" });
   }
+  if (!Number.isInteger(state.plannedSessionCount) || state.plannedSessionCount < 1 || state.plannedSessionCount > 52) return flash($("flash"), { title: "予定セッション数は1〜52回で入力してください", tone: "warn" });
+  if (!state.targetSectionIds?.length) return flash($("flash"), { title: "初回の対象範囲を1つ以上選んでください", tone: "warn" });
 
   clearFlash($("flash"));
   const unlock = lockForm(button, "登録しています…");
   try {
-    // 回の名前と開始日時は送らない。名前は通し番号、日時は案で決まる。
-    const created = await api.createSession(state.group.id, {
-      playbook_id: state.playbookId,
-      period_start: state.periodStart,
-      period_end: state.periodEnd,
-      duration_minutes: state.duration,
-      data: {
-        book_title: state.book.title,
-        isbn: state.book.isbn,
-        toc_source: state.tocSource,
-        sections: state.sections,
-        completed_section_ids: [],
-        target_section_ids: state.sections.map(s => s.id),
+    const created = await api.createBook(state.group.id, {
+      title: state.book.title,
+      isbn: state.book.isbn,
+      toc_source: state.tocSource,
+      sections: state.sections,
+      planned_session_count: state.plannedSessionCount,
+      session_creation_mode: state.sessionCreationMode,
+      initial_session: {
+        period_start: state.periodStart,
+        period_end: state.periodEnd,
+        duration_minutes: state.duration,
+        target_section_ids: state.targetSectionIds,
       },
     });
-    location.href = `/session.html?id=${encodeURIComponent(created.session.id)}`;
+    location.href = `/book.html?group_id=${encodeURIComponent(state.group.id)}&id=${encodeURIComponent(created.book.id)}`;
   } catch (err) {
     await reportMutationError(err, { node: $("flash"), loginUrl });
     unlock();

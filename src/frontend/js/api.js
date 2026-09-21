@@ -191,6 +191,17 @@ export const api = {
     });
   },
 
+  // ---- 輪読：ブックとセッション枠 ----
+  books: (groupId) => request("GET", `/groups/${encodeURIComponent(groupId)}/reading/books`),
+  createBook: (groupId, payload) => write("POST", `/groups/${encodeURIComponent(groupId)}/reading/books`, payload),
+  book: (groupId, bookId) => request("GET", `/groups/${encodeURIComponent(groupId)}/reading/books/${encodeURIComponent(bookId)}`),
+  createBookSession: (groupId, bookId, payload) =>
+    write("POST", `/groups/${encodeURIComponent(groupId)}/reading/books/${encodeURIComponent(bookId)}/sessions`, payload),
+  completeBookSession: (groupId, bookId, slotId, expectedRevision) =>
+    write("POST", `/groups/${encodeURIComponent(groupId)}/reading/books/${encodeURIComponent(bookId)}/sessions/${encodeURIComponent(slotId)}/complete`, {
+      expected_revision: expectedRevision,
+    }),
+
   // ---- 開発・デモ用（DEV_MODE=1 のときだけ存在する） ----
   dev: {
     status: () => request("GET", "/dev/status"),

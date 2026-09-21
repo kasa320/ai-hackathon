@@ -62,7 +62,7 @@ boot();
 
 async function boot() {
   if (!sessionId) {
-    mount($("headline"), placeholder("会が指定されていません", "会の一覧から開き直してください。"));
+    mount($("headline"), placeholder("セッションが指定されていません", "サークル一覧から開き直してください。"));
     return;
   }
 
@@ -88,7 +88,7 @@ async function boot() {
     onError: (err, { fatal }) => {
       if (!fatal) return;
       if (err.status === 401) location.href = loginUrl;
-      else mount($("headline"), placeholder("この会は表示できません", "アクセスできる会か確認してください。"));
+      else mount($("headline"), placeholder("このセッションは表示できません", "アクセスできるセッションか確認してください。"));
     },
   });
   poller.start();
@@ -185,7 +185,7 @@ function renderHeadline() {
         task ? TASK_TITLE[task.kind] ?? "回答してください" : headlineTitle()),
       el("p", { class: "change", style: "margin-top:8px" }, headlineText(task)),
       items.length
-        ? el("div", {}, renderPlanBar(items, { previous: prevItems, total: detail.session.duration_minutes }), planLegend())
+        ? el("div", {}, renderPlanBar(items, { previous: prevItems, total: detail.session.duration_minutes, animationKey: `${proposal.id}:${proposal.version}` }), planLegend())
         : null,
       renderActions(task, proposal),
     ),
@@ -212,7 +212,7 @@ function headlineText(task) {
   if (c?.status === "needs_owner") {
     return `${c.summary || REASON_LABEL[c.reason_code]} 自動での再試行は予定していません。`;
   }
-  return c?.summary ?? "この会でいま動いている調整はありません。";
+  return c?.summary ?? "このセッションでいま動いている調整はありません。";
 }
 
 function renderActions(task, proposal) {
@@ -244,12 +244,9 @@ function renderActions(task, proposal) {
     buttons.push(el("button", { class: "btn", type: "button", disabled: busy, onClick: openProposalForm }, "代案を出す"));
   }
 
-  // 自分のタスクに対応する承認の進み具合を出す。管理者の承認と全員の同意は別に数える
+  // 管理者の旧来の承認は通常画面の同意数に混ぜない。本人宛タスクの回答ボタンは上で維持する。
   const approvals = proposal?.approvals ?? [];
-  const approval =
-    (task?.kind === "owner_approval" ? approvals.find((a) => a.kind === "owner") : approvals.find((a) => a.kind !== "owner")) ??
-    approvals[0] ??
-    null;
+  const approval = approvals.find((a) => a.kind !== "owner") ?? null;
   const progress = approval
     ? tally({
         done: approval.approved_member_ids.length,
@@ -316,7 +313,8 @@ function renderConsent(proposal) {
   const blocks = [];
 
   for (const approval of proposal.approvals ?? []) {
-    const label = approval.kind === "owner" ? "管理者の承認" : approval.kind === "all" ? "全員の参加可否・同意" : "参加予定者の同意";
+    if (approval.kind === "owner") continue;
+    const label = approval.kind === "all" ? "全員の参加可否・同意" : "参加予定者の同意";
     blocks.push(
       el(
         "div",

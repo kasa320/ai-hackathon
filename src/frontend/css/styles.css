@@ -193,6 +193,17 @@ a.row:hover { background: var(--panel); }
 .group-row__main strong { font-size: .95rem; }
 .group-row__main small, .group-row__action small { color: var(--ink-3); font-size: .76rem; }
 .group-row__action { display: grid; justify-items: end; gap: 4px; margin-left: auto; }
+.group-books { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; color: var(--ink-3); font-size: .76rem; }
+.group-books .link { font-size: .76rem; }
+
+/* ブックの進捗と各セッション枠。開始前の枠は通知済み・調整中の見た目にしない。 */
+.book-progress { padding: var(--s4) var(--s5); border-radius: var(--r-card); background: var(--panel); }
+.book-progress .section__head { padding-bottom: var(--s2); }
+.book-progress .section__head strong { margin-left: auto; font-size: .88rem; }
+.book-sessions { display: grid; gap: var(--s3); margin-top: var(--s4); }
+.book-session { padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-ctrl); }
+.book-session > div:first-child { display: flex; align-items: center; gap: var(--s3); }
+.book-session .help { margin-top: var(--s2); }
 
 /* ---------- 補助パネル ---------- */
 .panels { display: grid; gap: var(--s4); grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-top: var(--s5); }
@@ -273,6 +284,12 @@ a.row:hover { background: var(--panel); }
 .checks label:hover { background: var(--panel); }
 .checks input { margin-top: 4px; accent-color: var(--blue); }
 .checks small { display: block; color: var(--ink-3); font-size: .76rem; }
+.choice-cards { display: grid; gap: var(--s3); }
+.choice-card { display: flex; align-items: flex-start; gap: var(--s3); padding: var(--s3) var(--s4); border: 1px solid var(--line); border-radius: var(--r-ctrl); cursor: pointer; }
+.choice-card:has(input:checked) { border-color: var(--blue); background: var(--blue-soft); }
+.choice-card input { margin-top: 5px; accent-color: var(--blue); }
+.choice-card span { display: grid; gap: 2px; }
+.choice-card small { color: var(--ink-2); font-size: .78rem; }
 .inline { display: flex; flex-wrap: wrap; gap: var(--s4); margin-top: var(--s3); font-size: .9rem; }
 .inline label { display: inline-flex; align-items: center; gap: 6px; }
 .inline input { accent-color: var(--blue); }
