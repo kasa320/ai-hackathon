@@ -458,3 +458,99 @@ dialog::backdrop { background: rgba(35, 42, 49, .35); }
 .entry__head { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
 .entry__via { flex: none; padding: 1px 8px; border: 1px solid var(--line-strong); border-radius: var(--r-chip); color: var(--ink-3); font-size: .7rem; }
 .entry__diff { display: grid; gap: 2px; margin: 0; padding-left: 1.1em; color: var(--ink-2); font-size: .8rem; list-style: disc; }
+
+/* ---------- グループ・ブック（複数ブックの管理） ---------- */
+.field-label { display: block; margin-bottom: 6px; color: var(--ink-2); font-size: .82rem; }
+.stamp[data-tone="warn"] { border-color: var(--warn); color: var(--warn); font-weight: 700; }
+
+/* 一覧：種別の札・名前・複数のブックが崩れないようにする */
+.group-row { flex-wrap: wrap; }
+.group-row__main { flex: 1 1 260px; }
+.group-row__title { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); min-width: 0; }
+.group-row__name { min-width: 0; overflow-wrap: anywhere; font-size: 1rem; font-weight: 700; text-decoration: none; }
+.group-row__name:hover { color: var(--blue); text-decoration: underline; }
+.group-row__action { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s2); margin-left: auto; }
+.group-row__action small { flex-basis: 100%; text-align: right; }
+.group-row__action .btn { padding: 8px 16px; font-size: .82rem; }
+.group-books { display: grid; gap: 2px; }
+.group-books ul { display: grid; gap: 2px; }
+.group-books li { display: flex; align-items: baseline; gap: var(--s2); min-width: 0; }
+.group-books li .link { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.group-books__state { flex: none; color: var(--ink-3); font-size: .72rem; }
+@media (max-width: 720px) {
+  .group-row__action { justify-content: flex-start; margin-left: 0; }
+  .group-row__action small { text-align: left; }
+}
+
+/* グループ詳細 */
+.page-head__title { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s3); }
+.page-head__title h1 { min-width: 0; overflow-wrap: anywhere; }
+.page-head__title .btn { padding: 6px 14px; font-size: .8rem; }
+.page-head p .plugin { vertical-align: middle; }
+.member-list { display: grid; gap: var(--s2); margin-top: var(--s4); }
+.member-list li { display: flex; align-items: center; gap: var(--s3); }
+.member-list small { color: var(--ink-3); font-size: .76rem; }
+.book-cards { display: grid; gap: var(--s3); margin-top: var(--s4); }
+.book-card { padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-ctrl); }
+.book-card__head { display: flex; align-items: center; gap: var(--s3); }
+.book-card__title { min-width: 0; overflow-wrap: anywhere; font-weight: 700; text-decoration: none; }
+.book-card__title:hover { color: var(--blue); text-decoration: underline; }
+.book-card__head .stamp { margin-left: auto; }
+.book-card .help { margin-top: var(--s1); }
+.section__head .btn { margin-left: auto; padding: 6px 16px; font-size: .82rem; }
+
+/* ブックの入力（グループ作成・追加・編集で共通） */
+.book-form__body { min-width: 0; margin: 0; padding: 0; border: 0; display: grid; gap: var(--s4); }
+.book-form__body .grid { margin-top: 0; }
+.book-entries { display: grid; gap: var(--s5); margin-top: var(--s4); }
+.book-entry { padding: var(--s5); border: 1px solid var(--line); border-radius: var(--r-card); }
+.book-entry[data-status="done"] { background: var(--panel); }
+.book-entry[data-status="failed"] { border-color: var(--warn); }
+.book-entry__head { display: flex; align-items: center; gap: var(--s3); margin-bottom: var(--s4); }
+.book-entry__head h2, .book-entry__head h3 { font-size: 1rem; font-weight: 700; }
+.book-entry__head .btn { margin-left: auto; padding: 4px 12px; font-size: .78rem; }
+.book-entry__result { margin-top: var(--s4); }
+.book-entry__result:empty { display: none; }
+.book-entry__ok { font-size: .86rem; color: var(--ink-2); }
+.book-entry__ok .link { margin-left: var(--s3); }
+.book-results:empty { display: none; }
+.book-entry .submit { margin-top: var(--s4); }
+.toc-row { display: flex; align-items: center; gap: var(--s3); font-size: .86rem; }
+@media (max-width: 720px) { .book-entry { padding: var(--s4); } }
+
+/* ブック詳細 */
+.book-facts { margin-bottom: var(--s5); }
+.book-tabs { display: flex; flex-wrap: wrap; gap: var(--s2); margin-bottom: var(--s5); }
+.book-tabs__item { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 5px 14px; border: 1px solid var(--line-strong); border-radius: var(--r-chip); font-size: .82rem; text-decoration: none; }
+.book-tabs__item:hover { background: var(--panel); }
+.book-tabs__item[aria-current="page"] { border-color: var(--ink); background: var(--ink); color: #fff; font-weight: 700; }
+.my-plan { margin-top: var(--s5); padding: var(--s4) var(--s5); border: 1px solid var(--line); border-radius: var(--r-card); }
+.my-plan h2 { font-size: 1rem; font-weight: 700; }
+.my-plan p { margin-top: var(--s2); font-size: .9rem; }
+.my-plan--ask { border-color: var(--blue); background: var(--blue-soft); }
+.my-plan .actions { margin-top: var(--s4); }
+.edit-lock { margin-top: var(--s5); padding: var(--s3) var(--s4); border-left: 2px solid var(--line-strong); background: var(--panel); font-size: .86rem; }
+.edit-book { margin-top: var(--s5); }
+.edit-book .book-entry { margin-top: var(--s4); }
+ol.book-sessions { padding: 0; list-style: none; }
+.slot__head { display: flex; align-items: center; gap: var(--s3); }
+.slot__facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--s1) var(--s4); margin: var(--s3) 0 0; font-size: .86rem; }
+.slot__facts dt { color: var(--ink-2); }
+.slot__facts dd { margin: 0; overflow-wrap: anywhere; }
+.slot .help { margin-top: var(--s2); }
+.slot[data-status="planned"] { background: #fff; }
+.slot[data-status="completed"] { background: var(--panel); }
+
+/* 普段の空き時間 */
+.week { display: grid; margin-top: var(--s3); border-top: 1px solid var(--line); }
+.week__day { display: grid; grid-template-columns: 6em minmax(0, 1fr); gap: var(--s3); padding: var(--s3) 0; border-bottom: 1px solid var(--line); }
+.week__label { padding-top: 6px; font-size: .9rem; font-weight: 500; }
+.week__windows { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); min-width: 0; }
+.week__window { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.week__window input[type="time"] { padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: var(--r-ctrl); background: #fff; font-size: .9rem; }
+.week__window input[type="time"]:focus { border-color: var(--blue); }
+.week__window .field__error { flex-basis: 100%; }
+.week__windows > .btn { padding: 4px 12px; font-size: .78rem; }
+@media (max-width: 720px) { .week__day { grid-template-columns: minmax(0, 1fr); gap: var(--s1); } .week__label { padding-top: 0; } }
+.book-entry .submit .btn--quiet, .submit .btn--quiet:first-child { margin-left: 0; }
+.notice > .btn { flex: none; align-self: center; white-space: nowrap; }
