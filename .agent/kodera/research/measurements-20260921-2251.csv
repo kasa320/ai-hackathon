@@ -1,0 +1,10 @@
+﻿実行日時,系統,ケース,構成,要求モデル,解決モデル,試行,LLM呼出数,入力tok,出力tok,確定額,通貨,費用欠測,所要秒(API),所要秒(実測),fallback,結果,備考
+2026-09-21T22:55:14,planner,E01,auto,orcarouter/auto,不明,1,2,0,0,不明,unknown,2,不明,240.2,0,失敗,status=planning
+2026-09-21T22:59:47,planner,E01,auto,orcarouter/auto,不明,2,2,0,0,不明,unknown,2,不明,240.2,0,失敗,status=planning
+2026-09-21T23:04:15,planner,E01,auto,orcarouter/auto,不明,3,2,0,0,不明,unknown,2,不明,240.2,0,失敗,status=planning
+2026-09-21T23:05:22,planner,E01,sonnet-5,anthropic/claude-sonnet-5,anthropic/claude-sonnet-5,1,3,14028,4470,0.059348,USD,0,56.0,60.0,0,安全停止,reason=model_error
+2026-09-21T23:06:28,planner,E01,sonnet-5,anthropic/claude-sonnet-5,anthropic/claude-sonnet-5,2,3,14049,4928,0.057586,USD,0,64.0,66.1,0,安全停止,reason=model_error
+2026-09-21T23:07:43,planner,E01,sonnet-5,anthropic/claude-sonnet-5,anthropic/claude-sonnet-5,3,3,14170,4539,0.052648,USD,0,71.0,75.1,0,安全停止,reason=model_error
+2026-09-21T23:11:50,planner,E01,haiku-4.5,anthropic/claude-haiku-4.5,不明,1,4,0,0,不明,unknown,4,不明,240.2,0,失敗,status=planning
+2026-09-21T23:15:50,planner,E01,haiku-4.5,anthropic/claude-haiku-4.5,不明,2,4,0,0,不明,unknown,4,不明,240.2,0,失敗,status=planning
+2026-09-21T23:19:50,planner,E01,haiku-4.5,anthropic/claude-haiku-4.5,不明,3,4,0,0,不明,unknown,4,不明,240.2,0,失敗,status=planning

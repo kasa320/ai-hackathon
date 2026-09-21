@@ -1,0 +1,16 @@
+﻿実行日時,系統,ケース,構成,要求モデル,解決モデル,試行,LLM呼出数,入力tok,出力tok,確定額,通貨,費用欠測,所要秒(API),所要秒(実測),fallback,結果,備考
+2026-09-22T00:31:54,interpreter,E13,auto,orcarouter/auto,不明,1,1,0,0,不明,unknown,1,不明,40.0,0,失敗,HTTP 503 temporarily_unavailable AIが応答しませんでした。フォームから入力するか、しばらくしてからやり直してください。
+2026-09-22T00:32:34,interpreter,E13,auto,orcarouter/auto,不明,2,1,0,0,不明,unknown,1,不明,40.0,0,失敗,HTTP 503 temporarily_unavailable AIが応答しませんでした。フォームから入力するか、しばらくしてからやり直してください。
+2026-09-22T00:32:52,interpreter,E13,auto,orcarouter/auto,anthropic/claude-opus-5,3,1,3621,423,0.046776,USD,0,18.0,18.3,0,安全拒否,HTTP 409 invalid_state この内容は参加条件の項目では扱えません。フォームから入力してください。
+2026-09-22T00:33:39,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,1,1,0,0,不明,unknown,1,不明,40.0,0,失敗,HTTP 503 temporarily_unavailable AIが応答しませんでした。フォームから入力するか、しばらくしてからやり直してください。
+2026-09-22T00:34:19,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,2,1,0,0,不明,unknown,1,不明,40.0,0,失敗,HTTP 503 temporarily_unavailable AIが応答しませんでした。フォームから入力するか、しばらくしてからやり直してください。
+2026-09-22T00:34:59,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,3,1,0,0,不明,unknown,1,不明,40.0,0,失敗,HTTP 503 temporarily_unavailable AIが応答しませんでした。フォームから入力するか、しばらくしてからやり直してください。
+2026-09-22T00:35:10,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,1,1,1403,504,0.001680,USD,0,4.0,4.6,0,期待通り,unclear=0 記録の増加なし(回答済み7/参加条件4/案1)
+2026-09-22T00:35:18,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,2,1,1403,1169,0.002988,USD,0,7.0,7.5,0,安全拒否,HTTP 409 invalid_state この内容は参加条件の項目では扱えません。フォームから入力してください。
+2026-09-22T00:35:35,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,3,2,2914,2955,0.007552,USD,0,17.0,16.8,0,期待通り,unclear=1 記録の増加なし(回答済み7/参加条件4/案1)
+2026-09-22T00:36:02,interpreter,E13,gpt-5-mini,openai/gpt-5-mini,openai/gpt-5-mini,1,1,1868,2561,0.005186,USD,0,20.0,20.3,0,安全拒否,HTTP 409 invalid_state この内容は参加条件の項目では扱えません。フォームから入力してください。
+2026-09-22T00:36:16,interpreter,E13,gpt-5-mini,openai/gpt-5-mini,openai/gpt-5-mini,2,1,1868,1600,0.003264,USD,0,14.0,14.5,0,期待通り,unclear=0 記録の増加なし(回答済み7/参加条件4/案1)
+2026-09-22T00:36:33,interpreter,E13,gpt-5-mini,openai/gpt-5-mini,openai/gpt-5-mini,3,1,1868,2112,0.004288,USD,0,16.0,16.3,0,期待通り,unclear=0 記録の増加なし(回答済み7/参加条件4/案1)
+2026-09-22T00:36:57,interpreter,E13,marunage-extract,orcarouter/marunage-extract,openai/gpt-5-mini,1,1,1868,1856,0.003776,USD,0,17.0,17.7,0,期待通り,unclear=0 記録の増加なし(回答済み7/参加条件4/案1)
+2026-09-22T00:37:11,interpreter,E13,marunage-extract,orcarouter/marunage-extract,openai/gpt-5-mini,2,1,1868,1536,0.003136,USD,0,14.0,14.6,0,期待通り,unclear=0 記録の増加なし(回答済み7/参加条件4/案1)
+2026-09-22T00:37:21,interpreter,E13,marunage-extract,orcarouter/marunage-extract,openai/gpt-5-mini,3,1,1868,1215,0.002494,USD,0,9.0,9.5,0,期待通り,unclear=0 記録の増加なし(回答済み7/参加条件4/案1)

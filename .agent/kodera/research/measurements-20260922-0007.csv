@@ -1,0 +1,4 @@
+﻿実行日時,系統,ケース,構成,要求モデル,解決モデル,試行,LLM呼出数,入力tok,出力tok,確定額,通貨,費用欠測,所要秒(API),所要秒(実測),fallback,結果,備考
+2026-09-22T00:11:32,planner,E01,marunage-plan,orcarouter/marunage-plan,anthropic/claude-sonnet-5,1,6,23078,9960,不明,USD,1,138.0,225.1,0,安全停止,reason=model_error
+2026-09-22T00:15:33,planner,E01,marunage-plan,orcarouter/marunage-plan,anthropic/claude-sonnet-5,2,2,4187,2302,不明,USD,1,26.0,240.2,0,失敗,status=planning
+2026-09-22T00:17:26,planner,E01,marunage-plan,orcarouter/marunage-plan,anthropic/claude-sonnet-5,3,3,14181,9399,0.102526,USD,0,108.0,111.1,0,安全停止,reason=model_error

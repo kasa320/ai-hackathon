@@ -1,0 +1,16 @@
+﻿実行日時,系統,ケース,構成,要求モデル,解決モデル,試行,LLM呼出数,入力tok,出力tok,確定額,通貨,費用欠測,所要秒(API),所要秒(実測),fallback,結果,備考
+2026-09-22T00:24:19,interpreter,E13,auto,orcarouter/auto,deepseek/deepseek-v4-flash-vision-exp,1,1,2179,670,0.000922,USD,0,4.0,4.3,0,失敗,HTTP 409
+2026-09-22T00:25:00,interpreter,E13,auto,orcarouter/auto,不明,2,1,0,0,不明,unknown,1,不明,40.0,0,失敗,HTTP 503
+2026-09-22T00:25:32,interpreter,E13,auto,orcarouter/auto,z-ai/glm-5.2,3,1,2101,1946,0.011504,USD,0,32.0,32.2,1,失敗,HTTP 409
+2026-09-22T00:26:19,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,1,1,0,0,不明,unknown,1,不明,40.0,0,失敗,HTTP 503
+2026-09-22T00:26:59,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,2,1,0,0,不明,unknown,1,不明,40.0,0,失敗,HTTP 503
+2026-09-22T00:27:35,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,google/gemini-2.5-flash-lite,3,2,3263,177,0.000396,USD,0,36.0,36.1,0,期待通り,unclear=0 記録の増加なし(回答済み7/参加条件4/案1)
+2026-09-22T00:27:50,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,1,1,1403,1311,0.003698,USD,0,8.0,9.0,0,期待通り,unclear=0 記録の増加なし(回答済み7/参加条件4/案1)
+2026-09-22T00:27:55,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,2,1,1403,511,0.001698,USD,0,4.0,4.4,0,期待通り,unclear=0 記録の増加なし(回答済み7/参加条件4/案1)
+2026-09-22T00:27:59,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,3,1,1403,615,0.001602,USD,0,4.0,4.3,0,失敗,HTTP 409
+2026-09-22T00:28:21,interpreter,E13,gpt-5-mini,openai/gpt-5-mini,openai/gpt-5-mini,1,1,1868,1408,0.002880,USD,0,13.0,15.2,0,期待通り,unclear=0 記録の増加なし(回答済み7/参加条件4/案1)
+2026-09-22T00:28:36,interpreter,E13,gpt-5-mini,openai/gpt-5-mini,openai/gpt-5-mini,2,1,1868,1984,0.004436,USD,0,14.0,15.0,0,期待通り,unclear=0 記録の増加なし(回答済み7/参加条件4/案1)
+2026-09-22T00:28:50,interpreter,E13,gpt-5-mini,openai/gpt-5-mini,openai/gpt-5-mini,3,1,1868,1368,0.002800,USD,0,13.0,13.4,0,期待通り,unclear=0 記録の増加なし(回答済み7/参加条件4/案1)
+2026-09-22T00:29:10,interpreter,E13,marunage-extract,orcarouter/marunage-extract,openai/gpt-5-mini,1,1,1868,1368,0.002800,USD,0,13.0,13.5,0,期待通り,unclear=0 記録の増加なし(回答済み7/参加条件4/案1)
+2026-09-22T00:29:23,interpreter,E13,marunage-extract,orcarouter/marunage-extract,openai/gpt-5-mini,2,1,1868,1746,0.003556,USD,0,13.0,13.0,0,期待通り,unclear=0 記録の増加なし(回答済み7/参加条件4/案1)
+2026-09-22T00:29:58,interpreter,E13,marunage-extract,orcarouter/marunage-extract,openai/gpt-5-mini,3,2,3877,4258,0.008708,USD,0,35.0,35.6,0,失敗,HTTP 409

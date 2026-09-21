@@ -89,11 +89,14 @@ Discordに「参加条件」と送ると、参加できる日時を会話で入�
 | `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` / `DISCORD_REDIRECT_URL` | 空 | Discord ログイン。未設定なら `/api/auth/discord` は `auth_error=provider_unavailable` に戻る |
 | `DISCORD_BOT_TOKEN` | 空 | Bot が常駐し、DM での対話と本人宛て通知の DM 送信を行う（`DIRECT_MESSAGES` インテントが必要）。未設定なら通知はサーバーログに出すだけ |
 | `DISCORD_CHANNEL_ID` | 空 | DM が使えないときの退避先と、全員宛ての連絡（計画の確定）の送り先。未設定なら本人宛ての DM だけを送り、宛先のない通知は失敗として記録する |
+| `ORCAROUTER_MODEL` | `orcarouter/auto` | 用途別の指定がないときの既定のモデル。案・解釈・目次画像は未設定ならこの値を引き継ぐ（目次検索だけは未設定なら使わない） |
 | `ORCAROUTER_PLANNER_MODEL` | 空 | 案（日時・進行・担当）を考えるモデル。空なら `ORCAROUTER_MODEL` |
 | `ORCAROUTER_INTERPRETER_MODEL` | 空 | Web・Discordの自由文から参加条件を取り出すモデル。空なら `ORCAROUTER_MODEL`。Discordの1往復は60秒で打ち切るので、応答の速いモデルを選ぶ |
 | `ORCAROUTER_TIMEOUT_SECONDS` | `180` | LLM 呼び出し1回の待ち時間の上限（1〜600秒）。超えると一時的な失敗として再試行する |
 | `ORCAROUTER_SEARCH_MODEL` | 空 | 国立国会図書館サーチに目次が登録されていない本を Web 検索で探す検索付きモデル。空なら Web 検索をせず画像の提出を依頼する |
-| `ORCAROUTER_VISION_MODEL` | 空 | 目次画像の書き写しに使うモデル（空なら `ORCAROUTER_MODEL`） |
+| `ORCAROUTER_VISION_MODEL` | 空 | 目次画像の書き写しに使うモデル。空なら `ORCAROUTER_MODEL` を引き継ぐので、`ORCAROUTER_MODEL` に Named Router（`orcarouter/…`）を設定していると、画像入力に対応しないモデルへ振られて書き写しが壊れることがある。この組み合わせのときは起動時に WARN を出すので、画像に対応するモデルを明示する |
+
+`AGENT_MODE=llm` で起動すると、LLM を呼ぶ4か所（計画・解釈・目次画像・目次検索）の実際の宛先モデルと待ち時間の上限を INFO ログに1行で出します（目次検索が未設定なら `(なし)`）。設定漏れをその場で見つけるためと、費用・所要時間をどの構成で測ったかの証跡を残すためです。設定ミスで起動を止めることはしません。
 
 ### 開発モード（デモ）
 
@@ -116,6 +119,29 @@ curl -X PUT  localhost:24680/api/dev/faults -H 'Content-Type: application/json' 
 その他のコマンド：`make fmt`（整形）、`make vet`（静的検査）、`make db-reset`（ローカル DB の削除）
 
 依存ライブラリ：`modernc.org/sqlite`（SQLite）、`golang.org/x/text`（目次の照合での Unicode 正規化）、`github.com/bwmarrin/discordgo`（DM の受信とボタン）。LLM の呼び出しと通知の送信は標準ライブラリの HTTP クライアントで行う。
+
+### 計測（モデル構成の比較）
+
+`scripts/measure.py` は、モデル構成ごとに固定ケースを実行して費用・所要時間・結果を CSV にまとめます。必要なのは Python 3 だけ（外部ライブラリなし）。`AGENT_MODE=llm` で実際に OrcaRouter を呼ぶので `ORCAROUTER_API_KEY` が要ります。1構成につきサーバーを1回だけ起動し、試行ごとに初期データを投入し直します。DB は出力先の `.work/` に作るので、ローカルの `data/app.db` には触れません。
+
+```sh
+python scripts/measure.py --runs 3                         # 計画・解釈の全構成
+python scripts/measure.py --only interpreter --timeout 20  # 解釈側だけ、合格線20秒
+python scripts/measure.py --configs auto,marunage-plan     # 構成を絞る
+```
+
+| 引数 | 既定値 | 内容 |
+| --- | --- | --- |
+| `--runs` | `3` | 1構成あたりの試行数 |
+| `--only` | 空 | `planner` / `interpreter` の片方だけ実行する |
+| `--configs` | 空 | 構成名をカンマ区切りで絞る |
+| `--timeout` | `60` | LLM 呼び出し1回の上限秒（合格線）。`ORCAROUTER_TIMEOUT_SECONDS` として渡す |
+| `--port` | `24690` | 計測用サーバーの待ち受けポート。開発用の 24680 や他の担当と分ける |
+| `--out-dir` | `.agent/kodera/research` | CSV と作業ファイル（`.work/`）の出力先 |
+
+`--timeout` は測定の都合ではなく、製品要件に合わせた合格線です。計画は背景処理で結果が通知に届くので60秒、解釈は本人が画面の前で待つので20秒（Discord の1往復は60秒で打ち切る）。超えた試行は失敗として数えます。
+
+結果は `<出力先>/measurements-<日時>.csv`。試行ごとに、要求モデル・解決モデル・LLM呼出数・入出力トークン・確定額・通貨・費用欠測数・所要秒（OrcaRouter の計測値と実測）・`fallback`・結果・備考を記録します。ケースは計画側が E01（担当辞退→再計画）、解釈側が E09・E13。失敗した試行も消さず、費用が取れなかったものは「不明」と書いて0として扱いません。
 
 ## 提出物
 

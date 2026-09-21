@@ -200,7 +200,6 @@ function openDeleteGroup(group) {
       "div",
       {},
       el("p", {}, "メンバー全員がこのグループと開催回を閲覧できなくなります。削除のお知らせは全員の個人DMへ送ります。"),
-      el("p", { class: "help" }, "保存済みデータは論理削除として保持されます。"),
     ),
     submitLabel: "削除する",
     onSubmit: async ({ showError, close }) => {

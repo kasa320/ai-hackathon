@@ -288,20 +288,28 @@ Discord への送信待ち行列。
 
 ## llm_calls
 
-LLM 呼び出し1回の記録。金額が分からなければ NULL のままにし、0円として扱わない。以下のサンプルだけは `AGENT_MODE=llm` のときの想定値（デモ投入は `fake` のため記録されない）。
+LLM 呼び出し1回の記録。金額・所要時間・実際に応答したモデルが分からなければ NULL のままにし、0 や推測値として扱わない。以下のサンプルだけは `AGENT_MODE=llm` のときの想定値（デモ投入は `fake` のため記録されない）。
 
 | カラム | 意味 | サンプル |
 | --- | --- | --- |
 | `id` | 記録ID | `llm_1f0c3a7d94e2b58c6d0a1e44` |
 | `case_id` | 調整案件（目次取得なら NULL） | `case_52e00dd5202cf4c3cd0f1e73` |
 | `lookup_id` | 目次取得（調整案件なら NULL） | `null` |
-| `model` | 使ったモデル | `orcarouter/auto` |
-| `input_tokens` / `output_tokens` | トークン数（不明なら NULL） | `1820` / `260` |
-| `currency` | 通貨。不明なら `unknown` | `unknown` |
+| `model` | 要求したモデル。ルーター名のことがある | `orcarouter/auto` |
+| `purpose` | 呼び出し元。`planner` / `interpreter` / `toc_search` / `toc_vision`。`case_id` と `lookup_id` だけでは計画と解釈、目次検索と目次画像を区別できないため持つ | `planner` |
+| `resolved_model` | 実際に応答したモデル。`model` はルーター名のことがあるので、実測の集計はこちらを使う。取れなければ NULL（`model` で代用しない） | `z-ai/glm-5.3-flash` |
+| `fallback_level` | 0 が本命成功、1 以上で受け皿が発動。取れなければ NULL | `0` |
+| `request_id` | OrcaRouter の `X-Orca-Request-Id`。確定請求額と所要時間の取得に使う | `20260921113026632111` |
+| `latency_ms` | OrcaRouter が計測した所要時間（ミリ秒）。取れなければ NULL | `73000` |
+| `input_tokens` / `output_tokens` | トークン数（不明なら NULL） | `2506` / `3215` |
+| `currency` | 通貨。不明なら `unknown` | `USD` |
 | `estimated_amount` | 呼び出し前の見積額（文字列） | `null` |
-| `billed_amount` | 実際の請求額（文字列） | `null` |
+| `billed_amount` | 確定した請求額（文字列）。`GET /v1/generation` から取れたときだけ入れる | `0.000992` |
 | `succeeded` | 成功したか（0/1）。失敗も回数に数える | `1` |
 | `created_at` | 呼び出し日時 | `2026-09-20T06:28:09.270000000Z` |
+
+`purpose` 以降の5カラムは後から追加したため、既存の行は NULL のまま残る。集計では「測れなかった」と「0 だった」を区別する。
+障害注入（`DEV_MODE=1`）で失敗させた呼び出しも `purpose` 付きで残り、`model` が `fault-injection` になる。実測の集計から外すときはこれで除く。
 
 ## idempotency
 
