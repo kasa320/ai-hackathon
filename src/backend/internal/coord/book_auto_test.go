@@ -12,14 +12,6 @@ import (
 	"github.com/kasa320/ai-hackathon/src/backend/internal/store"
 )
 
-func (h *harness) kinds() map[string]int {
-	out := map[string]int{}
-	for _, n := range h.groupNotifs() {
-		out[n.Kind]++
-	}
-	return out
-}
-
 // restart はプロセスの再起動を模す。DB・時計は引き継ぎ、Coordinator を作り直す。
 func (h *harness) restart() {
 	h.t.Helper()
@@ -647,4 +639,79 @@ func TestBookEditIsRejectedAfterFirstSessionStarts(t *testing.T) {
 	if d := h.book("A", b.ID); d.Permissions.CanEdit {
 		t.Fatal("開始後なのに can_edit")
 	}
+}
+
+// メンバーがまだログインしていないと、実セッションを作れない。自動で進めず、管理者へ一度だけ知らせ、
+// 解消されたら次の処理で開始する。
+func TestSlotStartBlockedByUnjoinedMemberNotifiesOwnerOnceAndRecovers(t *testing.T) {
+	h := newHarness(t, nil)
+	res, err := h.c.CreateGroup(ctx, h.users["A"], apitypes.CreateGroupInput{Name: "二人組", Invitees: []apitypes.Invitee{{DiscordUserID: "555555555555555555", DisplayName: "未参加"}}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var g apitypes.Group
+	decode(t, res.Body, &g)
+	h.group = g.ID
+	b := h.createBook(bookInput("設計の本", 6, 3))
+	h.approveBook(b.ID) // 担当を割り当てられるのは、ログイン済みの管理者だけ
+	h.setNow(jst0(2026, 9, 24))
+	for i := 0; i < 3; i++ {
+		h.process()
+	}
+	d := h.book("A", b.ID)
+	if h.sessionCount() != 0 || d.Sessions[0].SchedulingStatus != "needs_attention" || d.Sessions[0].Status != "planned" {
+		t.Fatalf("開始できない枠 = %+v sessions=%d", d.Sessions[0], h.sessionCount())
+	}
+	if h.kinds()["book_attention"] != 1 {
+		t.Fatalf("管理者への通知 = %v", h.kinds())
+	}
+	// 未参加のメンバーがログインすると、次の処理で開始される（通知は増えない）。
+	if err := h.st.Tx(ctx, func(tx *store.Tx) error {
+		u, err := tx.UpsertUser(ctx, "555555555555555555", "参加した人", t0)
+		if err != nil {
+			return err
+		}
+		return tx.ActivateMemberships(ctx, u)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	h.process()
+	d = h.book("A", b.ID)
+	if h.sessionCount() != 1 || d.Sessions[0].Status != "active" || d.Sessions[0].SchedulingStatus != "scheduling" {
+		t.Fatalf("解消後 = %+v sessions=%d", d.Sessions[0], h.sessionCount())
+	}
+	if h.kinds()["book_attention"] != 1 {
+		t.Fatalf("通知が重複した: %v", h.kinds())
+	}
+}
+
+// 担当変更の候補を作れないときは、無承認で交代させず、管理者判断待ちにする。
+func TestReplacementFailureNeverSwapsAssigneeAndNotifiesOwner(t *testing.T) {
+	agent := &fixedBookAgent{}
+	h := newHarnessFull(t, nil, coord.DraftOnlyInterpreter{}, agent)
+	b := h.createBook(bookInput("設計の本", 6, 3))
+	agent.plan = coord.BookPlan{Summary: "計画", Slots: []coord.BookPlanSlot{
+		{Sequence: 1, PeriodStart: "2026-10-01", PeriodEnd: "2026-10-07", SectionIDs: []string{"sec_1", "sec_2"}, AssigneeMemberID: h.groupMemberID("A")},
+		{Sequence: 2, PeriodStart: "2026-10-08", PeriodEnd: "2026-10-14", SectionIDs: []string{"sec_3", "sec_4"}, AssigneeMemberID: h.groupMemberID("B")},
+		{Sequence: 3, PeriodStart: "2026-10-15", PeriodEnd: "2026-10-21", SectionIDs: []string{"sec_5", "sec_6"}, AssigneeMemberID: h.groupMemberID("C")},
+	}}
+	h.process()
+	slot := h.book("A", b.ID).Sessions[1].SlotID
+	h.mustAssign("B", b.ID, "", "request_change")
+	agent.replaceErr = coord.ErrTransient
+	for i := 0; i < 8; i++ {
+		h.process()
+		h.clk.Advance(20 * time.Minute)
+	}
+	s := h.book("A", b.ID).Sessions[1]
+	if s.AssignmentStatus != "needs_attention" || h.memberName(*s.AssigneeMemberID) != "B" || s.ProposedAssigneeMemberID != nil || s.SchedulingStatus != "needs_attention" {
+		t.Fatalf("失敗後の枠 = %+v", s)
+	}
+	if h.kinds()["book_attention"] != 1 {
+		t.Fatalf("管理者への通知 = %v", h.kinds())
+	}
+	if got := h.book("A", b.ID).Book.PlanStatus; got != "awaiting_approval" {
+		t.Fatalf("候補のない枠があるのに成立した: %s", got)
+	}
+	_ = slot
 }

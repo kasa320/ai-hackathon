@@ -67,7 +67,9 @@ func TestWeeklyAvailabilityValidation(t *testing.T) {
 	s := newServer(t)
 	s.seed("initial_demo")
 	a := s.client().devLogin("A")
-	win := func(day int, start, end string) map[string]any { return map[string]any{"weekday": day, "start": start, "end": end} }
+	win := func(day int, start, end string) map[string]any {
+		return map[string]any{"weekday": day, "start": start, "end": end}
+	}
 	ok := func(ws ...map[string]any) map[string]any {
 		return map[string]any{"timezone": "Asia/Tokyo", "windows": ws}
 	}
@@ -76,23 +78,23 @@ func TestWeeklyAvailabilityValidation(t *testing.T) {
 		code string
 		path string
 	}{
-		"区間の重複":       {ok(win(1, "19:00", "21:00"), win(1, "20:00", "22:00")), "validation_failed", "windows[1]"},
-		"包含も重複":       {ok(win(2, "09:00", "18:00"), win(2, "10:00", "11:00")), "validation_failed", "windows[1]"},
-		"開始と終了が同じ":    {ok(win(1, "19:00", "19:00")), "validation_failed", "windows[0]"},
-		"開始が終了より後":    {ok(win(1, "22:00", "19:00")), "validation_failed", "windows[0]"},
-		"曜日が0":        {ok(win(0, "19:00", "20:00")), "validation_failed", "windows[0].weekday"},
-		"曜日が8":        {ok(win(8, "19:00", "20:00")), "validation_failed", "windows[0].weekday"},
-		"時刻の形式":       {ok(win(1, "7:00", "20:00")), "validation_failed", "windows[0].start"},
-		"存在しない時刻":     {ok(win(1, "19:00", "25:00")), "validation_failed", "windows[0].end"},
-		"開始に24:00":    {ok(win(1, "24:00", "24:00")), "validation_failed", "windows[0].start"},
-		"分が不正":        {ok(win(1, "19:60", "20:00")), "validation_failed", "windows[0].start"},
-		"未知のタイムゾーン":   {map[string]any{"timezone": "Mars/Base", "windows": []any{}}, "validation_failed", "timezone"},
-		"環境依存のタイムゾーン": {map[string]any{"timezone": "Local", "windows": []any{}}, "validation_failed", "timezone"},
-		"タイムゾーンなし":    {map[string]any{"windows": []any{}}, "validation_failed", "timezone"},
-		"windowsなし":   {map[string]any{"timezone": "Asia/Tokyo"}, "validation_failed", "windows"},
-		"windowsがnull": {`{"timezone":"Asia/Tokyo","windows":null}`, "validation_failed", "windows"},
+		"区間の重複":           {ok(win(1, "19:00", "21:00"), win(1, "20:00", "22:00")), "validation_failed", "windows[1]"},
+		"包含も重複":           {ok(win(2, "09:00", "18:00"), win(2, "10:00", "11:00")), "validation_failed", "windows[1]"},
+		"開始と終了が同じ":        {ok(win(1, "19:00", "19:00")), "validation_failed", "windows[0]"},
+		"開始が終了より後":        {ok(win(1, "22:00", "19:00")), "validation_failed", "windows[0]"},
+		"曜日が0":            {ok(win(0, "19:00", "20:00")), "validation_failed", "windows[0].weekday"},
+		"曜日が8":            {ok(win(8, "19:00", "20:00")), "validation_failed", "windows[0].weekday"},
+		"時刻の形式":           {ok(win(1, "7:00", "20:00")), "validation_failed", "windows[0].start"},
+		"存在しない時刻":         {ok(win(1, "19:00", "25:00")), "validation_failed", "windows[0].end"},
+		"開始に24:00":        {ok(win(1, "24:00", "24:00")), "validation_failed", "windows[0].start"},
+		"分が不正":            {ok(win(1, "19:60", "20:00")), "validation_failed", "windows[0].start"},
+		"未知のタイムゾーン":       {map[string]any{"timezone": "Mars/Base", "windows": []any{}}, "validation_failed", "timezone"},
+		"環境依存のタイムゾーン":     {map[string]any{"timezone": "Local", "windows": []any{}}, "validation_failed", "timezone"},
+		"タイムゾーンなし":        {map[string]any{"windows": []any{}}, "validation_failed", "timezone"},
+		"windowsなし":       {map[string]any{"timezone": "Asia/Tokyo"}, "validation_failed", "windows"},
+		"windowsがnull":    {`{"timezone":"Asia/Tokyo","windows":null}`, "validation_failed", "windows"},
 		"updated_atは入力不可": {map[string]any{"timezone": "Asia/Tokyo", "windows": []any{}, "updated_at": "2026-09-19T00:00:00Z"}, "invalid_json", ""},
-		"未知の項目":       {map[string]any{"timezone": "Asia/Tokyo", "windows": []any{}, "user_id": "usr_x"}, "invalid_json", ""},
+		"未知の項目":           {map[string]any{"timezone": "Asia/Tokyo", "windows": []any{}, "user_id": "usr_x"}, "invalid_json", ""},
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := a.send(http.MethodPut, "/api/me/weekly-availability", tc.body)

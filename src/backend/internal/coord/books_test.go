@@ -384,10 +384,17 @@ type fixedBookAgent struct {
 	plan coord.BookPlan
 	err  error
 	n    int
+	// during は AI の呼び出し中（トランザクションの外）に実行する。処理中の変更を再現する。
+	during func()
+	// replaceErr が非 nil なら、担当変更の候補の作成に失敗させる。
+	replaceErr error
 }
 
 func (f *fixedBookAgent) PlanBook(_ context.Context, req coord.BookPlanRequest) (coord.BookPlan, coord.Usage, error) {
 	f.n++
+	if f.during != nil {
+		f.during()
+	}
 	if f.err != nil {
 		return coord.BookPlan{}, coord.Usage{LLMCalls: []coord.LLMCall{{Model: "test-model", Currency: "unknown"}}}, f.err
 	}
@@ -399,6 +406,9 @@ func (f *fixedBookAgent) PlanBook(_ context.Context, req coord.BookPlanRequest) 
 }
 
 func (f *fixedBookAgent) ProposeReplacement(ctx context.Context, req coord.ReplacementRequest) (string, coord.Usage, error) {
+	if f.replaceErr != nil {
+		return "", coord.Usage{LLMCalls: []coord.LLMCall{{Model: "test-model", Currency: "unknown"}}}, f.replaceErr
+	}
 	return coord.DraftBookAgent{}.ProposeReplacement(ctx, req)
 }
 
@@ -639,4 +649,49 @@ func (h *harness) setNow(at time.Time) {
 	if d := at.Sub(h.clk.Now()); d > 0 {
 		h.clk.Advance(d)
 	}
+}
+
+// AIの呼び出し中にブックが編集されたら、古い計画は使わない（版が変わっている）。
+func TestStaleBookPlanIsDiscardedWhenBookChangedDuringAIRun(t *testing.T) {
+	agent := &fixedBookAgent{}
+	h := newHarnessFull(t, nil, coord.DraftOnlyInterpreter{}, agent)
+	b := h.createBook(bookInput("設計の本", 6, 3))
+	mem := func(n string) string { return h.groupMemberID(n) }
+	agent.plan = coord.BookPlan{Summary: "旧計画", Slots: []coord.BookPlanSlot{
+		{Sequence: 1, PeriodStart: "2026-10-01", PeriodEnd: "2026-10-07", SectionIDs: []string{"sec_1", "sec_2"}, AssigneeMemberID: mem("A")},
+		{Sequence: 2, PeriodStart: "2026-10-08", PeriodEnd: "2026-10-14", SectionIDs: []string{"sec_3", "sec_4"}, AssigneeMemberID: mem("B")},
+		{Sequence: 3, PeriodStart: "2026-10-15", PeriodEnd: "2026-10-21", SectionIDs: []string{"sec_5", "sec_6"}, AssigneeMemberID: mem("C")},
+	}}
+	edited := false
+	agent.during = func() {
+		if edited {
+			return
+		}
+		edited = true
+		n := 2
+		if _, err := h.c.UpdateReadingBook(ctx, h.users["A"], h.group, b.ID, apitypes.UpdateReadingBookInput{PlannedSessionCount: &n}, nil); err != nil {
+			t.Error(err)
+		}
+	}
+	h.process()
+	d := h.book("A", b.ID)
+	if d.Book.PlanVersion != 2 || len(d.Sessions) != 2 {
+		t.Fatalf("編集後の版 = %+v", d.Book)
+	}
+	for _, s := range d.Sessions {
+		if s.AssigneeMemberID != nil && d.Book.PlanStatus == "planning" {
+			t.Fatalf("古い計画の担当が保存された: %+v", s)
+		}
+	}
+	if len(h.groupNotifs()) != 0 {
+		t.Fatalf("古い計画の承認依頼が送られた: %v", h.kinds())
+	}
+}
+
+func (h *harness) kinds() map[string]int {
+	out := map[string]int{}
+	for _, n := range h.groupNotifs() {
+		out[n.Kind]++
+	}
+	return out
 }

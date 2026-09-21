@@ -118,17 +118,17 @@ func TestValidateBookPlanRejectsFabricationAndImbalance(t *testing.T) {
 		mutate func(*coord.BookPlan)
 		path   string
 	}{
-		"存在しない章":    {func(p *coord.BookPlan) { p.Slots[0].SectionIDs[0] = "zzz" }, "slots"},
-		"章の欠落":      {func(p *coord.BookPlan) { p.Slots[2].SectionIDs = p.Slots[2].SectionIDs[:1] }, "slots"},
-		"空の回":       {func(p *coord.BookPlan) { p.Slots[1].SectionIDs = nil }, "slots[1].section_ids"},
-		"捏造したメンバー":  {func(p *coord.BookPlan) { p.Slots[1].AssigneeMemberID = "ghost" }, "slots[1].assignee_member_id"},
-		"担当なし":      {func(p *coord.BookPlan) { p.Slots[1].AssigneeMemberID = "" }, "slots[1].assignee_member_id"},
-		"回の番号":      {func(p *coord.BookPlan) { p.Slots[1].Sequence = 5 }, "slots[1].sequence"},
-		"期間の外":      {func(p *coord.BookPlan) { p.Slots[2].PeriodEnd = "2027-01-01" }, "slots[2].period_start"},
-		"日付の形式":     {func(p *coord.BookPlan) { p.Slots[0].PeriodStart = "10/01" }, "slots[0].period_start"},
-		"目安の順序が逆":   {func(p *coord.BookPlan) { p.Slots[1].PeriodStart, p.Slots[1].PeriodEnd = "2026-10-14", "2026-10-08" }, "slots[1].period_end"},
-		"同じ人が連続":    {func(p *coord.BookPlan) { p.Slots[1].AssigneeMemberID = p.Slots[0].AssigneeMemberID }, "slots[1].assignee_member_id"},
-		"負担が偏っている":  {func(p *coord.BookPlan) { p.Slots[1].AssigneeMemberID, p.Slots[2].AssigneeMemberID = "b", "b" }, "slots"},
+		"存在しない章":   {func(p *coord.BookPlan) { p.Slots[0].SectionIDs[0] = "zzz" }, "slots"},
+		"章の欠落":     {func(p *coord.BookPlan) { p.Slots[2].SectionIDs = p.Slots[2].SectionIDs[:1] }, "slots"},
+		"空の回":      {func(p *coord.BookPlan) { p.Slots[1].SectionIDs = nil }, "slots[1].section_ids"},
+		"捏造したメンバー": {func(p *coord.BookPlan) { p.Slots[1].AssigneeMemberID = "ghost" }, "slots[1].assignee_member_id"},
+		"担当なし":     {func(p *coord.BookPlan) { p.Slots[1].AssigneeMemberID = "" }, "slots[1].assignee_member_id"},
+		"回の番号":     {func(p *coord.BookPlan) { p.Slots[1].Sequence = 5 }, "slots[1].sequence"},
+		"期間の外":     {func(p *coord.BookPlan) { p.Slots[2].PeriodEnd = "2027-01-01" }, "slots[2].period_start"},
+		"日付の形式":    {func(p *coord.BookPlan) { p.Slots[0].PeriodStart = "10/01" }, "slots[0].period_start"},
+		"目安の順序が逆":  {func(p *coord.BookPlan) { p.Slots[1].PeriodStart, p.Slots[1].PeriodEnd = "2026-10-14", "2026-10-08" }, "slots[1].period_end"},
+		"同じ人が連続":   {func(p *coord.BookPlan) { p.Slots[1].AssigneeMemberID = p.Slots[0].AssigneeMemberID }, "slots[1].assignee_member_id"},
+		"負担が偏っている": {func(p *coord.BookPlan) { p.Slots[1].AssigneeMemberID, p.Slots[2].AssigneeMemberID = "b", "b" }, "slots"},
 	} {
 		p := clone()
 		tc.mutate(&p)

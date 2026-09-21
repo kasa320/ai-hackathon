@@ -209,7 +209,8 @@ func (s *server) boot() {
 	runLock := &sync.Mutex{}
 	base := s.http.URL
 	s.coord = coord.NewCoordinator(registry, st, s.clk, agent.WithFaults(s.planner, s.faults), coord.Options{PublicBaseURL: base, Log: quiet, RunLock: runLock, Rand: func() float64 { return 0.5 },
-		Interpreter: agent.WithInterpretFaults(coord.DraftOnlyInterpreter{}, s.faults)})
+		Interpreter: agent.WithInterpretFaults(coord.DraftOnlyInterpreter{}, s.faults),
+		BookAgent:   agent.WithBookFaults(coord.DraftBookAgent{}, s.faults)})
 	s.dispatch = notify.NewDispatcher(st, s.clk, notify.WithFaults(s.sender, s.faults), quiet)
 	if err := s.dispatch.Recover(bg); err != nil {
 		t.Fatal(err)
