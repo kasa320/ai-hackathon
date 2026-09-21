@@ -126,6 +126,7 @@ type SessionDetail = {
     can_withdraw_attendance: boolean;
     can_submit_proposal: boolean;                           // 管理者かつ needs_owner のときだけ
     can_view_activity: boolean;                             // 管理者だけ
+    can_delete_session: boolean;                            // 管理者だけ（開催回を作れるのも管理者だけ）
   };
   current_member_id: ID;
   notification_summary: { pending_count; sent_count; failed_count; unknown_count: number };
@@ -163,6 +164,9 @@ type ApprovalResponse    = { decision: "approve" | "reject"; proposal_id: ID; pr
 
 // POST /api/sessions/{id}/proposals（管理者、needs_owner のときだけ）
 type SubmitProposal = { expected_revision: Revision; data: PlanData };
+
+// DELETE /api/sessions/{id}（管理者）。本文は {}、応答は削除した回と戻り先のグループ
+type SessionDeleted = { session_id: ID; group_id: ID };
 ```
 
 ## 実行履歴

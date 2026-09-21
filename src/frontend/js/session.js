@@ -450,6 +450,9 @@ function renderMyActions() {
   if (p.can_withdraw_attendance) {
     buttons.push(el("button", { class: "btn btn--quiet", type: "button", disabled: busy, onClick: () => withdraw("attendance") }, "欠席と伝える"));
   }
+  if (p.can_delete_session) {
+    buttons.push(el("button", { class: "btn btn--quiet", type: "button", "data-tone": "warn", disabled: busy, onClick: deleteSession }, "この回を削除する"));
+  }
 
   $("my-actions-section").hidden = buttons.length === 0;
   mount(
@@ -607,6 +610,24 @@ async function withdraw(scope) {
   } catch (err) {
     await reportMutationError(err, { node: $("flash"), refresh, loginUrl });
   } finally {
+    setBusy(false);
+  }
+}
+
+/** 開催回の削除。取り消せないので、回の名前を出して確認する。 */
+async function deleteSession() {
+  if (busy) return;
+  const message = `「${detail.session.title}」を削除します。\n参加条件・案・実行記録も消え、元に戻せません。参加者への通知は送られません。よろしいですか？`;
+  if (!confirm(message)) return;
+
+  clearFlash($("flash"));
+  setBusy(true);
+  try {
+    await api.deleteSession(sessionId);
+    poller?.stop();
+    location.href = "/";
+  } catch (err) {
+    await reportMutationError(err, { node: $("flash"), refresh, loginUrl });
     setBusy(false);
   }
 }

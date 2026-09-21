@@ -59,7 +59,7 @@ export function newIdempotencyKey() {
 
 async function request(method, path, { body, idempotencyKey, formData } = {}) {
   const headers = {};
-  const isWrite = method === "POST" || method === "PUT";
+  const isWrite = method === "POST" || method === "PUT" || method === "DELETE";
 
   if (isWrite && csrfToken) headers["X-CSRF-Token"] = csrfToken;
   if (isWrite && idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
@@ -162,6 +162,9 @@ export const api = {
   /** タスクへの回答。本文の形は task.kind で決まる。 */
   respondToTask: (taskId, payload) =>
     write("POST", `/tasks/${encodeURIComponent(taskId)}/responses`, payload),
+
+  /** 開催回の削除（管理者だけ）。参加条件・案・未送信の通知も一緒に消える。 */
+  deleteSession: (sessionId) => write("DELETE", `/sessions/${encodeURIComponent(sessionId)}`, {}),
 
   /** 管理者の代案。案件が needs_owner のときだけ。 */
   submitProposal: (sessionId, expectedRevision, data) =>

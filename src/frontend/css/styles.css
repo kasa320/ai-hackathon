@@ -242,6 +242,7 @@ a.row:hover { background: var(--panel); }
 .field input:disabled, .field select:disabled, .field textarea:disabled { background: var(--panel); color: var(--ink-3); }
 .btn:active:not(:disabled) { background: var(--blue-deep); }
 .btn--quiet:active:not(:disabled) { background: var(--panel-deep); }
+.btn--quiet[data-tone="warn"] { color: var(--warn); }
 .availability__list { max-height: none; }
 .availability__row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .availability__row .toc-list__date { min-width: 0; }

@@ -121,6 +121,19 @@ func (t *Tx) UpdateSessionState(ctx context.Context, s Session) error {
 		s.Revision, s.Status, nullStr(s.ConfirmedProposalID), ts(s.StartsAt), s.ScheduleStatus, ts(s.UpdatedAt), s.ID)
 }
 
+// DeleteSession は開催回を削除する。参加条件・案件・案・タスク・イベント・通知・実行履歴は
+// 外部キーの ON DELETE CASCADE で一緒に消える。LLM 呼び出しの記録（費用）は残す。
+func (t *Tx) DeleteSession(ctx context.Context, id string) error {
+	n, err := t.execN(ctx, "DELETE FROM sessions WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // SessionMembers は開催回に固定したメンバーを表示順で返す。
 func (t *Tx) SessionMembers(ctx context.Context, sessionID string) ([]Member, error) {
 	rows, err := t.query(ctx, `

@@ -430,6 +430,25 @@ func checkTaskResponseShape(tk store.Task, in apitypes.TaskResponseInput) error 
 }
 
 // SubmitProposal は管理者の判断待ちのときに代案を提出する（docs/api-endpoint.md）。
+// DeleteSession は開催回を削除する。開催回を作れるのは管理者だけなので、削除も管理者に限る。
+// 開催前後・案件の状態によらず削除でき、未送信の通知や予定していた処理も取り消される。
+func (c *Coordinator) DeleteSession(ctx context.Context, userID, sessionID string, idem *store.IdemKey) (store.Response, error) {
+	return c.st.Idempotent(ctx, idem, c.now(), func(tx *store.Tx) (store.Response, error) {
+		sess, m, err := c.access(ctx, tx, userID, sessionID)
+		if err != nil {
+			return store.Response{}, err
+		}
+		if m.Role != RoleOwner {
+			return store.Response{}, apperr.ForbiddenErr()
+		}
+		if err := tx.DeleteSession(ctx, sess.ID); err != nil {
+			return store.Response{}, err
+		}
+		c.log.Info("開催回を削除", "session_id", sess.ID, "group_id", sess.GroupID, "member_id", m.ID)
+		return store.Response{Status: http.StatusOK, Body: encode(apitypes.SessionDeleted{SessionID: sess.ID, GroupID: sess.GroupID})}, nil
+	})
+}
+
 func (c *Coordinator) SubmitProposal(ctx context.Context, userID, sessionID string, in apitypes.SubmitProposalInput, idem *store.IdemKey) (store.Response, error) {
 	now := c.now()
 	res, err := c.st.Idempotent(ctx, idem, now, func(tx *store.Tx) (store.Response, error) {

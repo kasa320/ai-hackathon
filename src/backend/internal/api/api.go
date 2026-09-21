@@ -68,6 +68,7 @@ func (s *Server) Handler(frontendDir string, mount ...func(mux *http.ServeMux)) 
 	mux.HandleFunc("POST /api/sessions/{session_id}/withdrawals", s.authed(s.withdraw))
 	mux.HandleFunc("POST /api/tasks/{task_id}/responses", s.authed(s.respondTask))
 	mux.HandleFunc("POST /api/sessions/{session_id}/proposals", s.authed(s.submitProposal))
+	mux.HandleFunc("DELETE /api/sessions/{session_id}", s.authed(s.deleteSession))
 	mux.HandleFunc("GET /api/sessions/{session_id}/activity", s.authed(s.activity))
 
 	for _, ext := range s.Extensions {
@@ -87,7 +88,7 @@ func (s *Server) Handler(frontendDir string, mount ...func(mux *http.ServeMux)) 
 // apiFallback は未定義の API に JSON の 404、メソッド違いに 405 を返す。
 func (s *Server) apiFallback(mux *http.ServeMux, w http.ResponseWriter, r *http.Request) {
 	var allow []string
-	for _, m := range []string{http.MethodGet, http.MethodPost, http.MethodPut} {
+	for _, m := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete} {
 		probe := r.Clone(r.Context())
 		probe.Method = m
 		if _, pattern := mux.Handler(probe); pattern != "" && pattern != "/api/" && pattern != "/" {
@@ -362,6 +363,14 @@ func (s *Server) respondTask(w http.ResponseWriter, r *http.Request, sess auth.S
 func (s *Server) submitProposal(w http.ResponseWriter, r *http.Request, sess auth.Session) {
 	mutation(s, w, r, sess, s.sessionAccess(r, sess), func(in apitypes.SubmitProposalInput, key *store.IdemKey) (store.Response, error) {
 		return s.Coord.SubmitProposal(r.Context(), sess.User.ID, r.PathValue("session_id"), in, key)
+	})
+}
+
+func (s *Server) deleteSession(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	// 削除後は回が存在しないので、事前のアクセス確認をすると再送が 404 になる。
+	// アクセス確認は DeleteSession の中で、再送判定のあとに行う（再送判定は利用者ごと）。
+	mutation(s, w, r, sess, nil, func(_ apitypes.DeleteSessionInput, key *store.IdemKey) (store.Response, error) {
+		return s.Coord.DeleteSession(r.Context(), sess.User.ID, r.PathValue("session_id"), key)
 	})
 }
 

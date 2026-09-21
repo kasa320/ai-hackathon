@@ -126,6 +126,7 @@ type Permissions struct {
 	CanWithdrawAssignment bool `json:"can_withdraw_assignment"`
 	CanWithdrawAttendance bool `json:"can_withdraw_attendance"`
 	CanSubmitProposal     bool `json:"can_submit_proposal"`
+	CanDeleteSession      bool `json:"can_delete_session"`
 	CanViewActivity       bool `json:"can_view_activity"`
 }
 
@@ -233,6 +234,15 @@ type PreparationInterpretation struct {
 	NeedsFollowup bool `json:"needs_followup"`
 	// Saved は常に false。解釈だけでは何も保存されないことを示す。
 	Saved bool `json:"saved"`
+}
+
+// DeleteSessionInput は開催回の削除。本文は空のオブジェクト。
+type DeleteSessionInput struct{}
+
+// SessionDeleted は削除した開催回と、戻り先のグループ。
+type SessionDeleted struct {
+	SessionID string `json:"session_id"`
+	GroupID   string `json:"group_id"`
 }
 
 type WithdrawalInput struct {

@@ -197,6 +197,8 @@ func (c *Coordinator) SessionDetail(ctx context.Context, userID, sessionID strin
 		}
 		out.Permissions.CanSubmitProposal = isOwner && before && hasCase && cs.Status == store.CaseNeedsOwner && canSecure(now, sess.StartsAt)
 		out.Permissions.CanViewActivity = isOwner
+		// 開催回を作れるのは管理者だけなので、作った人＝管理者が削除できる
+		out.Permissions.CanDeleteSession = isOwner
 		return nil
 	})
 	return out, err
