@@ -63,7 +63,7 @@ func (t *Tx) CreateSession(ctx context.Context, s Session, memberIDs []string) e
 }
 
 func (t *Tx) Session(ctx context.Context, id string) (Session, error) {
-	return scanSession(t.row(ctx, "SELECT "+sessionCols+" FROM sessions WHERE id = ?", id))
+	return scanSession(t.row(ctx, "SELECT "+sessionCols+" FROM sessions WHERE id = ? AND EXISTS (SELECT 1 FROM groups g WHERE g.id = sessions.group_id AND g.deleted_at IS NULL)", id))
 }
 
 // SessionsByGroup は開催回を starts_at の降順で返す。
@@ -93,7 +93,7 @@ func (t *Tx) UpdateSessionState(ctx context.Context, s Session) error {
 // SessionMembers は開催回に固定したメンバーを表示順で返す。
 func (t *Tx) SessionMembers(ctx context.Context, sessionID string) ([]Member, error) {
 	rows, err := t.query(ctx, `
-		SELECT m.id, m.group_id, m.discord_user_id, m.user_id, m.display_name, m.role
+		SELECT m.id, m.group_id, m.discord_user_id, m.user_id, m.display_name, m.role, m.left_at
 		FROM session_members sm JOIN members m ON m.id = sm.member_id
 		WHERE sm.session_id = ? ORDER BY m.seq`, sessionID)
 	if err != nil {
