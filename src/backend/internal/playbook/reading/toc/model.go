@@ -45,9 +45,9 @@ const (
 	LookupTTL        = 24 * time.Hour
 	RetryWindow      = 10 * time.Minute
 	DailyLimit       = 10
-	MaxImages        = 5
+	MaxImages        = 10
 	MaxImageBytes    = 4 << 20
-	MaxTotalBytes    = 10 << 20
+	MaxTotalBytes    = 20 << 20
 	MatchThreshold   = 0.9
 	MaxEntries       = 300
 	maxLLMPerLookup  = 6

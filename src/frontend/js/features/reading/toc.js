@@ -10,6 +10,14 @@ import { placeholder } from "../../ui.js";
 
 const POLL_MS = 3000;
 
+// 目次画像の上限と文言。バックエンド（toc/model.go・toc/http.go）と揃える。
+const MAX_IMAGES = 10;
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 20 * 1024 * 1024;
+const IMAGE_COUNT_MESSAGE = `画像は1〜${MAX_IMAGES}枚にしてください`;
+const IMAGE_SIZE_MESSAGE = "画像は1枚4 MBまでにしてください。";
+const IMAGE_TOTAL_MESSAGE = "画像は合計20 MBまでにしてください。";
+
 const STATUS_TEXT = {
   resolving_book: "本を調べています…",
   searching: "目次を探しています…",
@@ -211,8 +219,8 @@ export function createTocPicker(client, groupId, { onPick, onManual, picked = nu
           )
         : null,
       bookLine(),
-      el("label", { class: "field" }, el("span", {}, "目次ページの写真（1〜5枚、1枚4MBまで）"), input),
-      el("p", { class: "help" }, "写真は読み取りにだけ使い、保存しません。"),
+      el("label", { class: "field" }, el("span", {}, "目次ページの写真（1〜10枚、1枚4MB・合計20MBまで）"), input),
+      el("p", { class: "help" }, "目次の最上位の項目（章）だけを読み取ります。写真は読み取りにだけ使い、保存しません。"),
       error,
       el(
         "div",
@@ -225,8 +233,9 @@ export function createTocPicker(client, groupId, { onPick, onManual, picked = nu
             onClick: async () => {
               const files = [...(input.files ?? [])];
               if (!files.length) { error.textContent = "目次の写真を選んでください。"; return; }
-              if (files.length > 5) { error.textContent = "写真は5枚までにしてください。"; return; }
-              if (files.some((f) => f.size > 4 * 1024 * 1024)) { error.textContent = "1枚4MBまでの写真にしてください。"; return; }
+              if (files.length > MAX_IMAGES) { error.textContent = IMAGE_COUNT_MESSAGE; return; }
+              if (files.some((f) => f.size > MAX_IMAGE_BYTES)) { error.textContent = IMAGE_SIZE_MESSAGE; return; }
+              if (files.reduce((n, f) => n + f.size, 0) > MAX_TOTAL_BYTES) { error.textContent = IMAGE_TOTAL_MESSAGE; return; }
               renderWaiting("reading_image");
               try {
                 // 写真から始めた場合は、ここで ISBN なしの取得を作る

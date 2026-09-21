@@ -81,7 +81,7 @@ func (e *Extension) images(w http.ResponseWriter, r *http.Request, req httpx.Req
 	httpx.WriteResponse(w, res)
 }
 
-// parseImages は multipart/form-data の images フィールドから1〜5枚の画像を取り出す。
+// parseImages は multipart/form-data の images フィールドから1〜10枚の画像を取り出す。
 // 形式は本文の先頭バイトから判定し、申告された Content-Type を信用しない。
 func parseImages(contentType string, body []byte) ([]Image, string, error) {
 	mt, params, err := mime.ParseMediaType(contentType)
@@ -112,7 +112,7 @@ func parseImages(contentType string, body []byte) ([]Image, string, error) {
 		}
 		total += len(data)
 		if total > MaxTotalBytes {
-			return nil, "", apperr.New(apperr.PayloadTooLarge, "画像は合計10 MBまでにしてください。")
+			return nil, "", apperr.New(apperr.PayloadTooLarge, "画像は合計20 MBまでにしてください。")
 		}
 		ct := http.DetectContentType(data)
 		if !allowedImageTypes[ct] {
@@ -122,11 +122,11 @@ func parseImages(contentType string, body []byte) ([]Image, string, error) {
 		h.Write(sum[:])
 		images = append(images, Image{ContentType: ct, Data: data})
 		if len(images) > MaxImages {
-			return nil, "", apperr.Validation(apperr.Field{Path: "images", Message: "画像は1〜5枚にしてください"})
+			return nil, "", apperr.Validation(apperr.Field{Path: "images", Message: "画像は1〜10枚にしてください"})
 		}
 	}
 	if len(images) == 0 {
-		return nil, "", apperr.Validation(apperr.Field{Path: "images", Message: "画像は1〜5枚にしてください"})
+		return nil, "", apperr.Validation(apperr.Field{Path: "images", Message: "画像は1〜10枚にしてください"})
 	}
 	return images, hex.EncodeToString(h.Sum(nil)), nil
 }

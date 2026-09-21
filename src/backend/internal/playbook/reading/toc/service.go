@@ -188,16 +188,18 @@ func (s *Service) readImages(ctx context.Context, lookupID string, images []Imag
 	}
 	images = nil // 参照を残さない
 	_ = images
+	// 読み取り側の実装によらず、章の一覧には最上位の項目だけを載せる。
+	chapters, _ := TopLevelChapters(result.Entries)
 	uerr := s.update(ctx, lookupID, calls, func(l *store.TocLookup) {
 		switch {
 		case err != nil:
 			s.log.Warn("目次画像の読み取りに失敗", "lookup", lookupID, "err", err)
 			l.Status, l.ReasonCode = StatusFailed, ReasonModelError
-		case len(result.Entries) == 0:
+		case len(chapters) == 0:
 			l.Status, l.ReasonCode = StatusFailed, ReasonImageUnread
 		default:
 			l.Status, l.Source, l.ReasonCode = StatusSucceeded, SourceImage, ""
-			l.Entries, l.UnreadableCount, l.SourceURLs = encode(result.Entries), result.UnreadableCount, nil
+			l.Entries, l.UnreadableCount, l.SourceURLs = encode(chapters), result.UnreadableCount, nil
 		}
 	})
 	if uerr != nil {

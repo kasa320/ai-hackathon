@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -332,6 +333,23 @@ func multipartBody(t *testing.T, files map[string][]byte) (string, []byte) {
 	return mw.FormDataContentType(), buf.Bytes()
 }
 
+func pngFiles(n int) map[string][]byte {
+	files := map[string][]byte{}
+	for i := 0; i < n; i++ {
+		files[fmt.Sprintf("%d.png", i)] = pngImg
+	}
+	return files
+}
+
+// bigFiles は1枚の上限ちょうど（4 MB）の画像を n 枚作る。
+func bigFiles(n int) map[string][]byte {
+	files := map[string][]byte{}
+	for i := 0; i < n; i++ {
+		files[fmt.Sprintf("%d.png", i)] = append(append([]byte{}, pngImg[:8]...), make([]byte, MaxImageBytes-8)...)
+	}
+	return files
+}
+
 func TestParseImages(t *testing.T) {
 	ct, body := multipartBody(t, map[string][]byte{"a.png": pngImg})
 	imgs, hash, err := parseImages(ct, body)
@@ -349,7 +367,8 @@ func TestParseImages(t *testing.T) {
 	}{
 		"画像以外":  {map[string][]byte{"a.txt": []byte("hello")}, apperr.UnsupportedMediaType},
 		"大きすぎる": {map[string][]byte{"a.png": append(append([]byte{}, pngImg...), make([]byte, MaxImageBytes)...)}, apperr.PayloadTooLarge},
-		"多すぎる":  {map[string][]byte{"1.png": pngImg, "2.png": pngImg, "3.png": pngImg, "4.png": pngImg, "5.png": pngImg, "6.png": pngImg}, apperr.ValidationFailed},
+		"11枚":   {pngFiles(MaxImages + 1), apperr.ValidationFailed},
+		"合計超過":  {bigFiles(MaxTotalBytes/MaxImageBytes + 1), apperr.PayloadTooLarge},
 		"別の項目":  {map[string][]byte{"other.png": pngImg}, apperr.ValidationFailed},
 	}
 	for name, tc := range cases {
@@ -357,6 +376,15 @@ func TestParseImages(t *testing.T) {
 		if _, _, err := parseImages(ct, body); code(err) != tc.code {
 			t.Errorf("%s: %v", name, err)
 		}
+	}
+	// 上限ちょうど（10枚・合計20 MB）は受理する。
+	ct, body = multipartBody(t, pngFiles(MaxImages))
+	if imgs, _, err := parseImages(ct, body); err != nil || len(imgs) != MaxImages {
+		t.Fatalf("10枚は受理: %d %v", len(imgs), err)
+	}
+	ct, body = multipartBody(t, bigFiles(MaxTotalBytes/MaxImageBytes))
+	if imgs, _, err := parseImages(ct, body); err != nil || len(imgs) != MaxTotalBytes/MaxImageBytes {
+		t.Fatalf("合計20 MBちょうどは受理: %d %v", len(imgs), err)
 	}
 	if _, _, err := parseImages("application/json", []byte("{}")); code(err) != apperr.UnsupportedMediaType {
 		t.Fatalf("multipart 以外: %v", err)
