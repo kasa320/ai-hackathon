@@ -64,6 +64,11 @@ func (s *Server) Handler(frontendDir string, mount ...func(mux *http.ServeMux)) 
 	mux.HandleFunc("DELETE /api/groups/{group_id}", s.authed(s.deleteGroup))
 	mux.HandleFunc("GET /api/groups/{group_id}/sessions", s.authed(s.listSessions))
 	mux.HandleFunc("POST /api/groups/{group_id}/sessions", s.authed(s.createSession))
+	mux.HandleFunc("GET /api/groups/{group_id}/reading/books", s.authed(s.listReadingBooks))
+	mux.HandleFunc("POST /api/groups/{group_id}/reading/books", s.authed(s.createReadingBook))
+	mux.HandleFunc("GET /api/groups/{group_id}/reading/books/{book_id}", s.authed(s.readingBookDetail))
+	mux.HandleFunc("POST /api/groups/{group_id}/reading/books/{book_id}/sessions", s.authed(s.startReadingBookSession))
+	mux.HandleFunc("POST /api/groups/{group_id}/reading/books/{book_id}/sessions/{slot_id}/complete", s.authed(s.completeReadingBookSession))
 	mux.HandleFunc("GET /api/sessions/{session_id}", s.authed(s.getSession))
 	mux.HandleFunc("PUT /api/sessions/{session_id}/preparations/me", s.authed(s.putPreparation))
 	mux.HandleFunc("POST /api/sessions/{session_id}/preparations/me/interpretations", s.authed(s.interpretPreparation))
@@ -320,6 +325,44 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request, sess auth
 	access := func() error { _, err := s.Coord.CheckGroupAccess(r.Context(), sess.User.ID, groupID, true); return err }
 	mutation(s, w, r, sess, access, func(in apitypes.CreateSessionInput, key *store.IdemKey) (store.Response, error) {
 		return s.Coord.CreateSession(r.Context(), sess.User.ID, groupID, in, key)
+	})
+}
+
+func (s *Server) listReadingBooks(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	out, err := s.Coord.ListReadingBooks(r.Context(), sess.User.ID, r.PathValue("group_id"))
+	if err != nil {
+		httpx.WriteError(w, r, s.Log, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
+}
+func (s *Server) createReadingBook(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	gid := r.PathValue("group_id")
+	access := func() error { _, err := s.Coord.CheckGroupAccess(r.Context(), sess.User.ID, gid, true); return err }
+	mutation(s, w, r, sess, access, func(in apitypes.CreateReadingBookInput, key *store.IdemKey) (store.Response, error) {
+		return s.Coord.CreateReadingBook(r.Context(), sess.User.ID, gid, in, key)
+	})
+}
+func (s *Server) readingBookDetail(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	out, err := s.Coord.ReadingBookDetail(r.Context(), sess.User.ID, r.PathValue("group_id"), r.PathValue("book_id"))
+	if err != nil {
+		httpx.WriteError(w, r, s.Log, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
+}
+func (s *Server) startReadingBookSession(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	gid, bid := r.PathValue("group_id"), r.PathValue("book_id")
+	access := func() error { _, err := s.Coord.CheckGroupAccess(r.Context(), sess.User.ID, gid, true); return err }
+	mutation(s, w, r, sess, access, func(in apitypes.ReadingBookSessionInput, key *store.IdemKey) (store.Response, error) {
+		return s.Coord.StartReadingBookSession(r.Context(), sess.User.ID, gid, bid, in, key)
+	})
+}
+func (s *Server) completeReadingBookSession(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	gid, bid, sid := r.PathValue("group_id"), r.PathValue("book_id"), r.PathValue("slot_id")
+	access := func() error { _, err := s.Coord.CheckGroupAccess(r.Context(), sess.User.ID, gid, true); return err }
+	mutation(s, w, r, sess, access, func(in apitypes.CompleteReadingBookSessionInput, key *store.IdemKey) (store.Response, error) {
+		return s.Coord.CompleteReadingBookSession(r.Context(), sess.User.ID, gid, bid, sid, in, key)
 	})
 }
 

@@ -59,6 +59,66 @@ type SessionList struct {
 	Items []SessionSummary `json:"items"`
 }
 
+type ReadingBook struct {
+	ID                    string          `json:"id"`
+	GroupID               string          `json:"group_id"`
+	Title                 string          `json:"title"`
+	ISBN                  *string         `json:"isbn"`
+	TocSource             json.RawMessage `json:"toc_source,omitempty"`
+	Sections              json.RawMessage `json:"sections,omitempty"`
+	PlannedSessionCount   int             `json:"planned_session_count"`
+	SessionCreationMode   string          `json:"session_creation_mode"`
+	Status                string          `json:"status"`
+	CompletedSectionIDs   []string        `json:"completed_section_ids"`
+	CompletedSessionCount int             `json:"completed_session_count"`
+	CreatedAt             time.Time       `json:"created_at"`
+	UpdatedAt             time.Time       `json:"updated_at"`
+}
+type ReadingBookList struct {
+	Items []ReadingBook `json:"items"`
+}
+type ReadingBookSlot struct {
+	SlotID            string          `json:"slot_id"`
+	SequenceNumber    int             `json:"sequence_number"`
+	Status            string          `json:"status"`
+	CoveredSectionIDs []string        `json:"covered_section_ids"`
+	Session           *SessionSummary `json:"session"`
+}
+type ReadingBookDetail struct {
+	Book        ReadingBook       `json:"book"`
+	Sessions    []ReadingBookSlot `json:"sessions"`
+	Permissions struct {
+		CanManage bool `json:"can_manage"`
+	} `json:"permissions"`
+}
+type CreateReadingBookInput struct {
+	Title               string                  `json:"title"`
+	ISBN                *string                 `json:"isbn"`
+	TocSource           json.RawMessage         `json:"toc_source"`
+	Sections            json.RawMessage         `json:"sections"`
+	PlannedSessionCount int                     `json:"planned_session_count"`
+	SessionCreationMode string                  `json:"session_creation_mode"`
+	InitialSession      ReadingBookSessionInput `json:"initial_session"`
+}
+type ReadingBookSessionInput struct {
+	SlotID           string   `json:"slot_id,omitempty"`
+	PeriodStart      string   `json:"period_start"`
+	PeriodEnd        string   `json:"period_end"`
+	DurationMinutes  int      `json:"duration_minutes"`
+	TargetSectionIDs []string `json:"target_section_ids"`
+}
+type CreateReadingBookResult struct {
+	Book           ReadingBook    `json:"book"`
+	InitialSession SessionSummary `json:"initial_session"`
+}
+type StartReadingBookSessionResult struct {
+	SlotID  string         `json:"slot_id"`
+	Session SessionSummary `json:"session"`
+}
+type CompleteReadingBookSessionInput struct {
+	ExpectedRevision *int64 `json:"expected_revision"`
+}
+
 type SessionCreated struct {
 	Session SessionSummary `json:"session"`
 	CaseID  string         `json:"case_id"`
