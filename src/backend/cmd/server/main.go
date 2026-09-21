@@ -72,7 +72,6 @@ func run(log *slog.Logger) error {
 		// 案を考える処理と、自由文から条件を取り出す処理は別のモデルを使える
 		planner = &agent.LLMPlanner{Client: client, Model: cfg.OrcaRouterPlannerModel}
 		interpreter = &agent.LLMInterpreter{Client: client, Model: cfg.OrcaRouterInterpreterModel}
-		log.Info("LLM の設定", "planner_model", cfg.OrcaRouterPlannerModel, "interpreter_model", cfg.OrcaRouterInterpreterModel, "timeout", cfg.OrcaRouterTimeout)
 		if cfg.OrcaRouterSearchModel != "" {
 			tocDeps.Searcher = &toc.LLMSearcher{Client: client, Model: cfg.OrcaRouterSearchModel}
 		}
@@ -81,6 +80,23 @@ func run(log *slog.Logger) error {
 			vision = cfg.OrcaRouterModel
 		}
 		tocDeps.Reader = &toc.LLMImageReader{Client: client, Model: vision}
+		// LLM を呼ぶ4か所の実際の宛先を起動時に残す。設定漏れをその場で見つけられるようにし、
+		// 費用・所要時間の計測結果がどの構成で得られたかの証跡にもする。
+		searchModel := cfg.OrcaRouterSearchModel
+		if searchModel == "" {
+			searchModel = "(なし)"
+		}
+		log.Info("LLM の設定",
+			"planner_model", cfg.OrcaRouterPlannerModel,
+			"interpreter_model", cfg.OrcaRouterInterpreterModel,
+			"vision_model", vision,
+			"search_model", searchModel,
+			"timeout", cfg.OrcaRouterTimeout)
+		// 目次画像はモデルが画像入力に対応している必要がある。ルーター任せにすると、
+		// 候補に画像非対応のモデルが含まれていた場合に画像の提出時まで失敗が分からない。
+		if cfg.OrcaRouterVisionModel == "" && strings.HasPrefix(vision, "orcarouter/") {
+			log.Warn("ORCAROUTER_VISION_MODEL が未設定のため、目次画像の書き写しがルーターに委ねられます。画像入力に対応するモデルを明示してください", "vision_model", vision)
+		}
 	}
 	tocService := toc.NewService(tocDeps)
 	if err := tocService.Recover(ctx); err != nil {
