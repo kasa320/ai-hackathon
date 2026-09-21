@@ -154,6 +154,10 @@ func (c *Coordinator) handlePlan(ctx context.Context, e store.Event) error {
 			return nil
 		}
 
+		if planErr != nil {
+			// 原因をターミナルから追えるように残す。エラーに参加者の原文は含まれない
+			c.log.Warn("AIの計画に失敗", "case", cur.ID, "retry_count", cur.RetryCount, "err", planErr)
+		}
 		switch {
 		case errors.Is(planErr, ErrTransient):
 			delay := c.retryDelay(cur.RetryCount)

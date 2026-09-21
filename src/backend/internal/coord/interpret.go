@@ -332,8 +332,12 @@ func (c *Coordinator) interpretError(ierr error, sessionID string) error {
 	case errors.Is(ierr, ErrBudgetExceeded):
 		return apperr.InvalidStateErr("AIの呼び出し回数の上限に達したため、解釈は使えません。フォームから入力してください。")
 	case errors.Is(ierr, ErrTransient):
+		// 通信・タイムアウト・429・5xx のエラーには原文が含まれないので、詳細を残す
+		c.log.Warn("自由文の解釈でAIが応答しませんでした", "session_id", sessionID, "err", ierr)
 		return apperr.New(apperr.TemporarilyUnavailable, "AIが応答しませんでした。フォームから入力するか、しばらくしてからやり直してください。")
 	case errors.Is(ierr, ErrInvalidOutput):
+		// 出力には原文の一部が含まれうるので、詳細は出さない
+		c.log.Warn("自由文の解釈でAIの出力が形式を満たしませんでした", "session_id", sessionID)
 		return apperr.New(apperr.TemporarilyUnavailable, "発言から項目を取り出せませんでした。フォームから入力してください。")
 	default:
 		// 原文が混ざらないよう、詳細は返さずログにも出さない。

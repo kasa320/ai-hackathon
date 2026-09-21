@@ -89,6 +89,9 @@ Discordに「参加条件」と送ると、予定・準備状況を1項目ずつ
 | `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` / `DISCORD_REDIRECT_URL` | 空 | Discord ログイン。未設定なら `/api/auth/discord` は `auth_error=provider_unavailable` に戻る |
 | `DISCORD_BOT_TOKEN` | 空 | Bot が常駐し、DM での対話と本人宛て通知の DM 送信を行う（`DIRECT_MESSAGES` インテントが必要）。未設定なら通知はサーバーログに出すだけ |
 | `DISCORD_CHANNEL_ID` | 空 | DM が使えないときの退避先と、全員宛ての連絡（計画の確定）の送り先。未設定なら本人宛ての DM だけを送り、宛先のない通知は失敗として記録する |
+| `ORCAROUTER_PLANNER_MODEL` | 空 | 案（日時・進行・担当）を考えるモデル。空なら `ORCAROUTER_MODEL` |
+| `ORCAROUTER_INTERPRETER_MODEL` | 空 | Web・Discordの自由文から参加条件を取り出すモデル。空なら `ORCAROUTER_MODEL`。Discordの1往復は60秒で打ち切るので、応答の速いモデルを選ぶ |
+| `ORCAROUTER_TIMEOUT_SECONDS` | `180` | LLM 呼び出し1回の待ち時間の上限（1〜600秒）。超えると一時的な失敗として再試行する |
 | `ORCAROUTER_SEARCH_MODEL` | 空 | 目次の Web 検索に使う検索付きモデル。空なら Web 検索をせず画像の提出を依頼する |
 | `ORCAROUTER_VISION_MODEL` | 空 | 目次画像の書き写しに使うモデル（空なら `ORCAROUTER_MODEL`） |
 

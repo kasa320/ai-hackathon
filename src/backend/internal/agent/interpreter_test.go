@@ -18,7 +18,7 @@ import (
 func newInterpreter(t *testing.T, f *fakeLLM) *agent.LLMInterpreter {
 	srv := httptest.NewServer(f)
 	t.Cleanup(srv.Close)
-	return &agent.LLMInterpreter{Client: agent.NewClient(srv.URL+"/v1", "key"), Model: "test-model"}
+	return &agent.LLMInterpreter{Client: agent.NewClient(srv.URL+"/v1", "key", 0), Model: "test-model"}
 }
 
 func validPreparation(minutes int) map[string]any {

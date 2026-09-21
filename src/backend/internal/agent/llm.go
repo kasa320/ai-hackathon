@@ -25,9 +25,16 @@ type Client struct {
 	CostCurrency string
 }
 
-func NewClient(baseURL, apiKey string) *Client {
-	return &Client{BaseURL: strings.TrimRight(baseURL, "/"), APIKey: apiKey, HTTP: &http.Client{Timeout: 90 * time.Second}}
+// NewClient を作る。timeout は1回の呼び出しの上限で、0以下なら DefaultTimeout を使う。
+func NewClient(baseURL, apiKey string, timeout time.Duration) *Client {
+	if timeout <= 0 {
+		timeout = DefaultTimeout
+	}
+	return &Client{BaseURL: strings.TrimRight(baseURL, "/"), APIKey: apiKey, HTTP: &http.Client{Timeout: timeout}}
 }
+
+// DefaultTimeout は呼び出し1回の既定の上限。推論の重いモデルは1回に90秒前後かかることがある。
+const DefaultTimeout = 180 * time.Second
 
 type Message struct {
 	Role       string     `json:"role"`

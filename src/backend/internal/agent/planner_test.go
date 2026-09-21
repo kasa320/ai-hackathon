@@ -89,7 +89,7 @@ var validPlan = map[string]any{
 func newPlanner(t *testing.T, f *fakeLLM) *agent.LLMPlanner {
 	srv := httptest.NewServer(f)
 	t.Cleanup(srv.Close)
-	return &agent.LLMPlanner{Client: agent.NewClient(srv.URL+"/v1", "key"), Model: "test-model"}
+	return &agent.LLMPlanner{Client: agent.NewClient(srv.URL+"/v1", "key", 0), Model: "test-model"}
 }
 
 func TestLLMPlannerReturnsValidatedProposal(t *testing.T) {
@@ -173,7 +173,7 @@ func TestLLMPlannerErrorKinds(t *testing.T) {
 		})
 	}
 	// 通信できない場合も一時的な障害。
-	p := &agent.LLMPlanner{Client: agent.NewClient("http://127.0.0.1:1", "key"), Model: "m"}
+	p := &agent.LLMPlanner{Client: agent.NewClient("http://127.0.0.1:1", "key", 0), Model: "m"}
 	if _, _, err := p.Plan(context.Background(), request(func(context.Context, coord.Outcome) error { return nil })); !errors.Is(err, coord.ErrTransient) {
 		t.Fatalf("接続失敗は一時的な障害: %v", err)
 	}
