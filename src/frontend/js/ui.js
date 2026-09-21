@@ -197,25 +197,29 @@ export function pluginTag(playbookId, name) {
  * （競合で閉じたあと、同じ内容で送り直せるようにするため）。
  */
 export function createDialog({ title, body, submitLabel, onSubmit, extra = null }) {
-  const errorBox = el("p", { class: "field__error", hidden: true });
+  const opener = document.activeElement;
+  const token = globalThis.crypto?.randomUUID?.() ?? Date.now();
+  const titleId = `dialog-title-${token}`;
+  const errorId = `dialog-error-${token}`;
+  const errorBox = el("p", { class: "field__error", id: errorId, role: "alert", "aria-live": "assertive", hidden: true });
   const receiptBox = el("div", {});
 
   const dialog = el(
     "dialog",
-    {},
+    { "aria-labelledby": titleId, onClose: () => cleanup() },
     el(
       "form",
       {
         method: "dialog",
         onSubmit: (event) => {
           event.preventDefault();
-          onSubmit({ showError, showReceipt, close });
+          onSubmit({ showError, showReceipt, close, form: event.currentTarget });
         },
       },
       el(
         "div",
         { class: "dialog__head" },
-        el("h2", {}, title),
+        el("h2", { id: titleId }, title),
         el("button", { type: "button", "aria-label": "閉じる", onClick: () => close() }, "×"),
       ),
       el("div", { class: "dialog__body" }, body, errorBox, receiptBox),
@@ -238,14 +242,20 @@ export function createDialog({ title, body, submitLabel, onSubmit, extra = null 
   }
 
   function close() {
-    dialog.close();
+    if (dialog.open) dialog.close();
+    else cleanup();
+  }
+
+  function cleanup() {
+    if (!dialog.isConnected) return;
     dialog.remove();
+    if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
   }
 
   document.body.append(dialog);
   dialog.showModal();
-  dialog.querySelector("input, select, textarea")?.focus();
-  return { dialog, close, showError, showReceipt };
+  (dialog.querySelector("input, select, textarea") ?? dialog.querySelector('button[type="submit"]'))?.focus();
+  return { dialog, close, showError, showReceipt, errorId };
 }
 
 /**

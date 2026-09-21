@@ -60,6 +60,8 @@ func (s *Server) Handler(frontendDir string, mount ...func(mux *http.ServeMux)) 
 	mux.HandleFunc("GET /api/groups", s.authed(s.listGroups))
 	mux.HandleFunc("POST /api/groups", s.authed(s.createGroup))
 	mux.HandleFunc("GET /api/groups/{group_id}", s.authed(s.getGroup))
+	mux.HandleFunc("POST /api/groups/{group_id}/leave", s.authed(s.leaveGroup))
+	mux.HandleFunc("DELETE /api/groups/{group_id}", s.authed(s.deleteGroup))
 	mux.HandleFunc("GET /api/groups/{group_id}/sessions", s.authed(s.listSessions))
 	mux.HandleFunc("POST /api/groups/{group_id}/sessions", s.authed(s.createSession))
 	mux.HandleFunc("GET /api/sessions/{session_id}", s.authed(s.getSession))
@@ -87,7 +89,7 @@ func (s *Server) Handler(frontendDir string, mount ...func(mux *http.ServeMux)) 
 // apiFallback は未定義の API に JSON の 404、メソッド違いに 405 を返す。
 func (s *Server) apiFallback(mux *http.ServeMux, w http.ResponseWriter, r *http.Request) {
 	var allow []string
-	for _, m := range []string{http.MethodGet, http.MethodPost, http.MethodPut} {
+	for _, m := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete} {
 		probe := r.Clone(r.Context())
 		probe.Method = m
 		if _, pattern := mux.Handler(probe); pattern != "" && pattern != "/api/" && pattern != "/" {
@@ -287,6 +289,18 @@ func (s *Server) getGroup(w http.ResponseWriter, r *http.Request, sess auth.Sess
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) leaveGroup(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	mutation(s, w, r, sess, nil, func(in apitypes.LeaveGroupInput, key *store.IdemKey) (store.Response, error) {
+		return s.Coord.LeaveGroup(r.Context(), sess.User.ID, r.PathValue("group_id"), in, key)
+	})
+}
+
+func (s *Server) deleteGroup(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	mutation(s, w, r, sess, nil, func(in apitypes.DeleteGroupInput, key *store.IdemKey) (store.Response, error) {
+		return s.Coord.DeleteGroup(r.Context(), sess.User.ID, r.PathValue("group_id"), in, key)
+	})
 }
 
 func (s *Server) listSessions(w http.ResponseWriter, r *http.Request, sess auth.Session) {

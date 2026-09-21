@@ -227,6 +227,9 @@ func (c *Coordinator) snapshot(ctx context.Context, tx *store.Tx, sess store.Ses
 		return s, err
 	}
 	for _, m := range members {
+		if m.LeftAt != nil {
+			continue
+		}
 		s.Members = append(s.Members, SnapshotMember{ID: m.ID, DisplayName: m.DisplayName, Role: m.Role})
 		if m.Role == "owner" {
 			s.OwnerMemberID = m.ID

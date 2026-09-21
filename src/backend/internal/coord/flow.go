@@ -158,6 +158,15 @@ func supersedePending(ctx context.Context, tx *store.Tx, sessionID string) (bool
 // 現在の案を旧版にし、確定計画が実行不能になれば新しい案件を開き、必要なら再計画を予定する。
 // withdrawn は辞退した人（なければ空）。戻り値は処理後の案件。
 func (c *Coordinator) onInputChanged(ctx context.Context, tx *store.Tx, sess *store.Session, withdrawn string, now time.Time) (store.Case, error) {
+	return c.onInputChangedWithForce(ctx, tx, sess, withdrawn, now, false)
+}
+
+// onMembershipChanged は脱退で参加者そのものが変わったとき、確定案が偶然成立していても再調整する。
+func (c *Coordinator) onMembershipChanged(ctx context.Context, tx *store.Tx, sess *store.Session, withdrawn string, now time.Time) (store.Case, error) {
+	return c.onInputChangedWithForce(ctx, tx, sess, withdrawn, now, true)
+}
+
+func (c *Coordinator) onInputChangedWithForce(ctx context.Context, tx *store.Tx, sess *store.Session, withdrawn string, now time.Time, force bool) (store.Case, error) {
 	pb, err := c.playbook(sess.PlaybookID)
 	if err != nil {
 		return store.Case{}, err
@@ -171,7 +180,7 @@ func (c *Coordinator) onInputChanged(ctx context.Context, tx *store.Tx, sess *st
 	}
 	if errors.Is(err, store.ErrNotFound) || !cs.Open() {
 		// 案件が完了している場合、確定計画がまだ実行可能なら新しい案件は作らない。
-		if sess.ConfirmedProposalID != "" {
+		if !force && sess.ConfirmedProposalID != "" {
 			s, err := c.snapshot(ctx, tx, *sess, nil)
 			if err != nil {
 				return cs, err
@@ -183,6 +192,8 @@ func (c *Coordinator) onInputChanged(ctx context.Context, tx *store.Tx, sess *st
 			if pb.ValidatePlan(ctx, s, Proposal{Version: cur.Version, ChangeKind: cur.ChangeKind, Data: cur.Data}) == nil {
 				return cs, nil
 			}
+		}
+		if sess.ConfirmedProposalID != "" {
 			sess.Status = sessionAttn
 			if err := tx.UpdateSessionState(ctx, *sess); err != nil {
 				return cs, err
@@ -219,6 +230,9 @@ func (c *Coordinator) advance(ctx context.Context, tx *store.Tx, sess store.Sess
 	}
 	missing := 0
 	for _, m := range members {
+		if m.LeftAt != nil {
+			continue
+		}
 		if _, ok := preps[m.ID]; !ok {
 			missing++
 		}

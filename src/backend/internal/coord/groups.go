@@ -182,6 +182,9 @@ func (c *Coordinator) CreateSession(ctx context.Context, userID, groupID string,
 		if err != nil {
 			return store.Response{}, err
 		}
+		if len(members) < MinGroupSize {
+			return store.Response{}, apperr.InvalidStateErr("開催回を作るには、在籍メンバーが2人以上必要です。")
+		}
 		var notJoined []string
 		for _, m := range members {
 			if !m.Joined() {

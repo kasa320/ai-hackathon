@@ -198,6 +198,19 @@ type CreateGroupInput struct {
 	Invitees []Invitee `json:"invitees"`
 }
 
+type LeaveGroupInput struct{}
+
+// DeleteGroupInput は削除確認ダイアログから送る空の本文。
+// 誤操作防止は、管理者限定と警告付き確認ダイアログで行う。
+type DeleteGroupInput struct{}
+
+type GroupLifecycleResult struct {
+	GroupID              string `json:"group_id"`
+	Status               string `json:"status"`
+	AffectedSessionCount int    `json:"affected_session_count"`
+	NotificationCount    int    `json:"notification_count"`
+}
+
 type CreateSessionInput struct {
 	PlaybookID string `json:"playbook_id"`
 	// Title は空なら「第N回」を自動で付ける。

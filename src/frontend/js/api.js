@@ -2,7 +2,7 @@
 // 契約：docs/api-endpoint.md（エンドポイント）と docs/data-structure.md（型）。
 //
 // ここが守ること：
-// - 認証済みの POST / PUT に X-CSRF-Token と Idempotency-Key を付ける
+// - 認証済みの POST / PUT / DELETE に X-CSRF-Token と Idempotency-Key を付ける
 // - エラーは必ず ApiError にして、画面側は code で分岐する（message で分岐しない）
 // - 本人 ID や権限を本文に入れない。サーバーがセッションから解決する
 
@@ -59,7 +59,7 @@ export function newIdempotencyKey() {
 
 async function request(method, path, { body, idempotencyKey, formData } = {}) {
   const headers = {};
-  const isWrite = method === "POST" || method === "PUT";
+  const isWrite = method === "POST" || method === "PUT" || method === "DELETE";
 
   if (isWrite && csrfToken) headers["X-CSRF-Token"] = csrfToken;
   if (isWrite && idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
@@ -131,6 +131,8 @@ export const api = {
   groups: () => request("GET", "/groups"),
   group: (groupId) => request("GET", `/groups/${encodeURIComponent(groupId)}`),
   createGroup: (payload) => write("POST", "/groups", payload),
+  leaveGroup: (groupId) => write("POST", `/groups/${encodeURIComponent(groupId)}/leave`, {}),
+  deleteGroup: (groupId) => write("DELETE", `/groups/${encodeURIComponent(groupId)}`, {}),
 
   // ---- 開催回 ----
   sessions: (groupId) => request("GET", `/groups/${encodeURIComponent(groupId)}/sessions`),
