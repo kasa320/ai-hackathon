@@ -28,6 +28,7 @@ MVPは、既存の輪読会の「期間だけ登録→日時と進行の提案�
 | [api-endpoint](docs/api-endpoint.md) | エンドポイント一覧・共通の呼び出し規約・エラー・画面URL |
 | [data-structure](docs/data-structure.md) | APIがやりとりする型と状態値 |
 | [database](docs/database.md) | テーブル定義と1レコードのサンプル |
+| [scheduling-rule](docs/scheduling-rule.md) | 輪読の日程調整の流れ・候補日時の決め方・確定条件・期限 |
 | agent | 状態遷移・ツール・モデル構成（準備中） |
 | development | セットアップ・環境変数・開発ルール（準備中） |
 | [evaluation](.agent/decisions/evaluation.md) | LINEとの比較方法・固定評価ケース・費用の計測（手順のみ、結果は未計測） |
