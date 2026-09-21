@@ -47,21 +47,28 @@ func (Playbook) InterpretContext(_ context.Context, s coord.Snapshot) (json.RawM
 }
 
 // PreparationSchema は PreparationData の JSON Schema。
+//
+// 配列の maxItems は Gemini の制約付き生成が受け付ける範囲に収める。maxItems は
+// 「今いくつ出したか」を数える状態を要求し、要素側の状態と掛け算になるため、
+// 大きすぎると Gemini が "constraint has too many states for serving" として
+// HTTP 400 を返す。2026-09-21 の実測では 3 つの配列を 40 以上にすると
+// コンパイルが走った呼び出しはすべて失敗し、21 以下は 12 回すべて成功した。
+// 上限を超える入力は Web のフォームから登録できる（サーバー側の検証は 60 件まで許す）。
 func (Playbook) PreparationSchema() json.RawMessage {
 	return json.RawMessage(`{
   "type": "object",
   "additionalProperties": false,
   "required": [],
   "properties": {
-    "unavailable_dates": {"type":"array","maxItems":60,"items":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"description":"本人が自分から言った、終日参加できない日"},
+    "unavailable_dates": {"type":"array","maxItems":21,"items":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"description":"本人が自分から言った、終日参加できない日"},
     "schedule": {
       "type":["object","null"], "additionalProperties":false,
       "required":["status","weekly_windows","date_windows","max_duration_minutes"],
       "properties":{
         "status":{"type":"string","enum":["provided","unknown","unavailable"]},
         "max_duration_minutes":{"type":"integer","minimum":0,"maximum":480,"description":"本人が自分から言った1回の参加時間の上限。言っていなければ0"},
-        "weekly_windows":{"type":"array","maxItems":60,"items":{"type":"object","additionalProperties":false,"required":["weekday","start","end"],"properties":{"weekday":{"type":"integer","minimum":0,"maximum":6},"start":{"type":"string"},"end":{"type":"string"}}}},
-        "date_windows":{"type":"array","maxItems":60,"items":{"type":"object","additionalProperties":false,"required":["date","start","end"],"properties":{"date":{"type":"string"},"start":{"type":"string"},"end":{"type":"string"}}}}
+        "weekly_windows":{"type":"array","maxItems":21,"items":{"type":"object","additionalProperties":false,"required":["weekday","start","end"],"properties":{"weekday":{"type":"integer","minimum":0,"maximum":6},"start":{"type":"string"},"end":{"type":"string"}}}},
+        "date_windows":{"type":"array","maxItems":14,"items":{"type":"object","additionalProperties":false,"required":["date","start","end"],"properties":{"date":{"type":"string"},"start":{"type":"string"},"end":{"type":"string"}}}}
       }
     },
     "declined_presentation": {"type": "boolean", "description": "本人が「今回は説明の担当はできない」とはっきり言ったときだけ true"}
