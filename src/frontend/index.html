@@ -5,53 +5,78 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./css/styles.css">
-  <meta name="description" content="担当者が準備できなくなっても、参加者の条件に合わせて次回の会を組み直し、引き受けと同意を集めて配ります。">
-  <title>会 — Quorum</title>
+  <meta name="description" content="適当なチャットを投げるだけ。マルナゲが全員に予定を聞いて日時を決め、輪読なら読む範囲と発表者、会議なら議題と時間配分まで割り当てます。">
+  <title>会 — Marunage</title>
 </head>
 <body data-page="home">
   <div class="devbar" id="devbar" hidden></div>
   <header class="topbar" id="topbar"></header>
 
+  <!-- ホームの頭。全幅で使うので shell の外に置く。ログイン後は低くして出す -->
+  <section class="hero" id="hero" hidden>
+    <!-- 見出しが内容を伝えるので、写真は装飾として alt を空にする -->
+    <div class="hero__media">
+      <img src="./img/meeting-1600.jpg"
+           srcset="./img/meeting-900.jpg 900w, ./img/meeting-1600.jpg 1600w"
+           sizes="100vw" width="1600" height="1067" alt="" fetchpriority="high">
+    </div>
+    <div class="hero__in">
+      <span class="hero__kicker">マルナゲ／幹事エージェント</span>
+      <h1>日程調整は、<br>丸投げでいい。</h1>
+      <p class="hero__lead">「来週あたりで輪読やりたい」。その一言を投げるだけ。マルナゲが全員に予定と都合を聞き、日時を決め、当日の担当と進め方まで組み立てて配ります。</p>
+      <p class="hero__sub">輪読なら読む範囲と発表者、会議なら議題と時間配分。何をする会かに合わせて、割り当てまで作ります。</p>
+      <div class="hero__actions">
+        <a class="btn" id="login" href="/api/auth/discord">Discord ではじめる</a>
+        <span class="hero__note" id="hero-note">聞かれるのはあなたの分だけ。返事は Discord の個人チャットでできます。</span>
+      </div>
+    </div>
+  </section>
+
   <main class="shell">
     <div id="flash" hidden></div>
 
-    <!-- 未ログイン：この仕組みが何をするかを、組み直しの実例で見せる -->
+    <!-- 未ログイン：雑なチャットが進行表になるまでを、実例で見せる -->
     <div id="guest" hidden>
-      <div class="page-head">
-        <h1>準備が変わっても、会は開ける。</h1>
-        <p>担当者が準備できなくなったとき、参加者が読めた範囲と説明できる時間に合わせて、今回の範囲と進行を組み直します。本人の引き受けと同意を集め、決まったことを配るまで進めます。</p>
-      </div>
-
-      <section class="headline">
-        <div class="headline__top">
-          <span class="stamp">例</span>
+      <section class="section">
+        <div class="section__head">
+          <h2>雑なひと言から、ここまで決まる</h2>
           <span class="headline__state">60分・4人の輪読会</span>
         </div>
-        <div class="headline__body">
-          <h2 style="font-size:clamp(1.3rem,3vw,1.7rem);font-weight:700;letter-spacing:-.02em;line-height:1.4">40分を担当していた人が、準備できなくなったとき</h2>
-          <p class="change" style="margin-top:8px">別の人が「前半だけ15分なら」と答えると、範囲を縮めて復習に振り替えた案を作ります。帯の長さは実際の分数のままです。</p>
 
-          <div class="plan plan--enter" style="margin-top:24px">
-            <div class="plan__bar" role="img" aria-label="変更後の進行表。復習20分、説明15分、議論25分。">
-              <span style="flex:20"><b>復習</b>全員 20分</span>
-              <span style="flex:15" data-tone="mid"><b>説明</b>Cさん 15分</span>
-              <span style="flex:25"><b>議論</b>全員 25分</span>
-            </div>
-            <p class="plan__scale num"><span>0</span><span>20</span><span>35</span><span>60分</span></p>
-            <div class="plan__prev">
-              <p>変更前</p>
-              <div class="plan__bar plan__bar--prev" role="img" aria-label="変更前の進行表。説明が40分、議論が20分。">
-                <span style="flex:40">説明 40分</span><span style="flex:20">議論 20分</span>
-              </div>
-            </div>
-          </div>
+        <p class="change">「来週あたりで輪読やりたい、1時間くらいで」。これだけを受け取ったマルナゲは、足りない条件を本人に聞きに行きます。<b>いつなら出られるか、どこまで読めたか、何分なら説明できるか</b>。集まった答えだけで、この進行表を組みます。</p>
 
-          <div class="actions">
-            <a class="btn" id="login" href="/api/auth/discord">Discord でログイン</a>
-            <span class="tally"><span class="num">扱えなかった範囲は次回へ引き継ぎます</span></span>
+        <div class="plan plan--enter" style="margin-top:24px">
+          <div class="plan__bar" role="img" aria-label="組み上がった進行表。復習20分、説明15分、議論25分。">
+            <span style="flex:20"><b>復習</b>全員 20分</span>
+            <span style="flex:15" data-tone="mid"><b>説明</b>Cさん 15分</span>
+            <span style="flex:25"><b>議論</b>全員 25分</span>
           </div>
+          <p class="plan__scale num"><span>0</span><span>20</span><span>35</span><span>60分</span></p>
+        </div>
+
+        <p class="change">担当が準備できなくなっても同じです。「前半だけ15分なら」と答えた人がいれば、範囲を縮めて復習に振り替えた案を作り直し、引き受けと同意を集め直します。扱えなかった範囲は次回へ引き継ぎます。</p>
+      </section>
+
+      <section class="section">
+        <div class="section__head"><h2>テーマに合わせて、割り当てまで変える</h2></div>
+        <div class="panels">
+          <article class="panel">
+            <h3>輪読</h3>
+            <strong>読む範囲と発表者、復習と議論の時間</strong>
+            <p>読めた範囲と説明できる分数から組みます。いま使えるのはこの形です。</p>
+          </article>
+          <article class="panel">
+            <h3>会議</h3>
+            <strong>議題と時間配分、進行の担当</strong>
+            <p>決めたいことと持ち時間から組む形。用途を足して増やせる作りにしています。</p>
+          </article>
+          <article class="panel">
+            <h3>勉強会</h3>
+            <strong>発表順と持ち時間</strong>
+            <p>同じく用途として追加できます。日程調整と通知の部分は共通です。</p>
+          </article>
         </div>
       </section>
 
@@ -64,8 +89,8 @@
             <p>答えた内容だけを使います。書名から章の中身を推測しません。都合がつかない理由は集めません。</p>
           </article>
           <article class="panel">
-            <h3>組み直す</h3>
-            <strong>範囲を縮める、復習にあてる、担当を替える</strong>
+            <h3>組み立てる</h3>
+            <strong>日時を決め、範囲と担当と進行を割り当てる</strong>
             <p>持ち時間を超える案や、本人が説明できない範囲を割り当てる案は作りません。</p>
           </article>
           <article class="panel">

@@ -1,4 +1,4 @@
-/* Quorum — 幹事エージェント
+/* Marunage（マルナゲ） — 幹事エージェント
    白基調・寒色（鋼色）。決めごと：
    - 色は「あなたの行動」と「進行表」にだけ使う。状態は記号と罫で示す
    - 注意の暖色は失敗と成否不明のときだけ、1画面に1か所まで
@@ -45,6 +45,8 @@
 }
 
 * { box-sizing: border-box; }
+/* hidden 属性は display を持つ規則より強くする（.hero や .devbar が消えなくなるため） */
+[hidden] { display: none !important; }
 html { font-size: 16px; }
 body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-feature-settings: "palt" 1; line-height: 1.7; -webkit-font-smoothing: antialiased; }
 h1, h2, h3, p, ul, figure { margin: 0; }
@@ -69,6 +71,45 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .shell { width: var(--shell); margin: 0 auto; padding: var(--s7) 0 var(--s8); }
 .shell--narrow { width: min(760px, calc(100% - 40px)); }
+
+/* ---------- ログイン前の頭（全幅の写真＋幕） ----------
+   写真は差し替え前提。img/meeting-*.jpg を置き換えれば、ここは触らなくてよい。 */
+.hero { position: relative; display: flex; align-items: flex-end; min-height: clamp(440px, calc(100dvh - 60px), 720px); background: #152a47; overflow: hidden; }
+.hero__media { position: absolute; inset: 0; }
+.hero__media img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* 文字の載る左下を濃くして、写真を替えても白文字の明度差（6:1 前後）を保つ */
+.hero__media::after { content: ""; position: absolute; inset: 0; background: linear-gradient(104deg, rgba(15, 32, 56, .95) 0%, rgba(18, 40, 68, .88) 46%, rgba(24, 58, 96, .5) 74%, rgba(37, 99, 168, .32) 100%); }
+.hero__in { position: relative; width: var(--shell); margin: 0 auto; padding: var(--s8) 0 var(--s7); color: #fff; }
+.hero__kicker { display: inline-flex; align-items: center; gap: var(--s2); padding: 5px 12px; border: 1px solid rgba(255, 255, 255, .4); border-radius: var(--r-chip); font-size: .78rem; }
+.hero h1 { margin-top: var(--s4); font-size: clamp(34px, 6.2vw, 62px); font-weight: 900; letter-spacing: -.04em; line-height: 1.16; }
+.hero__lead { margin-top: var(--s4); max-width: 34em; color: rgba(255, 255, 255, .9); font-size: 1.02rem; }
+.hero__sub { margin-top: var(--s3); max-width: 34em; color: rgba(255, 255, 255, .68); font-size: .88rem; }
+.hero__actions { display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap; margin-top: var(--s5); }
+.hero__note { max-width: 28em; color: rgba(255, 255, 255, .72); font-size: .78rem; }
+/* 写真の上では、青より白のほうが押せる場所として強い */
+.hero .btn { background: #fff; color: var(--blue-deep); }
+.hero .btn:hover { background: rgba(255, 255, 255, .86); }
+
+@media (max-width: 800px) {
+  /* 狭い画面では文字が写真の全幅にかかるので、幕を下から立ち上げる */
+  .hero__media::after { background: linear-gradient(to top, rgba(15, 32, 56, .96) 0%, rgba(18, 40, 68, .9) 50%, rgba(24, 58, 96, .55) 100%); }
+}
+
+/* 頭のすぐ下は、節の間隔ではなく shell の余白で受ける */
+#guest > .section:first-child { margin-top: 0; }
+
+/* ログイン後：頭は残すが低くして、会の情報を折り返しの中に入れる */
+body[data-auth="in"] .hero { min-height: 260px; }
+body[data-auth="in"] .hero__in { padding: var(--s6) 0 var(--s5); }
+body[data-auth="in"] .hero h1 { font-size: clamp(26px, 3.2vw, 36px); }
+body[data-auth="in"] .hero__lead, body[data-auth="in"] .hero__sub { display: none; }
+body[data-auth="in"] .hero__actions { margin-top: var(--s4); }
+/* 帯が居座る分だけ、飛び先を下げる */
+#member { scroll-margin-top: 76px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
 
 .page-head { margin-bottom: var(--s6); }
 .page-head h1 { font-size: clamp(1.6rem, 3.4vw, 2.1rem); font-weight: 700; letter-spacing: -.02em; line-height: 1.35; }

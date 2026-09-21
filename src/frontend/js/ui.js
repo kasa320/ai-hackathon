@@ -15,7 +15,7 @@ export function renderTopbar(node, { me, current }) {
 
   mount(
     node,
-    el("a", { class: "brand", href: "/" }, "Quorum", el("small", {}, "幹事エージェント")),
+    el("a", { class: "brand", href: "/" }, "Marunage", el("small", {}, "幹事エージェント")),
     el(
       "nav",
       { class: "nav", "aria-label": "主なページ" },

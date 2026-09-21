@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ホーム画面の案くらべ — Marunage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+/* 本実装（src/frontend/css/styles.css）と同じ色・余白の土台。ここは比較用の使い捨て。 */
+:root{
+  --bg:#fff; --panel:#f2f4f6; --line:#dfe4e9; --ink:#232a31; --ink-2:#5c6874; --ink-3:#8b95a1;
+  --blue:#2563a8; --blue-deep:#1c4d85; --blue-soft:#e8f0f7;
+  --seg-quiet:#d8e4ef; --seg-mid:#8fb0ce; --seg-solid:#2563a8;
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px; --s8:72px;
+  --r-card:12px; --r-ctrl:8px; --r-chip:999px;
+  --font:"Inter","Noto Sans JP",system-ui,sans-serif;
+  --shell:min(1120px,calc(100% - 40px));
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.7;font-feature-settings:"palt" 1;-webkit-font-smoothing:antialiased}
+h1,h2,h3,p,ul{margin:0}
+ul{padding:0;list-style:none}
+a{color:inherit}
+.num{font-variant-numeric:tabular-nums}
+
+/* ---- 比較用の枠 ---- */
+.guide{width:var(--shell);margin:0 auto;padding:var(--s7) 0 var(--s5)}
+.guide h1{font-size:1.5rem;letter-spacing:-.02em}
+.guide p{margin-top:var(--s2);max-width:64ch;color:var(--ink-2);font-size:.92rem}
+.tag{display:inline-flex;align-items:center;gap:var(--s2);margin:var(--s7) 0 var(--s3);width:var(--shell);margin-inline:auto}
+.tag b{display:grid;place-items:center;width:28px;height:28px;border-radius:var(--r-chip);background:var(--ink);color:#fff;font-size:.86rem}
+.tag span{font-size:.92rem;color:var(--ink-2)}
+.frame{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+
+/* ---- 共通のヘッダー（全案おなじ） ---- */
+.topbar{display:flex;align-items:center;gap:var(--s5);height:60px;padding:0 clamp(var(--s4),4vw,var(--s6));border-bottom:1px solid var(--line);background:#fff}
+.topbar--on-photo{position:absolute;inset:0 0 auto;z-index:2;background:transparent;border-bottom-color:rgba(255,255,255,.22);color:#fff}
+.brand{display:flex;align-items:baseline;gap:var(--s2);text-decoration:none;font-weight:700;font-size:1.06rem;letter-spacing:-.01em}
+.brand small{font-weight:500;font-size:.72rem;color:var(--ink-3)}
+.topbar--on-photo .brand small{color:rgba(255,255,255,.72)}
+.topbar .nav{display:flex;gap:var(--s4);font-size:.88rem;color:var(--ink-2)}
+.topbar--on-photo .nav{color:rgba(255,255,255,.82)}
+.topbar .nav a{text-decoration:none}
+
+/* ---- 操作子 ---- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--s2);padding:11px 18px;border:1px solid var(--line);border-radius:var(--r-ctrl);background:#fff;color:var(--ink);font-weight:700;font-size:.92rem;text-decoration:none}
+.btn--main{border-color:var(--blue);background:var(--blue);color:#fff}
+.btn--ghost{border-color:rgba(255,255,255,.66);background:transparent;color:#fff}
+.btns{display:flex;flex-wrap:wrap;gap:var(--s3);margin-top:var(--s5)}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:var(--r-chip);font-size:.8rem;font-weight:500}
+
+/* ======================================================================
+   案A：写真を全面に敷き、下から濃い幕。文字は左下にまとめる
+   ====================================================================== */
+.heroA{position:relative;display:flex;align-items:flex-end;min-height:clamp(460px,76vh,720px);background:#152a47;overflow:hidden}
+.heroA__media{position:absolute;inset:0}
+.heroA__media img{display:block;width:100%;height:100%;object-fit:cover}
+/* 文字の載る左下を濃くする。白文字で 6:1 前後を保つ下限 */
+.heroA__media::after{content:"";position:absolute;inset:0;background:linear-gradient(104deg,rgba(15,32,56,.95) 0%,rgba(18,40,68,.88) 46%,rgba(24,58,96,.5) 74%,rgba(37,99,168,.32) 100%)}
+.heroA__in{position:relative;width:var(--shell);margin:0 auto;padding:var(--s8) 0 var(--s7);color:#fff}
+.heroA__kicker{display:inline-flex;align-items:center;gap:var(--s2);padding:5px 12px;border:1px solid rgba(255,255,255,.4);border-radius:var(--r-chip);font-size:.78rem;letter-spacing:.02em}
+.heroA h1{margin-top:var(--s4);font-size:clamp(34px,6.2vw,62px);font-weight:900;letter-spacing:-.04em;line-height:1.16}
+.heroA__lead{margin-top:var(--s4);max-width:34em;color:rgba(255,255,255,.9);font-size:1.02rem}
+.heroA__sub{margin-top:var(--s3);max-width:34em;color:rgba(255,255,255,.68);font-size:.88rem}
+
+/* ======================================================================
+   案B：左に文字・右に写真。チャットが予定に変わる様子を図で見せる
+   ====================================================================== */
+.heroB{position:relative;background:linear-gradient(160deg,#f7f9fb 0%,var(--blue-soft) 58%,#dce9f5 100%);border-bottom:1px solid var(--line);overflow:hidden}
+.heroB__in{position:relative;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:var(--s7);align-items:center;width:var(--shell);margin:0 auto;padding:var(--s8) 0}
+.heroB__kicker{display:inline-flex;align-items:center;gap:var(--s2);padding:5px 12px;border-radius:var(--r-chip);background:#fff;border:1px solid var(--line);color:var(--blue-deep);font-size:.78rem;font-weight:700}
+.heroB h1{margin-top:var(--s4);font-size:clamp(30px,4.6vw,50px);font-weight:900;letter-spacing:-.035em;line-height:1.2}
+.heroB__lead{margin-top:var(--s4);max-width:30em;color:var(--ink-2);font-size:1rem}
+.heroB__media{position:relative;border-radius:var(--r-card);overflow:hidden;box-shadow:0 18px 40px -18px rgba(21,42,71,.45)}
+.heroB__media img{display:block;width:100%;height:clamp(300px,38vw,420px);object-fit:cover}
+.heroB__media::after{content:"";position:absolute;inset:0;background:linear-gradient(200deg,rgba(21,42,71,.06) 0%,rgba(21,42,71,.52) 72%,rgba(21,42,71,.78) 100%)}
+.heroB__card{position:absolute;left:var(--s4);right:var(--s4);bottom:var(--s4);z-index:2;padding:var(--s4);border-radius:10px;background:rgba(255,255,255,.96);box-shadow:0 10px 24px -14px rgba(21,42,71,.6)}
+.chat{display:flex;flex-direction:column;gap:6px;font-size:.84rem}
+.chat span{max-width:88%;padding:7px 12px;border-radius:12px;background:var(--panel);color:var(--ink-2)}
+.chat span.me{align-self:flex-end;background:var(--blue);color:#fff}
+.arrowdown{margin:var(--s3) 0;text-align:center;color:var(--ink-3);font-size:.8rem}
+.mini{display:flex;height:26px;border-radius:6px;overflow:hidden;font-size:.68rem;color:#fff}
+.mini span{display:grid;place-items:center;background:var(--seg-mid)}
+.mini span:nth-child(2){background:var(--seg-solid)}
+.mini span:nth-child(3){background:var(--seg-quiet);color:var(--ink-2)}
+
+/* ======================================================================
+   案C：ブランド色のグラデーションが主役。写真は奥に薄く敷く
+   ====================================================================== */
+.heroC{position:relative;overflow:hidden;background:linear-gradient(135deg,#0f2038 0%,#1c4d85 46%,#2f7bc4 100%)}
+.heroC__media{position:absolute;inset:0;opacity:.22;mix-blend-mode:luminosity}
+.heroC__media img{display:block;width:100%;height:100%;object-fit:cover}
+.heroC__glow{position:absolute;right:-12%;top:-30%;width:70%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,rgba(120,190,255,.5) 0%,rgba(120,190,255,0) 62%)}
+.heroC__in{position:relative;width:var(--shell);margin:0 auto;padding:var(--s8) 0;color:#fff;text-align:center}
+.heroC__kicker{display:inline-flex;gap:var(--s2);padding:5px 14px;border:1px solid rgba(255,255,255,.4);border-radius:var(--r-chip);font-size:.78rem}
+.heroC h1{margin-top:var(--s4);font-size:clamp(34px,5.8vw,58px);font-weight:900;letter-spacing:-.04em;line-height:1.18}
+.heroC__lead{margin:var(--s4) auto 0;max-width:40em;color:rgba(255,255,255,.88);font-size:1.02rem}
+.heroC .btns{justify-content:center}
+.heroC__themes{display:flex;flex-wrap:wrap;justify-content:center;gap:var(--s2);margin-top:var(--s6)}
+.heroC__themes .chip{border:1px solid rgba(255,255,255,.34);background:rgba(255,255,255,.1);color:#fff}
+.heroC__themes .chip b{font-weight:700}
+
+/* ---- 各案の下に置く共通の続き（3案とも同じ内容） ---- */
+.below{width:var(--shell);margin:0 auto;padding:var(--s7) 0 var(--s8)}
+.below h2{font-size:1.15rem;letter-spacing:-.01em}
+.below__note{margin-top:var(--s2);color:var(--ink-2);font-size:.9rem;max-width:60ch}
+.panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:var(--s4);margin-top:var(--s5)}
+.panel{padding:var(--s5);border:1px solid var(--line);border-radius:var(--r-card);background:#fff}
+.panel h3{font-size:.8rem;color:var(--ink-3);font-weight:700;letter-spacing:.04em}
+.panel strong{display:block;margin-top:var(--s2);font-size:1rem;letter-spacing:-.01em}
+.panel p{margin-top:var(--s2);color:var(--ink-2);font-size:.88rem}
+
+@media (max-width:860px){
+  .heroB__in{grid-template-columns:1fr;gap:var(--s5);padding:var(--s7) 0}
+  .heroA__media::after{background:linear-gradient(to top,rgba(15,32,56,.96) 0%,rgba(18,40,68,.9) 50%,rgba(24,58,96,.55) 100%)}
+}
+</style>
+</head>
+<body>
+
+<div class="guide">
+  <h1>ホーム画面（ログイン前）の案くらべ</h1>
+  <p>3案とも中身の主張は同じで、見せ方だけが違います。写真は仮置き（Unsplash License、<code>.agent/ui-login-screen/img/</code> から流用）。決まった案を <code>src/frontend/index.html</code> と <code>css/styles.css</code> に入れます。名前は「Marunage／マルナゲ」、添え名は「幹事エージェント」のままです。</p>
+</div>
+
+<!-- ============================ 案A ============================ -->
+<div class="tag"><b>A</b><span>写真を全面に敷き、左下を濃い幕で沈める（いちばん強い・写真頼み）</span></div>
+<div class="frame">
+  <section class="heroA">
+    <header class="topbar topbar--on-photo">
+      <a class="brand" href="#">Marunage<small>幹事エージェント</small></a>
+      <nav class="nav"><a href="#">会</a></nav>
+    </header>
+    <div class="heroA__media">
+      <img src="img/meeting-1600.jpg" srcset="img/meeting-900.jpg 900w, img/meeting-1600.jpg 1600w" sizes="100vw" width="1600" height="1067" alt="">
+    </div>
+    <div class="heroA__in">
+      <span class="heroA__kicker">マルナゲ／幹事エージェント</span>
+      <h1>日程調整は、<br>丸投げでいい。</h1>
+      <p class="heroA__lead">「来週あたりで輪読やりたい」。その一言を投げるだけ。マルナゲが全員に予定を聞き、日時を決め、担当と当日の進め方まで組み立てて配ります。</p>
+      <p class="heroA__sub">輪読なら読む範囲と発表者、会議なら議題と時間配分。テーマに合わせて割り当てまで作ります。</p>
+      <div class="btns">
+        <a class="btn btn--main" href="#">Discord ではじめる</a>
+        <a class="btn btn--ghost" href="#">見本の会を見る</a>
+      </div>
+    </div>
+  </section>
+  <div class="below">
+    <h2>任せられること</h2>
+    <p class="below__note">この下は3案とも共通です（文言は本実装で詰めます）。</p>
+    <div class="panels">
+      <article class="panel"><h3>読み取る</h3><strong>雑なチャットから、決めるべきことを割り出す</strong><p>「来週あたり」「1時間くらい」でも、日時・人数・持ち時間まで質問して埋めます。</p></article>
+      <article class="panel"><h3>組み立てる</h3><strong>テーマに合わせて、担当と進行を割り当てる</strong><p>輪読・会議・勉強会。何を決める会なのかに合わせて、割り当ての形を変えます。</p></article>
+      <article class="panel"><h3>届ける</h3><strong>本人には Discord の個人チャットで聞く</strong><p>全員に返事を催促しません。答えるのはあなたの分だけです。</p></article>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ 案B ============================ -->
+<div class="tag"><b>B</b><span>左に文言・右に写真。チャットが予定に変わる様子を図で見せる（説明が効く）</span></div>
+<div class="frame">
+  <header class="topbar">
+    <a class="brand" href="#">Marunage<small>幹事エージェント</small></a>
+    <nav class="nav"><a href="#">会</a></nav>
+  </header>
+  <section class="heroB">
+    <div class="heroB__in">
+      <div>
+        <span class="heroB__kicker">マルナゲ／幹事エージェント</span>
+        <h1>その雑なひと言から、<br>予定はちゃんと決まる。</h1>
+        <p class="heroB__lead">「来週あたりで輪読やりたい」と書くだけ。マルナゲが足りない条件を本人に聞き、日時を決め、輪読なら読む範囲と発表者、会議なら議題と時間配分まで組み立てます。幹事はもういりません。</p>
+        <div class="btns">
+          <a class="btn btn--main" href="#">Discord ではじめる</a>
+          <a class="btn" href="#">見本の会を見る</a>
+        </div>
+      </div>
+      <div class="heroB__media">
+        <img src="img/meeting-1600.jpg" srcset="img/meeting-900.jpg 900w, img/meeting-1600.jpg 1600w" sizes="(max-width:860px) 100vw, 46vw" width="1600" height="1067" alt="">
+        <div class="heroB__card">
+          <div class="chat">
+            <span class="me">来週あたりで輪読やりたい、1時間くらいで</span>
+            <span>何曜の夜なら空いてますか？　どこまで読めましたか？</span>
+          </div>
+          <p class="arrowdown">↓ 全員の返事から</p>
+          <div class="mini"><span>復習 20分</span><span>説明 15分</span><span>議論 25分</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <div class="below">
+    <h2>任せられること</h2>
+    <p class="below__note">この下は3案とも共通です（文言は本実装で詰めます）。</p>
+    <div class="panels">
+      <article class="panel"><h3>読み取る</h3><strong>雑なチャットから、決めるべきことを割り出す</strong><p>「来週あたり」「1時間くらい」でも、日時・人数・持ち時間まで質問して埋めます。</p></article>
+      <article class="panel"><h3>組み立てる</h3><strong>テーマに合わせて、担当と進行を割り当てる</strong><p>輪読・会議・勉強会。何を決める会なのかに合わせて、割り当ての形を変えます。</p></article>
+      <article class="panel"><h3>届ける</h3><strong>本人には Discord の個人チャットで聞く</strong><p>全員に返事を催促しません。答えるのはあなたの分だけです。</p></article>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ 案C ============================ -->
+<div class="tag"><b>C</b><span>グラデーションが主役、写真は奥に薄く。テーマの広さを前に出す（写真が未定でも成立）</span></div>
+<div class="frame">
+  <section class="heroC">
+    <header class="topbar topbar--on-photo" style="position:relative;border-bottom-color:rgba(255,255,255,.18)">
+      <a class="brand" href="#">Marunage<small>幹事エージェント</small></a>
+      <nav class="nav"><a href="#">会</a></nav>
+    </header>
+    <div class="heroC__media">
+      <img src="img/meeting-1600.jpg" srcset="img/meeting-900.jpg 900w, img/meeting-1600.jpg 1600w" sizes="100vw" width="1600" height="1067" alt="">
+    </div>
+    <div class="heroC__glow" aria-hidden="true"></div>
+    <div class="heroC__in">
+      <span class="heroC__kicker">マルナゲ／幹事エージェント</span>
+      <h1>幹事、もういません。</h1>
+      <p class="heroC__lead">適当なチャットを投げるだけ。マルナゲが全員に予定を聞いて日時を決め、その会のテーマに合わせて担当と進め方まで割り当てます。</p>
+      <div class="btns">
+        <a class="btn btn--main" href="#">Discord ではじめる</a>
+        <a class="btn btn--ghost" href="#">見本の会を見る</a>
+      </div>
+      <div class="heroC__themes">
+        <span class="chip"><b>輪読</b>読む範囲と発表者</span>
+        <span class="chip"><b>会議</b>議題と時間配分</span>
+        <span class="chip"><b>勉強会</b>発表順と持ち時間</span>
+      </div>
+    </div>
+  </section>
+  <div class="below">
+    <h2>任せられること</h2>
+    <p class="below__note">この下は3案とも共通です（文言は本実装で詰めます）。</p>
+    <div class="panels">
+      <article class="panel"><h3>読み取る</h3><strong>雑なチャットから、決めるべきことを割り出す</strong><p>「来週あたり」「1時間くらい」でも、日時・人数・持ち時間まで質問して埋めます。</p></article>
+      <article class="panel"><h3>組み立てる</h3><strong>テーマに合わせて、担当と進行を割り当てる</strong><p>輪読・会議・勉強会。何を決める会なのかに合わせて、割り当ての形を変えます。</p></article>
+      <article class="panel"><h3>届ける</h3><strong>本人には Discord の個人チャットで聞く</strong><p>全員に返事を催促しません。答えるのはあなたの分だけです。</p></article>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

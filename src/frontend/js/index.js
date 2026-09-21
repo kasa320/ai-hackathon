@@ -46,11 +46,21 @@ async function boot() {
 
   renderTopbar($("topbar"), { me, current: "home" });
 
+  $("hero").hidden = false;
+
   if (!me) {
     $("login").href = api.loginUrl("/");
     $("guest").hidden = false;
     return;
   }
+
+  // ログイン後もホームの頭は残す（ロゴから戻るとここに着く）。ただし低くして、
+  // 会の情報がすぐ下に出るようにし、入口のボタンは次にやることへ差し替える。
+  document.body.dataset.auth = "in";
+  const cta = $("login");
+  cta.textContent = "自分の会を見る";
+  cta.href = "#member";
+  $("hero-note").textContent = `${me.user.display_name} さんとして見ています。新しい会は「会を登録」から作れます。`;
 
   $("member").hidden = false;
   await renderMember();

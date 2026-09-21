@@ -109,7 +109,7 @@ function setBusy(on) {
 function render() {
   if (!detail) return;
   feature = featureFor(detail.session.playbook_id);
-  document.title = `${detail.session.title} — Quorum`;
+  document.title = `${detail.session.title} — Marunage`;
 
   renderHead();
   renderHeadline();

@@ -41,4 +41,4 @@ APIには繋がらないので、ログイン状態の確認に失敗して未�
 
 - `index.html` は `session.html` と `meeting.html` へのリンクを持つが、どちらもこの抜き出しには無い。
 - `js/api.js` の冒頭コメントが `.agent/decisions/api.md` を参照している。このファイルは [docs/api-endpoint.md](../../docs/api-endpoint.md) と [docs/data-structure.md](../../docs/data-structure.md) に分割済みなので、本実装へ移すときに直す。
-- 画面の語彙が「輪読調整」で、[`../ui-prototype/`](../ui-prototype/) の「Quorum」とは別のデザイン体系になっている。どちらに寄せるかを決めてから統合する。
+- 画面の語彙が「輪読調整」で、[`../ui-prototype/`](../ui-prototype/) の「Marunage」とは別のデザイン体系になっている。どちらに寄せるかを決めてから統合する。

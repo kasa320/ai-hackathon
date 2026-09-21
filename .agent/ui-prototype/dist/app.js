@@ -1,4 +1,4 @@
-/* Quorum UIプロトタイプ。APIはまだ繋がず、状態見本だけを描画します。 */
+/* Marunage UIプロトタイプ。APIはまだ繋がず、状態見本だけを描画します。 */
 
 const schedules = {
   old: [
