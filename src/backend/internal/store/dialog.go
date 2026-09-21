@@ -25,7 +25,8 @@ func (t *Tx) PreparationTargetsByUser(ctx context.Context, userID string, now ti
 FROM sessions s
 JOIN session_members sm ON sm.session_id = s.id
 JOIN members m ON m.id = sm.member_id
-WHERE m.user_id = ? AND s.starts_at > ?
+WHERE m.user_id = ? AND m.left_at IS NULL AND s.starts_at > ?
+  AND EXISTS (SELECT 1 FROM groups g WHERE g.id = s.group_id AND g.deleted_at IS NULL)
 ORDER BY s.starts_at, s.id
 LIMIT ?`, ts(now), userID, ts(now), limit)
 	if err != nil {

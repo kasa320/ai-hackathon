@@ -34,7 +34,8 @@ CREATE TABLE IF NOT EXISTS groups (
     id            TEXT PRIMARY KEY,
     name          TEXT NOT NULL,
     owner_user_id TEXT NOT NULL REFERENCES users(id),
-    created_at    TEXT NOT NULL
+    created_at    TEXT NOT NULL,
+    deleted_at    TEXT
 );
 
 -- グループの固定メンバー。user_id が NULL の間は招待中（本人未ログイン）。
@@ -46,6 +47,7 @@ CREATE TABLE IF NOT EXISTS members (
     display_name    TEXT NOT NULL,
     role            TEXT NOT NULL CHECK (role IN ('owner', 'member')),
     seq             INTEGER NOT NULL,
+    left_at         TEXT,
     UNIQUE (group_id, discord_user_id)
 );
 CREATE INDEX IF NOT EXISTS members_user ON members(user_id);
@@ -170,13 +172,29 @@ CREATE TABLE IF NOT EXISTS notifications (
     dedupe_key TEXT NOT NULL UNIQUE,
     content    TEXT NOT NULL,
     mentions   TEXT NOT NULL DEFAULT '[]',
-    status     TEXT NOT NULL CHECK (status IN ('pending', 'sending', 'sent', 'failed', 'unknown')),
+    status     TEXT NOT NULL CHECK (status IN ('pending', 'sending', 'sent', 'failed', 'unknown', 'cancelled')),
     error_code TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     seq        INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS notifications_status ON notifications(status, seq);
+
+-- 開催回に属さないグループ操作の個人DM。受信者ごとに1行を作り、個別に成否を残す。
+CREATE TABLE IF NOT EXISTS group_notifications (
+    id                        TEXT PRIMARY KEY,
+    group_id                  TEXT NOT NULL REFERENCES groups(id),
+    kind                      TEXT NOT NULL CHECK (kind IN ('member_left', 'group_deleted')),
+    recipient_discord_user_id TEXT NOT NULL,
+    dedupe_key                TEXT NOT NULL UNIQUE,
+    content                   TEXT NOT NULL,
+    status                    TEXT NOT NULL CHECK (status IN ('pending', 'sending', 'sent', 'failed', 'unknown')),
+    error_code                TEXT,
+    created_at                TEXT NOT NULL,
+    updated_at                TEXT NOT NULL,
+    seq                       INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS group_notifications_status ON group_notifications(status, seq);
 
 -- 実行履歴。私的な理由・プロンプト全文・モデルの生出力は保存しない。
 CREATE TABLE IF NOT EXISTS activity (

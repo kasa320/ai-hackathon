@@ -251,14 +251,17 @@ export function pluginTag(playbookId, name) {
  */
 export function createDialog({ title, body, submitLabel, onSubmit, extra = null }) {
   const opener = document.activeElement;
+  const token = globalThis.crypto?.randomUUID?.() ?? Date.now();
+  const titleId = `dialog-title-${token}`;
+  const errorId = `dialog-error-${token}`;
   let pending = false;
   let restore = [];
-  const errorBox = el("p", { class: "field__error", hidden: true, role: "alert" });
+  const errorBox = el("p", { class: "field__error", id: errorId, role: "alert", "aria-live": "assertive", hidden: true });
   const receiptBox = el("div", {});
 
   const dialog = el(
     "dialog",
-    {},
+    { "aria-labelledby": titleId, onClose: () => cleanup() },
     el(
       "form",
       {
@@ -280,7 +283,7 @@ export function createDialog({ title, body, submitLabel, onSubmit, extra = null 
       el(
         "div",
         { class: "dialog__head" },
-        el("h2", {}, title),
+        el("h2", { id: titleId }, title),
         el("button", { type: "button", "aria-label": "閉じる", onClick: () => { if (!pending) close(); } }, "×"),
       ),
       el("div", { class: "dialog__body" }, body, errorBox, receiptBox),
@@ -303,9 +306,14 @@ export function createDialog({ title, body, submitLabel, onSubmit, extra = null 
   }
 
   function close() {
-    dialog.close();
+    if (dialog.open) dialog.close();
+    else cleanup();
+  }
+
+  function cleanup() {
+    if (!dialog.isConnected) return;
     dialog.remove();
-    if (opener?.isConnected) opener.focus();
+    if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
   }
 
   function setPending(value, label = "送信しています…") {
@@ -324,16 +332,13 @@ export function createDialog({ title, body, submitLabel, onSubmit, extra = null 
     }
   }
 
+  // 送信中は Esc での取り消しも止める。閉じたあとの後始末は cleanup に一本化する。
   dialog.addEventListener("cancel", (event) => { if (pending) event.preventDefault(); });
-  dialog.addEventListener("close", () => {
-    dialog.remove();
-    if (opener?.isConnected) opener.focus();
-  });
 
   document.body.append(dialog);
   dialog.showModal();
-  dialog.querySelector("input, select, textarea")?.focus();
-  return { dialog, close, showError, showReceipt, setPending };
+  (dialog.querySelector("input, select, textarea") ?? dialog.querySelector('button[type="submit"]'))?.focus();
+  return { dialog, close, showError, showReceipt, setPending, errorId };
 }
 
 /**

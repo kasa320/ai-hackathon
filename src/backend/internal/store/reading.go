@@ -69,11 +69,13 @@ func (t *Tx) CreateTocLookup(ctx context.Context, l TocLookup) error {
 
 func (t *Tx) UpdateTocLookup(ctx context.Context, l TocLookup) error {
 	return t.exec(ctx, `UPDATE reading_toc_lookups SET group_id = ?, isbn = ?, status = ?, book = ?, source = ?, source_urls = ?, entries = ?,
-		unreadable_count = ?, reason_code = ?, retry_count = ?, next_run_at = ?, created_at = ?, expires_at = ? WHERE id = ?`, append(tocArgs(l), l.ID)...)
+		unreadable_count = ?, reason_code = ?, retry_count = ?, next_run_at = ?, created_at = ?, expires_at = ?
+		WHERE id = ? AND EXISTS (SELECT 1 FROM groups g WHERE g.id = reading_toc_lookups.group_id AND g.deleted_at IS NULL)`, append(tocArgs(l), l.ID)...)
 }
 
 func (t *Tx) TocLookup(ctx context.Context, id string) (TocLookup, error) {
-	return scanToc(t.row(ctx, "SELECT "+tocCols+" FROM reading_toc_lookups WHERE id = ?", id))
+	return scanToc(t.row(ctx, `SELECT `+tocCols+` FROM reading_toc_lookups WHERE id = ?
+		AND EXISTS (SELECT 1 FROM groups g WHERE g.id = reading_toc_lookups.group_id AND g.deleted_at IS NULL)`, id))
 }
 
 // CountTocLookupsSince はグループが since 以降に開始した取得の数を返す（1日の上限の判定用）。
@@ -85,7 +87,10 @@ func (t *Tx) CountTocLookupsSince(ctx context.Context, groupID string, since tim
 
 // DueTocLookups は処理待ち（書誌の確定・検索・照合）で実行時刻を過ぎたものを返す。
 func (t *Tx) DueTocLookups(ctx context.Context, now time.Time, limit int) ([]TocLookup, error) {
-	rows, err := t.query(ctx, "SELECT "+tocCols+" FROM reading_toc_lookups WHERE status IN ('resolving_book', 'searching', 'verifying') AND next_run_at <= ? ORDER BY next_run_at LIMIT ?", ts(now), limit)
+	rows, err := t.query(ctx, `SELECT `+tocCols+` FROM reading_toc_lookups
+		WHERE status IN ('resolving_book', 'searching', 'verifying') AND next_run_at <= ?
+		AND EXISTS (SELECT 1 FROM groups g WHERE g.id = reading_toc_lookups.group_id AND g.deleted_at IS NULL)
+		ORDER BY next_run_at LIMIT ?`, ts(now), limit)
 	if err != nil {
 		return nil, err
 	}

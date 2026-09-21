@@ -43,6 +43,9 @@ type Message struct {
 // チャンネルへ送る。ただしチャンネルが未設定なら、名指しした本人への DM だけが届け先になる。
 var DMKinds = map[string]bool{"task_requested": true, "reminder": true}
 
+// DMOnlyKinds は共通チャンネルへ退避せず、必ず本人との個人チャットだけへ送る通知。
+var DMOnlyKinds = map[string]bool{"member_left": true, "group_deleted": true}
+
 type Sender interface {
 	Send(ctx context.Context, m Message) error
 }
@@ -73,6 +76,9 @@ func (d *DiscordSender) Send(ctx context.Context, m Message) error {
 	users := m.MentionUserIDs
 	if users == nil {
 		users = []string{}
+	}
+	if len(m.DMUserIDs) == 1 && DMOnlyKinds[m.Kind] {
+		return d.sendDM(ctx, m.DMUserIDs[0], content, users)
 	}
 	if len(m.DMUserIDs) == 1 && (DMKinds[m.Kind] || d.ChannelID == "") {
 		err := d.sendDM(ctx, m.DMUserIDs[0], content, users)
@@ -191,6 +197,9 @@ func (d *Dispatcher) now() time.Time { return d.clock.Now().UTC().Truncate(time.
 func (d *Dispatcher) Recover(ctx context.Context) error {
 	return d.st.Tx(ctx, func(tx *store.Tx) error {
 		now := d.now()
+		if _, err := tx.MarkInterruptedGroupNotificationsUnknown(ctx, now); err != nil {
+			return err
+		}
 		list, err := tx.MarkInterruptedNotificationsUnknown(ctx, now)
 		if err != nil {
 			return err
@@ -207,7 +216,10 @@ func (d *Dispatcher) Recover(ctx context.Context) error {
 
 // DispatchPending は送信待ちの通知をすべて送る。送った件数を返す。
 func (d *Dispatcher) DispatchPending(ctx context.Context) (int, error) {
-	n := 0
+	n, err := d.dispatchGroupPending(ctx)
+	if err != nil {
+		return n, err
+	}
 	for {
 		var ntf store.Notification
 		err := d.st.Tx(ctx, func(tx *store.Tx) error {
@@ -251,6 +263,48 @@ func (d *Dispatcher) DispatchPending(ctx context.Context) (int, error) {
 		}
 		if status == store.NotifyPending {
 			// レート制限中は次の周期まで待つ。
+			return n, nil
+		}
+		n++
+	}
+}
+
+// dispatchGroupPending は脱退・削除の通知を受信者ごとの個人DMとして送る。
+func (d *Dispatcher) dispatchGroupPending(ctx context.Context) (int, error) {
+	n := 0
+	for {
+		var ntf store.GroupNotification
+		err := d.st.Tx(ctx, func(tx *store.Tx) error {
+			var err error
+			ntf, err = tx.ClaimGroupNotification(ctx, d.now())
+			return err
+		})
+		if errors.Is(err, store.ErrNotFound) {
+			return n, nil
+		}
+		if err != nil {
+			return n, err
+		}
+		msg := Message{Content: ntf.Content, Kind: ntf.Kind, DMUserIDs: []string{ntf.RecipientDiscordUserID}}
+		sendErr := d.sender.Send(ctx, msg)
+		status, code := store.NotifySent, ""
+		switch {
+		case errors.Is(sendErr, ErrRetryLater):
+			status = store.NotifyPending
+		case errors.Is(sendErr, ErrDeliveryFailed):
+			status, code = store.NotifyFailed, "delivery_failed"
+		case sendErr != nil:
+			status, code = store.NotifyUnknown, "delivery_unknown"
+		}
+		if sendErr != nil {
+			d.log.Warn("グループ通知の送信に失敗", "notification", ntf.ID, "status", status, "err", sendErr)
+		}
+		if err := d.st.Tx(ctx, func(tx *store.Tx) error {
+			return tx.SetGroupNotificationStatus(ctx, ntf.ID, status, code, d.now())
+		}); err != nil {
+			return n, err
+		}
+		if status == store.NotifyPending {
 			return n, nil
 		}
 		n++

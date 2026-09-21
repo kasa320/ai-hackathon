@@ -59,7 +59,9 @@ func (t *Tx) User(ctx context.Context, id string) (User, error) {
 
 // ActivateMemberships は招待中の所属を本人のログインで有効にし、表示名を本人のものにする。
 func (t *Tx) ActivateMemberships(ctx context.Context, u User) error {
-	return t.exec(ctx, "UPDATE members SET user_id = ?, display_name = ? WHERE discord_user_id = ?", u.ID, u.DisplayName, u.DiscordUserID)
+	return t.exec(ctx, `UPDATE members SET user_id = ?, display_name = ?
+		WHERE discord_user_id = ? AND left_at IS NULL
+		AND EXISTS (SELECT 1 FROM groups g WHERE g.id = members.group_id AND g.deleted_at IS NULL)`, u.ID, u.DisplayName, u.DiscordUserID)
 }
 
 type AuthSession struct {

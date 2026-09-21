@@ -91,12 +91,15 @@ func (t *Tx) CountSessions(ctx context.Context, groupID string) (int, error) {
 }
 
 func (t *Tx) Session(ctx context.Context, id string) (Session, error) {
-	return scanSession(t.row(ctx, "SELECT "+sessionCols+" FROM sessions WHERE id = ?", id))
+	return scanSession(t.row(ctx, `SELECT `+sessionCols+` FROM sessions
+		WHERE id = ? AND EXISTS (SELECT 1 FROM groups g WHERE g.id = sessions.group_id AND g.deleted_at IS NULL)`, id))
 }
 
 // SessionsByGroup は開催回を starts_at の降順で返す。
 func (t *Tx) SessionsByGroup(ctx context.Context, groupID string) ([]Session, error) {
-	rows, err := t.query(ctx, "SELECT "+sessionCols+" FROM sessions WHERE group_id = ? ORDER BY starts_at DESC, id DESC", groupID)
+	rows, err := t.query(ctx, `SELECT `+sessionCols+` FROM sessions
+		WHERE group_id = ? AND EXISTS (SELECT 1 FROM groups g WHERE g.id = sessions.group_id AND g.deleted_at IS NULL)
+		ORDER BY starts_at DESC, id DESC`, groupID)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +140,7 @@ func (t *Tx) DeleteSession(ctx context.Context, id string) error {
 // SessionMembers は開催回に固定したメンバーを表示順で返す。
 func (t *Tx) SessionMembers(ctx context.Context, sessionID string) ([]Member, error) {
 	rows, err := t.query(ctx, `
-		SELECT m.id, m.group_id, m.discord_user_id, m.user_id, m.display_name, m.role
+		SELECT m.id, m.group_id, m.discord_user_id, m.user_id, m.display_name, m.role, m.left_at
 		FROM session_members sm JOIN members m ON m.id = sm.member_id
 		WHERE sm.session_id = ? ORDER BY m.seq`, sessionID)
 	if err != nil {

@@ -57,7 +57,10 @@ func (t *Tx) CreateEvent(ctx context.Context, e Event) error {
 
 // DueEvents は実行時刻を過ぎた未処理のイベントを古い順に返す。
 func (t *Tx) DueEvents(ctx context.Context, now time.Time, limit int) ([]Event, error) {
-	rows, err := t.query(ctx, "SELECT "+eventCols+" FROM events WHERE status = 'pending' AND run_at <= ? ORDER BY run_at, seq LIMIT ?", ts(now), limit)
+	rows, err := t.query(ctx, `SELECT `+eventCols+` FROM events
+		WHERE status = 'pending' AND run_at <= ?
+		AND EXISTS (SELECT 1 FROM sessions s JOIN groups g ON g.id = s.group_id WHERE s.id = events.session_id AND g.deleted_at IS NULL)
+		ORDER BY run_at, seq LIMIT ?`, ts(now), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -88,11 +91,12 @@ func (t *Tx) CancelPendingEvents(ctx context.Context, caseID, kind string) error
 
 // 通知の状態。
 const (
-	NotifyPending = "pending"
-	NotifySending = "sending"
-	NotifySent    = "sent"
-	NotifyFailed  = "failed"
-	NotifyUnknown = "unknown"
+	NotifyPending   = "pending"
+	NotifySending   = "sending"
+	NotifySent      = "sent"
+	NotifyFailed    = "failed"
+	NotifyUnknown   = "unknown"
+	NotifyCancelled = "cancelled"
 )
 
 type Notification struct {
@@ -320,5 +324,8 @@ func (t *Tx) LLMCallsByCase(ctx context.Context, caseID string) ([]LLMCall, erro
 
 // DeleteNotifications はすべての通知待ちを削除する（開発用の初期データ投入で、投入時の依頼を送らないために使う）。
 func (t *Tx) DeleteNotifications(ctx context.Context) error {
+	if err := t.exec(ctx, "DELETE FROM group_notifications"); err != nil {
+		return err
+	}
 	return t.exec(ctx, "DELETE FROM notifications")
 }

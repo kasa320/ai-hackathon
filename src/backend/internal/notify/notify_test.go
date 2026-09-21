@@ -280,6 +280,32 @@ func TestDiscordSenderWithoutChannelSendsDMOnly(t *testing.T) {
 	}
 }
 
+func TestGroupLifecycleNotificationNeverFallsBackToSharedChannel(t *testing.T) {
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		if r.URL.Path == "/users/@me/channels" {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	s := notify.NewDiscordSender("bot-token", "shared-channel")
+	s.BaseURL = srv.URL
+
+	for _, kind := range []string{"member_left", "group_deleted"} {
+		paths = nil
+		err := s.Send(ctx, notify.Message{Kind: kind, Content: "hi", DMUserIDs: []string{"1"}})
+		if !errors.Is(err, notify.ErrDeliveryFailed) {
+			t.Fatalf("%s: DM失敗を返すべき: %v", kind, err)
+		}
+		if len(paths) != 1 || paths[0] != "/users/@me/channels" {
+			t.Fatalf("%s: 共通チャンネルへ退避した: %v", kind, paths)
+		}
+	}
+}
+
 // 通知の種類と名指しした本人は送信先へ渡す。DM を使うかどうかの判断は送信先だけが持つ。
 func TestDispatcherPassesKindAndRecipients(t *testing.T) {
 	for _, kind := range []string{"task_requested", "reminder", "plan_confirmed", "needs_owner"} {

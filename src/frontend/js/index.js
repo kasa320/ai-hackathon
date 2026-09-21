@@ -7,7 +7,7 @@
 import { el, mount, formatDateTime } from "./dom.js";
 import { api, ApiError } from "./api.js";
 import { featureFor } from "./features/index.js";
-import { renderTopbar, renderPlanBar, renderDevBar, pluginTag, placeholder, tally, whenLabel } from "./ui.js";
+import { createDialog, renderTopbar, renderPlanBar, renderDevBar, pluginTag, placeholder, tally, whenLabel } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -129,7 +129,93 @@ async function renderMember() {
     headline ? renderHeadline(headline) : nothingToDo(),
     renderList(sessions, details, headline?.session.id),
     headline ? renderAgentPanels(headline.detail) : null,
+    renderGroups(groups.items, sessions),
   );
+}
+
+function renderGroups(groups, sessions) {
+  const now = Date.now();
+  return el(
+    "section",
+    { class: "section" },
+    el("div", { class: "section__head" }, el("h2", {}, "参加中のグループ")),
+    el(
+      "div",
+      { class: "group-list" },
+      groups.map((group) => {
+        const running = sessions.some((session) => session.group_id === group.id
+          && session.schedule_status === "confirmed"
+          && now >= new Date(session.starts_at).getTime()
+          && now < new Date(session.starts_at).getTime() + session.duration_minutes * 60000);
+        const owner = group.role === "owner";
+        const action = el(
+          "button",
+          {
+            type: "button",
+            class: owner ? "btn btn--danger" : "btn btn--quiet",
+            disabled: running,
+            title: running ? "開催中の回が終了してから操作できます" : null,
+            onClick: () => owner ? openDeleteGroup(group) : openLeaveGroup(group),
+          },
+          owner ? "グループを削除" : "グループを脱退",
+        );
+        return el(
+          "div",
+          { class: "group-row" },
+          el("div", { class: "group-row__main" }, el("strong", {}, group.name), el("small", {}, `${owner ? "管理者" : "メンバー"}・${group.member_count}人`)),
+          el("div", { class: "group-row__action" }, action, running ? el("small", {}, "開催中は操作できません") : null),
+        );
+      }),
+    ),
+  );
+}
+
+function openLeaveGroup(group) {
+  createDialog({
+    title: `${group.name}から脱退しますか`,
+    body: el(
+      "div",
+      {},
+      el("p", {}, "開始前の開催回は欠席扱いとなり、残るメンバーで再調整されます。"),
+      el("p", { class: "help" }, "脱退後は、このグループの過去の開催回も閲覧できません。残るメンバーには個人DMで知らせます。"),
+    ),
+    submitLabel: "脱退する",
+    onSubmit: async ({ showError, close }) => {
+      showError("");
+      try {
+        await api.leaveGroup(group.id);
+        close();
+        await renderMember();
+      } catch (err) {
+        showError(err instanceof ApiError ? err.message : "脱退を完了できませんでした。時間をおいてお試しください。");
+      }
+    },
+  });
+}
+
+function openDeleteGroup(group) {
+  let modal;
+  modal = createDialog({
+    title: `${group.name}を削除しますか`,
+    body: el(
+      "div",
+      {},
+      el("p", {}, "メンバー全員がこのグループと開催回を閲覧できなくなります。削除のお知らせは全員の個人DMへ送ります。"),
+      el("p", { class: "help" }, "保存済みデータは論理削除として保持されます。"),
+    ),
+    submitLabel: "削除する",
+    onSubmit: async ({ showError, close }) => {
+      showError("");
+      try {
+        await api.deleteGroup(group.id);
+        close();
+        await renderMember();
+      } catch (err) {
+        showError(err instanceof ApiError ? err.message : "削除を完了できませんでした。時間をおいてお試しください。");
+      }
+    },
+  });
+  modal.dialog.querySelector('button[type="submit"]').classList.add("btn--danger");
 }
 
 /** 返事をする1件。進行表と「何がどう変わるか」を同じ面に置く。 */
