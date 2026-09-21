@@ -7,7 +7,8 @@
 import { el, mount, formatDateTime } from "./dom.js";
 import { api, ApiError } from "./api.js";
 import { featureFor } from "./features/index.js";
-import { createDialog, renderTopbar, renderPlanBar, renderDevBar, pluginTag, placeholder, tally, whenLabel } from "./ui.js";
+import { createDialog, renderTopbar, renderPlanBar, renderDevBar, pluginTag, playbookName, placeholder, tally, whenLabel } from "./ui.js";
+import { availabilityStatus } from "./weeklyAvailability.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -63,21 +64,25 @@ async function renderMember() {
   try {
     groups = await api.groups();
   } catch (err) {
-    mount($("member"), placeholder("サークル一覧を取得できませんでした", "時間をおいて開き直してください。"));
+    if (err instanceof ApiError && err.status === 401) {
+      location.href = api.loginUrl("/");
+      return;
+    }
+    mount($("member"), placeholder("グループ一覧を取得できませんでした", "時間をおいて開き直してください。"));
     return;
   }
 
   if (groups.items.length === 0) {
     mount(
       $("member"),
-      el("div", { class: "page-head" }, el("h1", {}, "サークル")),
+      el("div", { class: "page-head" }, el("h1", {}, "グループ")),
       placeholder(
-        "まだサークルがありません",
+        "まだグループがありません",
         el(
           "span",
           {},
-          "サークルを作って、参加者の Discord ユーザーIDを登録すると、ここに出ます。",
-          el("p", { style: "margin-top:16px" }, el("a", { class: "btn", href: "/setup.html" }, "サークルを作る")),
+          "グループを作って、参加者の Discord ユーザーIDを登録すると、ここに出ます。",
+          el("p", { style: "margin-top:16px" }, el("a", { class: "btn", href: "/setup.html" }, "グループを作る")),
         ),
       ),
     );
@@ -126,6 +131,7 @@ async function renderMember() {
 
   mount(
     $("member"),
+    availabilityNotice(),
     headline ? renderHeadline(headline) : nothingToDo(),
     renderList(sessions, details, headline?.session.id),
     headline ? renderAgentPanels(headline.detail) : null,
@@ -138,7 +144,7 @@ function renderGroups(groups, sessions) {
   return el(
     "section",
     { class: "section" },
-    el("div", { class: "section__head" }, el("h2", {}, "参加中のサークル")),
+    el("div", { class: "section__head" }, el("h2", {}, "参加中のグループ")),
     el(
       "div",
       { class: "group-list" },
@@ -157,26 +163,102 @@ function renderGroups(groups, sessions) {
             title: running ? "開催中のセッションが終了してから操作できます" : null,
             onClick: () => owner ? openDeleteGroup(group) : openLeaveGroup(group),
           },
-            owner ? "サークルを削除" : "サークルを脱退",
+          owner ? "グループを削除" : "グループを脱退",
         );
+        const groupUrl = `/group.html?id=${encodeURIComponent(group.id)}`;
         return el(
           "div",
           { class: "group-row" },
-          el("div", { class: "group-row__main" }, el("strong", {}, group.name), el("small", {}, `${owner ? "管理者" : "メンバー"}・${group.member_count}人`), bookLinks(group)),
-          el("div", { class: "group-row__action" }, action, running ? el("small", {}, "セッション中は操作できません") : null),
+          el(
+            "div",
+            { class: "group-row__main" },
+            el(
+              "div",
+              { class: "group-row__title" },
+              el("a", { class: "group-row__name", href: groupUrl }, group.name),
+              pluginTag(group.playbook_id, playbookName(group.playbook_id)),
+            ),
+            el("small", {}, `${owner ? "管理者" : "メンバー"}・${group.member_count}人`),
+            bookLinks(group, groupUrl),
+          ),
+          el(
+            "div",
+            { class: "group-row__action" },
+            el("a", { class: "btn btn--quiet", href: groupUrl }, "詳細"),
+            owner ? el("a", { class: "btn btn--quiet", href: `${groupUrl}&add_book=1` }, "ブックを追加") : null,
+            action,
+            running ? el("small", {}, "セッション中は操作できません") : null,
+          ),
         );
       }),
     ),
   );
 }
 
-function bookLinks(group) {
-  const node = el("span", { class: "group-books" }, "ブックを読み込み中…");
+const BOOKS_SHOWN = 3;
+
+/** グループの進行中のブック。複数あっても、先頭の数冊だけ出して残りは詳細へ誘導する。 */
+function bookLinks(group, groupUrl) {
+  const node = el("div", { class: "group-books", "aria-live": "polite" }, "ブックを読み込み中…");
   api.books(group.id).then(({ items }) => {
-    mount(node, items.length
-      ? items.map((book) => el("a", { class: "link", href: `/book.html?group_id=${encodeURIComponent(group.id)}&id=${encodeURIComponent(book.id)}` }, `${book.title}（${book.status === "completed" ? "完了" : "進行中"}）`))
-      : el("span", {}, "ブックはまだありません"));
-  }).catch(() => mount(node, el("span", {}, "ブックを取得できませんでした")));
+    if (items.length === 0) {
+      mount(node, el("span", {}, "ブックはまだありません"));
+      return;
+    }
+    const active = items.filter((book) => book.status !== "completed");
+    const shown = [...active, ...items.filter((book) => book.status === "completed")].slice(0, BOOKS_SHOWN);
+    mount(
+      node,
+      el(
+        "ul",
+        {},
+        shown.map((book) => el(
+          "li",
+          {},
+          el("a", { class: "link", href: `/book.html?group_id=${encodeURIComponent(group.id)}&id=${encodeURIComponent(book.id)}` }, book.title),
+          el("span", { class: "group-books__state" }, book.status === "completed" ? "完了" : "進行中"),
+        )),
+      ),
+      items.length > shown.length
+        ? el("a", { class: "link", href: groupUrl }, `ほか${items.length - shown.length}冊を見る`)
+        : null,
+    );
+  }).catch((err) => {
+    if (err instanceof ApiError && err.status === 401) {
+      location.href = api.loginUrl("/");
+      return;
+    }
+    mount(node, el("span", {}, "ブックを取得できませんでした"));
+  });
+  return node;
+}
+
+/** 普段の空き時間が未登録・再確認が必要なときの案内。取得できなくてもホームの表示は止めない。 */
+function availabilityNotice() {
+  const node = el("div", { class: "availability-notice", hidden: true });
+  api.weeklyAvailability().then((data) => {
+    const status = availabilityStatus(data);
+    if (status.kind === "ok") return;
+    const stale = status.kind === "stale";
+    mount(
+      node,
+      el(
+        "div",
+        { class: "notice", "data-tone": "warn", role: "status" },
+        el("span", { class: "notice__mark", "aria-hidden": "true" }, "!"),
+        el(
+          "span",
+          {},
+          el("strong", {}, stale ? "普段の空き時間を確認してください" : "普段の空き時間が未登録です"),
+          el("small", {}, stale
+            ? `最後の更新から${status.days}日たっています。いまも合っているか確かめてください。`
+            : "登録すると、日程調整で候補を出しやすくなります。"),
+        ),
+        el("a", { class: "btn btn--quiet", style: "margin-left:auto", href: "/weekly.html" }, stale ? "確認する" : "登録する"),
+      ),
+    );
+    node.hidden = false;
+  }).catch((err) => console.error(err));
   return node;
 }
 
@@ -187,7 +269,7 @@ function openLeaveGroup(group) {
       "div",
       {},
       el("p", {}, "開始前のセッションは欠席扱いとなり、残るメンバーで再調整されます。"),
-      el("p", { class: "help" }, "脱退後は、このサークルの過去のセッションも閲覧できません。残るメンバーには個人DMで知らせます。"),
+      el("p", { class: "help" }, "脱退後は、このグループの過去のセッションも閲覧できません。残るメンバーには個人DMで知らせます。"),
     ),
     submitLabel: "脱退する",
     onSubmit: async ({ showError, close }) => {
@@ -210,7 +292,7 @@ function openDeleteGroup(group) {
     body: el(
       "div",
       {},
-      el("p", { }, "メンバー全員がこのサークルとセッションを閲覧できなくなります。削除のお知らせは全員の個人DMへ送ります。"),
+      el("p", { }, "メンバー全員がこのグループとセッションを閲覧できなくなります。削除のお知らせは全員の個人DMへ送ります。"),
       el("p", { class: "help" }, "保存済みデータは論理削除として保持されます。"),
     ),
     submitLabel: "削除する",
@@ -312,7 +394,7 @@ function renderList(sessions, details, excludeId) {
       "div",
       { class: "section__head" },
       el("h2", {}, "ほかのセッション"),
-      el("a", { class: "link", href: "/setup.html" }, "サークルを作る"),
+      el("a", { class: "link", href: "/setup.html" }, "グループを作る"),
     ),
     rows.length
       ? el("div", { class: "rows" }, rows.map((s) => renderRow(s, details.get(s.id))))

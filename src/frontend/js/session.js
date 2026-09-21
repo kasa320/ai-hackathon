@@ -62,7 +62,7 @@ boot();
 
 async function boot() {
   if (!sessionId) {
-    mount($("headline"), placeholder("セッションが指定されていません", "サークル一覧から開き直してください。"));
+    mount($("headline"), placeholder("セッションが指定されていません", "グループ一覧から開き直してください。"));
     return;
   }
 
