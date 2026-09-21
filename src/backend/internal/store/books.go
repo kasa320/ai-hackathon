@@ -116,10 +116,12 @@ func (t *Tx) ReadingBookSlots(ctx context.Context, bookID string) ([]ReadingBook
 func (t *Tx) ReadingBookSlot(ctx context.Context, id string) (ReadingBookSlot, error) {
 	return scanSlot(t.row(ctx, "SELECT id,book_id,sequence_number,status,session_id,covered_section_ids FROM reading_book_slots WHERE id=?", id))
 }
-func (t *Tx) StartReadingBookSlot(ctx context.Context, id, sessionID string) error {
-	return t.exec(ctx, "UPDATE reading_book_slots SET status='active', session_id=? WHERE id=? AND status='planned'", sessionID, id)
+func (t *Tx) StartReadingBookSlot(ctx context.Context, id, sessionID string) (bool, error) {
+	n, err := t.execN(ctx, "UPDATE reading_book_slots SET status='active', session_id=? WHERE id=? AND status='planned'", sessionID, id)
+	return n == 1, err
 }
-func (t *Tx) CompleteReadingBookSlot(ctx context.Context, id string, covered []string) error {
+func (t *Tx) CompleteReadingBookSlot(ctx context.Context, id string, covered []string) (bool, error) {
 	v, _ := json.Marshal(nonNilStrings(covered))
-	return t.exec(ctx, "UPDATE reading_book_slots SET status='completed', covered_section_ids=? WHERE id=? AND status='active'", string(v), id)
+	n, err := t.execN(ctx, "UPDATE reading_book_slots SET status='completed', covered_section_ids=? WHERE id=? AND status='active'", string(v), id)
+	return n == 1, err
 }

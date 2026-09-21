@@ -53,7 +53,9 @@ function render() {
     ),
     el("section", { class: "section" },
       el("div", { class: "section__head" }, el("h2", {}, "セッション"),
-        detail.permissions.can_manage && book.session_creation_mode === "sequential" ? el("button", { class: "btn", type: "button", disabled: submitting, onClick: () => openSessionForm(null) }, "次のセッションを作る") : null),
+        detail.permissions.can_manage && book.session_creation_mode === "sequential" && detail.sessions.length < book.planned_session_count
+          ? el("button", { class: "btn", type: "button", disabled: submitting, onClick: () => openSessionForm(null) }, "次のセッションを作る")
+          : null),
       el("div", { class: "book-sessions" }, detail.sessions.map((slot) => renderSlot(slot, sections))),
     ),
   );
@@ -103,6 +105,7 @@ function openSessionForm(slot) {
         const payload = { period_start: from.value, period_end: to.value, duration_minutes: Number(duration.value), target_section_ids: target };
         if (slot) payload.slot_id = slot.slot_id;
         await api.createBookSession(groupId, bookId, payload);
+        submitting = false;
         close(); clearFlash($("flash")); await refresh();
       } catch (err) {
         await reportMutationError(err, { node: $("flash"), refresh, loginUrl });
@@ -119,6 +122,7 @@ async function complete(slot) {
     const revision = slot.session?.revision ?? slot.session?.current_revision;
     if (!Number.isInteger(revision)) throw new Error("最新のセッション版を取得できません。再読み込みしてください。");
     detail = await api.completeBookSession(groupId, bookId, slot.slot_id, revision);
+    submitting = false;
     flash($("flash"), { title: "セッションを完了しました" });
     render();
   } catch (err) {

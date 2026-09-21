@@ -205,8 +205,12 @@ func (c *Coordinator) CreateReadingBook(ctx context.Context, userID, groupID str
 		if e != nil {
 			return store.Response{}, e
 		}
-		if err := tx.StartReadingBookSlot(ctx, first.ID, sess.ID); err != nil {
+		started, err := tx.StartReadingBookSlot(ctx, first.ID, sess.ID)
+		if err != nil {
 			return store.Response{}, err
+		}
+		if !started {
+			return store.Response{}, apperr.InvalidStateErr("未開始の枠だけを開始できます。")
 		}
 		first.Status = "active"
 		first.SessionID = &sess.ID
@@ -276,8 +280,12 @@ func (c *Coordinator) StartReadingBookSession(ctx context.Context, userID, group
 		if e != nil {
 			return store.Response{}, e
 		}
-		if e := tx.StartReadingBookSlot(ctx, slot.ID, sess.ID); e != nil {
+		started, e := tx.StartReadingBookSlot(ctx, slot.ID, sess.ID)
+		if e != nil {
 			return store.Response{}, e
+		}
+		if !started {
+			return store.Response{}, apperr.InvalidStateErr("未開始の枠だけを開始できます。")
 		}
 		return store.Response{Status: http.StatusCreated, Body: encode(apitypes.StartReadingBookSessionResult{SlotID: slot.ID, Session: summaryView(sess)})}, nil
 	})
@@ -333,8 +341,12 @@ func (c *Coordinator) CompleteReadingBookSession(ctx context.Context, userID, gr
 		if e := json.Unmarshal(p.Data, &d); e != nil {
 			return store.Response{}, e
 		}
-		if e := tx.CompleteReadingBookSlot(ctx, slot.ID, d.Covered); e != nil {
+		completed, e := tx.CompleteReadingBookSlot(ctx, slot.ID, d.Covered)
+		if e != nil {
 			return store.Response{}, e
+		}
+		if !completed {
+			return store.Response{}, apperr.InvalidStateErr("開始済みの枠だけを完了できます。")
 		}
 		seen := map[string]bool{}
 		for _, id := range b.CompletedSectionIDs {
