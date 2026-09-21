@@ -19,8 +19,8 @@ export function renderTopbar(node, { me, current }) {
     el(
       "nav",
       { class: "nav", "aria-label": "主なページ" },
-      link("/", "会", "home"),
-      me ? link("/setup.html", "会を登録", "setup") : null,
+      link("/", "サークル", "home"),
+      me ? link("/setup.html", "サークルを作る", "setup") : null,
     ),
     me ? accountMenu(me) : null,
   );
@@ -108,8 +108,14 @@ export function initial(name) {
  * 進行表の帯。持ち時間を幅の比率で描き、変更前があれば薄い帯として下に並べる。
  * 差し替えずに必ず比較で見せる。items は [{ label, who, minutes, tone }]。
  */
-export function renderPlanBar(items, { previous = null, total = null, enter = true } = {}) {
+const animatedPlanVersions = new Set();
+
+export function renderPlanBar(items, { previous = null, total = null, enter = true, animationKey = null } = {}) {
   if (!items || items.length === 0) return null;
+
+  // ポーリングで同じ案を描き直しても、帯を毎回伸ばさない。版が変われば新しい key となり一度だけ動く。
+  const shouldEnter = enter && (!animationKey || !animatedPlanVersions.has(animationKey));
+  if (shouldEnter && animationKey) animatedPlanVersions.add(animationKey);
 
   const sum = items.reduce((n, item) => n + item.minutes, 0);
   const marks = items.reduce((acc, item) => acc.concat(acc[acc.length - 1] + item.minutes), [0]);
@@ -147,7 +153,7 @@ export function renderPlanBar(items, { previous = null, total = null, enter = tr
       )
     : null;
 
-  return el("div", { class: `plan${enter ? " plan--enter" : ""}` }, bar, scale, prev);
+  return el("div", { class: `plan${shouldEnter ? " plan--enter" : ""}` }, bar, scale, prev);
 }
 
 /** 進行表の色の意味。色は行動と進行表にしか使わないので、凡例もここだけ。 */
