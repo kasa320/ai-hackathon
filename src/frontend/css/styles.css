@@ -348,6 +348,15 @@ dialog::backdrop { background: rgba(35, 42, 49, .35); }
 .toc-list label[data-level="2"] { padding-left: var(--s4); }
 .toc-list label[data-level="3"] { padding-left: var(--s6); }
 .toc-list input { margin-top: 5px; accent-color: var(--blue); }
+/* 範囲の行は、そのまま書き換えられることが分かる見た目にする（罫は触ったときだけ） */
+.toc-list__title { flex: 1; min-width: 0; margin-top: 0; padding: 6px 10px; border: 1px solid transparent; border-radius: var(--r-ctrl); background: transparent; font-size: .86rem; }
+.toc-list__title:hover { border-color: var(--line); }
+.toc-list__title:focus { border-color: var(--blue); background: #fff; }
+.toc-list__title::placeholder { color: var(--ink-3); }
+.toc-list__date { margin-top: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--r-ctrl); background: #fff; font-size: .86rem; }
+.toc-list__date:focus { border-color: var(--blue); }
+.toc-list__drop { flex: none; width: 28px; height: 28px; border: 0; border-radius: var(--r-ctrl); background: transparent; color: var(--ink-3); font-size: 1rem; line-height: 1; cursor: pointer; }
+.toc-list__drop:hover { background: var(--panel-deep); color: var(--ink); }
 .source { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); margin-top: var(--s3); color: var(--ink-2); font-size: .78rem; }
 .source a { color: var(--blue); }
 

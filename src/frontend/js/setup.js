@@ -246,8 +246,8 @@ function renderMaterialStep() {
     if (state.sections.length === 0) {
       mount(
         box,
-        el("p", { class: "help" }, "目次を取得するか、手入力で範囲を足してください。"),
-        sectionEditor(renderSections),
+        el("p", { class: "help" }, "目次を取得するか、「範囲を足す」で1つずつ書いてください。"),
+        addSectionButton(renderSections, box),
       );
       return;
     }
@@ -261,7 +261,16 @@ function renderMaterialStep() {
           el(
             "div",
             { style: "display:flex;align-items:center;gap:12px;font-size:.86rem" },
-            el("span", { style: "flex:1;min-width:0" }, s.title),
+            el("input", {
+              type: "text",
+              class: "toc-list__title",
+              value: s.title,
+              placeholder: "範囲の名前（例：第2章 設計）",
+              "data-section": s.id,
+              "aria-label": "範囲の名前",
+              // 打つたびに組み直すと入力欄から焦点が外れるので、状態だけ更新する
+              onInput: (e) => { s.title = e.target.value; },
+            }),
             el(
               "label",
               { style: "display:inline-flex;gap:6px;color:var(--ink-2);font-size:.78rem" },
@@ -290,10 +299,25 @@ function renderMaterialStep() {
               }),
               "今回",
             ),
+            el(
+              "button",
+              {
+                type: "button",
+                class: "toc-list__drop",
+                "aria-label": `${s.title || "この範囲"}を消す`,
+                onClick: () => {
+                  state.sections = state.sections.filter((x) => x.id !== s.id);
+                  state.target.delete(s.id);
+                  state.completed.delete(s.id);
+                  renderSections();
+                },
+              },
+              "×",
+            ),
           ),
         ),
       ),
-      sectionEditor(renderSections),
+      addSectionButton(renderSections, box),
     );
   };
 
@@ -344,6 +368,10 @@ function renderMaterialStep() {
           onClick: () => {
             state.book.title = title.value.trim();
             if (!state.book.title) return flash($("flash"), { title: "書名を入れてください", tone: "warn" });
+            for (const s of state.sections) s.title = s.title.trim();
+            if (state.sections.some((s) => !s.title)) {
+              return flash($("flash"), { title: "名前のない範囲があります", body: "名前を入れるか、×で消してください。", tone: "warn" });
+            }
             if (state.target.size === 0) return flash($("flash"), { title: "今回扱う範囲を1つ以上選んでください", tone: "warn" });
             go(2);
           },
@@ -354,26 +382,34 @@ function renderMaterialStep() {
   );
 }
 
-function sectionEditor(rerender) {
-  const input = el("input", { type: "text", placeholder: "範囲の名前（例：第2章 設計）" });
+/** 使われていない番号を返す。行を消しても前の id と衝突しない。 */
+function nextSectionId() {
+  const used = new Set(state.sections.map((s) => s.id));
+  for (let n = 1; ; n++) {
+    const id = `sec_${n}`;
+    if (!used.has(id)) return id;
+  }
+}
+
+/** ＋ は空の行を足すだけ。名前はその行に直接書く。 */
+function addSectionButton(rerender, box) {
   return el(
     "div",
-    { class: "repeater__row", style: "margin-top:12px" },
-    input,
+    { style: "margin-top:12px" },
     el(
       "button",
       {
+        class: "btn btn--quiet",
         type: "button",
-        "aria-label": "範囲を足す",
         onClick: () => {
-          if (!input.value.trim()) return;
-          state.sections.push({ id: `sec_${state.sections.length + 1}`, title: input.value.trim() });
-          state.target.add(state.sections[state.sections.length - 1].id);
-          input.value = "";
+          const section = { id: nextSectionId(), title: "" };
+          state.sections.push(section);
+          state.target.add(section.id);
           rerender();
+          box.querySelector(`[data-section="${section.id}"]`)?.focus();
         },
       },
-      "＋",
+      "＋ 範囲を足す",
     ),
   );
 }
