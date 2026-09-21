@@ -68,6 +68,7 @@ func addMissingColumns(ctx context.Context, db *sql.DB) error {
 	type column struct{ table, name, def string }
 	for _, c := range []column{
 		{"groups", "deleted_at", "TEXT"},
+		{"groups", "playbook_id", "TEXT NOT NULL DEFAULT 'reading'"},
 		{"members", "left_at", "TEXT"},
 		{"sessions", "period_start", "TEXT NOT NULL DEFAULT ''"},
 		{"sessions", "period_end", "TEXT NOT NULL DEFAULT ''"},

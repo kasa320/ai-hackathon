@@ -7,10 +7,14 @@ import (
 	"time"
 )
 
+// DefaultPlaybookID は種別を持たない既存グループを読むときの値。
+const DefaultPlaybookID = "reading"
+
 type Group struct {
 	ID          string
 	Name        string
 	OwnerUserID string
+	PlaybookID  string
 	CreatedAt   time.Time
 	DeletedAt   *time.Time
 }
@@ -28,7 +32,22 @@ type Member struct {
 func (m Member) Joined() bool { return m.UserID != "" && m.LeftAt == nil }
 
 func (t *Tx) CreateGroup(ctx context.Context, g Group) error {
-	return t.exec(ctx, "INSERT INTO groups (id, name, owner_user_id, created_at) VALUES (?, ?, ?, ?)", g.ID, g.Name, g.OwnerUserID, ts(g.CreatedAt))
+	if g.PlaybookID == "" {
+		g.PlaybookID = DefaultPlaybookID
+	}
+	return t.exec(ctx, "INSERT INTO groups (id, name, owner_user_id, playbook_id, created_at) VALUES (?, ?, ?, ?, ?)", g.ID, g.Name, g.OwnerUserID, g.PlaybookID, ts(g.CreatedAt))
+}
+
+// RenameGroup はグループ名だけを更新する。種別は変更できない。
+func (t *Tx) RenameGroup(ctx context.Context, id, name string) error {
+	n, err := t.execN(ctx, "UPDATE groups SET name = ? WHERE id = ? AND deleted_at IS NULL", name, id)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // AddMember はメンバーを追加する。seq はグループ内の表示順。
@@ -40,7 +59,7 @@ func (t *Tx) AddMember(ctx context.Context, m Member, seq int) error {
 func (t *Tx) Group(ctx context.Context, id string) (Group, error) {
 	var g Group
 	var created string
-	err := t.row(ctx, "SELECT id, name, owner_user_id, created_at FROM groups WHERE id = ? AND deleted_at IS NULL", id).Scan(&g.ID, &g.Name, &g.OwnerUserID, &created)
+	err := t.row(ctx, "SELECT id, name, owner_user_id, playbook_id, created_at FROM groups WHERE id = ? AND deleted_at IS NULL", id).Scan(&g.ID, &g.Name, &g.OwnerUserID, &g.PlaybookID, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return g, ErrNotFound
 	}
@@ -107,7 +126,7 @@ type UserGroup struct {
 // GroupsForUser は本人が所属するグループを作成日時の降順で返す。
 func (t *Tx) GroupsForUser(ctx context.Context, userID string) ([]UserGroup, error) {
 	rows, err := t.query(ctx, `
-		SELECT g.id, g.name, g.owner_user_id, g.created_at, m.id, m.role,
+		SELECT g.id, g.name, g.owner_user_id, g.playbook_id, g.created_at, m.id, m.role,
 		       (SELECT COUNT(*) FROM members x WHERE x.group_id = g.id AND x.left_at IS NULL)
 		FROM members m JOIN groups g ON g.id = m.group_id
 		WHERE m.user_id = ? AND m.left_at IS NULL AND g.deleted_at IS NULL
@@ -120,7 +139,7 @@ func (t *Tx) GroupsForUser(ctx context.Context, userID string) ([]UserGroup, err
 	for rows.Next() {
 		var g UserGroup
 		var created string
-		if err := rows.Scan(&g.ID, &g.Name, &g.OwnerUserID, &created, &g.MemberID, &g.Role, &g.MemberCount); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.OwnerUserID, &g.PlaybookID, &created, &g.MemberID, &g.Role, &g.MemberCount); err != nil {
 			return nil, err
 		}
 		g.CreatedAt = parseTS(created)

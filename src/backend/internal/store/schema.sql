@@ -35,7 +35,9 @@ CREATE TABLE IF NOT EXISTS groups (
     name          TEXT NOT NULL,
     owner_user_id TEXT NOT NULL REFERENCES users(id),
     created_at    TEXT NOT NULL,
-    deleted_at    TEXT
+    deleted_at    TEXT,
+    -- グループの種別。作成後は変更しない。既存のグループは輪読として扱う。
+    playbook_id   TEXT NOT NULL DEFAULT 'reading'
 );
 
 -- グループの固定メンバー。user_id が NULL の間は招待中（本人未ログイン）。

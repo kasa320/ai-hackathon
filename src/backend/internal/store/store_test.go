@@ -82,6 +82,14 @@ func TestOpenAddsGroupLifecycleColumnsToLegacyDatabase(t *testing.T) {
 		if len(groups) != 1 || groups[0].ID != "grp_1" {
 			t.Fatalf("groups = %+v", groups)
 		}
+		// 種別を持たない既存グループは reading として読める。
+		if groups[0].PlaybookID != "reading" {
+			t.Fatalf("旧グループの種別 = %q", groups[0].PlaybookID)
+		}
+		g, err := tx.Group(ctx, "grp_1")
+		if err != nil || g.PlaybookID != "reading" {
+			t.Fatalf("Group = %+v, %v", g, err)
+		}
 		return nil
 	}); err != nil {
 		t.Fatal(err)

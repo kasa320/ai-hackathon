@@ -18,6 +18,7 @@ type Member struct {
 type Group struct {
 	ID              string   `json:"id"`
 	Name            string   `json:"name"`
+	PlaybookID      string   `json:"playbook_id"`
 	CurrentMemberID string   `json:"current_member_id"`
 	Members         []Member `json:"members"`
 }
@@ -25,6 +26,7 @@ type Group struct {
 type GroupListItem struct {
 	ID              string `json:"id"`
 	Name            string `json:"name"`
+	PlaybookID      string `json:"playbook_id"`
 	CurrentMemberID string `json:"current_member_id"`
 	Role            string `json:"role"`
 	MemberCount     int    `json:"member_count"`
@@ -255,8 +257,15 @@ type Invitee struct {
 }
 
 type CreateGroupInput struct {
-	Name     string    `json:"name"`
-	Invitees []Invitee `json:"invitees"`
+	Name string `json:"name"`
+	// PlaybookID はグループの種別。省略すると reading。作成後は変更できない。
+	PlaybookID string    `json:"playbook_id"`
+	Invitees   []Invitee `json:"invitees"`
+}
+
+// UpdateGroupInput はグループ名の変更。種別（playbook_id）は受け付けない。
+type UpdateGroupInput struct {
+	Name string `json:"name"`
 }
 
 type LeaveGroupInput struct{}

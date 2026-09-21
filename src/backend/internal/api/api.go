@@ -60,6 +60,7 @@ func (s *Server) Handler(frontendDir string, mount ...func(mux *http.ServeMux)) 
 	mux.HandleFunc("GET /api/groups", s.authed(s.listGroups))
 	mux.HandleFunc("POST /api/groups", s.authed(s.createGroup))
 	mux.HandleFunc("GET /api/groups/{group_id}", s.authed(s.getGroup))
+	mux.HandleFunc("PATCH /api/groups/{group_id}", s.authed(s.updateGroup))
 	mux.HandleFunc("POST /api/groups/{group_id}/leave", s.authed(s.leaveGroup))
 	mux.HandleFunc("DELETE /api/groups/{group_id}", s.authed(s.deleteGroup))
 	mux.HandleFunc("GET /api/groups/{group_id}/sessions", s.authed(s.listSessions))
@@ -95,7 +96,7 @@ func (s *Server) Handler(frontendDir string, mount ...func(mux *http.ServeMux)) 
 // apiFallback は未定義の API に JSON の 404、メソッド違いに 405 を返す。
 func (s *Server) apiFallback(mux *http.ServeMux, w http.ResponseWriter, r *http.Request) {
 	var allow []string
-	for _, m := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete} {
+	for _, m := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
 		probe := r.Clone(r.Context())
 		probe.Method = m
 		if _, pattern := mux.Handler(probe); pattern != "" && pattern != "/api/" && pattern != "/" {
@@ -292,6 +293,20 @@ func (s *Server) createGroup(w http.ResponseWriter, r *http.Request, sess auth.S
 
 func (s *Server) getGroup(w http.ResponseWriter, r *http.Request, sess auth.Session) {
 	out, err := s.Coord.GetGroup(r.Context(), sess.User.ID, r.PathValue("group_id"))
+	if err != nil {
+		httpx.WriteError(w, r, s.Log, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) updateGroup(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	var in apitypes.UpdateGroupInput
+	if _, err := httpx.ReadJSON(w, r, &in); err != nil {
+		httpx.WriteError(w, r, s.Log, err)
+		return
+	}
+	out, err := s.Coord.UpdateGroup(r.Context(), sess.User.ID, r.PathValue("group_id"), in)
 	if err != nil {
 		httpx.WriteError(w, r, s.Log, err)
 		return
