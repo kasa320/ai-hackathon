@@ -232,15 +232,57 @@ func TestDiscordSenderPrefersDM(t *testing.T) {
 	}
 }
 
-// 通知の種類と DM の宛先は送信先へ渡す。本文とメンションから送り先を推測しない。
-func TestDispatcherPassesKindAndDMRecipients(t *testing.T) {
-	tests := map[string]struct{ wantDM bool }{
-		"task_requested": {true},
-		"reminder":       {true},
-		"plan_confirmed": {false},
-		"needs_owner":    {false},
+// チャンネルが未設定なら、本人宛ての DM だけで届ける。退避先がないので、DM の失敗は失敗のまま返す。
+func TestDiscordSenderWithoutChannelSendsDMOnly(t *testing.T) {
+	var paths []string
+	dmStatus := http.StatusOK
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		if r.URL.Path == "/users/@me/channels" {
+			if dmStatus != http.StatusOK {
+				w.WriteHeader(dmStatus)
+				return
+			}
+			_, _ = w.Write([]byte(`{"id":"dm_1"}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	s := notify.NewDiscordSender("bot-token", "")
+	s.BaseURL = srv.URL
+
+	// 全員が知るべき種類でも、名指しされた本人がいるなら DM で届ける。
+	msg := notify.Message{Kind: "needs_owner", Content: "hi", MentionUserIDs: []string{"1"}, DMUserIDs: []string{"1"}}
+	if err := s.Send(ctx, msg); err != nil {
+		t.Fatal(err)
 	}
-	for kind, tt := range tests {
+	if len(paths) != 2 || paths[1] != "/channels/dm_1/messages" {
+		t.Fatalf("DM へ送っていない: %v", paths)
+	}
+
+	// 退避先がないので、DM 拒否はそのまま失敗にする。
+	paths, dmStatus = nil, http.StatusForbidden
+	if err := s.Send(ctx, msg); !errors.Is(err, notify.ErrDeliveryFailed) {
+		t.Fatalf("送信失敗のはず: %v", err)
+	}
+	if len(paths) != 1 {
+		t.Fatalf("退避先がないのに送った: %v", paths)
+	}
+
+	// 宛先も退避先もない通知は、送らずに失敗として記録する。
+	paths = nil
+	if err := s.Send(ctx, notify.Message{Kind: "plan_confirmed", Content: "hi"}); !errors.Is(err, notify.ErrDeliveryFailed) {
+		t.Fatalf("送信失敗のはず: %v", err)
+	}
+	if len(paths) != 0 {
+		t.Fatalf("宛先がないのに送った: %v", paths)
+	}
+}
+
+// 通知の種類と名指しした本人は送信先へ渡す。DM を使うかどうかの判断は送信先だけが持つ。
+func TestDispatcherPassesKindAndRecipients(t *testing.T) {
+	for _, kind := range []string{"task_requested", "reminder", "plan_confirmed", "needs_owner"} {
 		t.Run(kind, func(t *testing.T) {
 			st := setupKind(t, kind)
 			sender := &captureSender{}
@@ -255,10 +297,7 @@ func TestDispatcherPassesKindAndDMRecipients(t *testing.T) {
 			if m.Kind != kind {
 				t.Fatalf("kind = %q", m.Kind)
 			}
-			if got := len(m.DMUserIDs) > 0; got != tt.wantDM {
-				t.Fatalf("DM の宛先 = %v, want %v", m.DMUserIDs, tt.wantDM)
-			}
-			if tt.wantDM && m.DMUserIDs[0] != "222222222222222222" {
+			if len(m.DMUserIDs) != 1 || m.DMUserIDs[0] != "222222222222222222" {
 				t.Fatalf("DM の宛先 = %v", m.DMUserIDs)
 			}
 		})

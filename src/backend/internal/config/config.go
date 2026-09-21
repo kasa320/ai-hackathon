@@ -91,9 +91,10 @@ func (c Config) DiscordLoginConfigured() bool {
 	return c.DiscordClientID != "" && c.DiscordClientSecret != "" && c.DiscordRedirectURL != ""
 }
 
-// DiscordNotifyConfigured は Discord の通知（Bot とチャンネル）の設定が揃っているかを返す。
+// DiscordNotifyConfigured は Discord へ通知を送れるかを返す。Bot トークンだけでも本人宛ての DM は送れる。
+// チャンネルIDは、DM が使えないときの退避先と、全員が知るべき連絡の宛先として使う。
 func (c Config) DiscordNotifyConfigured() bool {
-	return c.DiscordBotToken != "" && c.DiscordChannelID != ""
+	return c.DiscordBotToken != ""
 }
 
 func env(key, fallback string) string {

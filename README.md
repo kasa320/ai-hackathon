@@ -78,8 +78,8 @@ Go サーバーが `src/frontend/` をそのまま配信します。ビルドも
 | `DEV_MODE` | 空 | `1` で開発・デモ用 API（`/api/dev/*`）と障害注入を有効にする。本番では設定しない |
 | `SESSION_SECRET` | 空 | セッショントークンのハッシュ用。未設定なら起動ごとに変わる（再起動でログアウト） |
 | `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` / `DISCORD_REDIRECT_URL` | 空 | Discord ログイン。未設定なら `/api/auth/discord` は `auth_error=provider_unavailable` に戻る |
-| `DISCORD_BOT_TOKEN` / `DISCORD_CHANNEL_ID` | 空 | 通知先チャンネル。未設定なら通知はサーバーログに出すだけ |
-| `DISCORD_BOT_TOKEN`（単体） | 空 | 設定すると Bot が常駐し、DM での対話から参加条件を更新できる（`DIRECT_MESSAGES` インテントが必要） |
+| `DISCORD_BOT_TOKEN` | 空 | Bot が常駐し、DM での対話と本人宛て通知の DM 送信を行う（`DIRECT_MESSAGES` インテントが必要）。未設定なら通知はサーバーログに出すだけ |
+| `DISCORD_CHANNEL_ID` | 空 | DM が使えないときの退避先と、全員宛ての連絡（計画の確定）の送り先。未設定なら本人宛ての DM だけを送り、宛先のない通知は失敗として記録する |
 | `ORCAROUTER_SEARCH_MODEL` | 空 | 目次の Web 検索に使う検索付きモデル。空なら Web 検索をせず画像の提出を依頼する |
 | `ORCAROUTER_VISION_MODEL` | 空 | 目次画像の書き写しに使うモデル（空なら `ORCAROUTER_MODEL`） |
 

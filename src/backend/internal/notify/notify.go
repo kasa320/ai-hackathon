@@ -35,13 +35,12 @@ type Message struct {
 	MentionUserIDs []string
 	// Kind は通知の種類（task_requested / reminder / plan_confirmed / needs_owner）。
 	Kind string
-	// DMUserIDs は DM を試す相手。本人だけが知ればよい依頼に使う。
-	// DM が使えないことが確実なときだけチャンネルへ退避する。
+	// DMUserIDs は名指しした本人。DM を試すかどうかは送信先が Kind と設定から決める。
 	DMUserIDs []string
 }
 
 // DMKinds は本人宛てに DM を試す通知の種類。確定の連絡や管理者への差し戻しは全員が知るべき情報なので
-// チャンネルへ送る。
+// チャンネルへ送る。ただしチャンネルが未設定なら、名指しした本人への DM だけが届け先になる。
 var DMKinds = map[string]bool{"task_requested": true, "reminder": true}
 
 type Sender interface {
@@ -65,6 +64,7 @@ func NewDiscordSender(token, channelID string) *DiscordSender {
 
 // Send は通知を送る。本人宛ての依頼はまず DM を試し、DM が使えないことが確実なときだけ
 // チャンネルへ退避する。成否が分からない送信は退避せず、到達済みの DM と二重に送らない。
+// チャンネルが未設定なら退避先がないので、名指しした本人への DM だけで届ける。
 func (d *DiscordSender) Send(ctx context.Context, m Message) error {
 	content := m.Content
 	if utf8.RuneCountInString(content) > maxContentLen {
@@ -74,12 +74,15 @@ func (d *DiscordSender) Send(ctx context.Context, m Message) error {
 	if users == nil {
 		users = []string{}
 	}
-	if len(m.DMUserIDs) == 1 && DMKinds[m.Kind] {
+	if len(m.DMUserIDs) == 1 && (DMKinds[m.Kind] || d.ChannelID == "") {
 		err := d.sendDM(ctx, m.DMUserIDs[0], content, users)
-		if err == nil || !errors.Is(err, ErrDeliveryFailed) {
+		if err == nil || !errors.Is(err, ErrDeliveryFailed) || d.ChannelID == "" {
 			return err
 		}
 		// DM 拒否・共通サーバーなしなど、送信されていないことが確実な失敗だけ退避する。
+	}
+	if d.ChannelID == "" {
+		return fmt.Errorf("%w: DM の宛先がなく、DISCORD_CHANNEL_ID も未設定です", ErrDeliveryFailed)
 	}
 	return d.sendChannel(ctx, d.ChannelID, content, users)
 }
@@ -218,11 +221,8 @@ func (d *Dispatcher) DispatchPending(ctx context.Context) (int, error) {
 		if err != nil {
 			return n, err
 		}
-		msg := Message{Content: ntf.Content, MentionUserIDs: ntf.Mentions, Kind: ntf.Kind}
-		if DMKinds[ntf.Kind] {
-			// 本人宛ての依頼は DM を試す。宛先は通知が名指しした本人だけ。
-			msg.DMUserIDs = ntf.Mentions
-		}
+		// DM を試せる相手は通知が名指しした本人だけ。実際に DM を使うかは送信先が決める。
+		msg := Message{Content: ntf.Content, MentionUserIDs: ntf.Mentions, Kind: ntf.Kind, DMUserIDs: ntf.Mentions}
 		sendErr := d.sender.Send(ctx, msg)
 		status, code, summary := store.NotifySent, "", "通知を送信しました（Discord の成功応答）。"
 		switch {
