@@ -1,0 +1,31 @@
+﻿実行日時,系統,ケース,構成,要求モデル,解決モデル,試行,LLM呼出数,入力tok,出力tok,確定額,通貨,費用欠測,所要秒(API),所要秒(実測),fallback,結果,備考
+2026-09-22T08:18:11,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,1,2,2895,1521,0.004670,USD,0,19.0,19.5,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:18:28,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,2,1,1403,3066,0.007730,USD,0,17.0,16.7,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:18:39,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,3,1,1403,1840,0.005020,USD,0,10.0,10.7,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:18:49,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,4,1,1403,1506,0.003830,USD,0,9.0,9.8,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:18:53,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,5,1,1403,674,0.001750,USD,0,4.0,4.8,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:19:03,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,6,1,1403,1725,0.004378,USD,0,9.0,10.0,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:19:08,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,7,1,1403,577,0.001508,USD,0,3.0,4.1,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:19:14,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,8,1,1403,1281,0.003268,USD,0,6.0,6.6,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:19:20,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,9,1,1403,721,0.001868,USD,0,6.0,5.7,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:19:31,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,10,1,1403,1651,0.004192,USD,0,10.0,10.7,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:19:50,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,11,1,1403,3539,0.008912,USD,0,19.0,19.4,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:19:54,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,12,1,1403,519,0.001362,USD,0,4.0,3.7,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:20:01,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,13,1,1403,1186,0.003030,USD,0,7.0,7.1,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:20:08,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,14,1,1403,1240,0.003166,USD,0,7.0,6.9,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:20:28,interpreter,E13,flash,google/gemini-2.5-flash,不明,15,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T08:20:48,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,16,2,2895,3207,0.008178,USD,0,19.0,19.6,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:20:52,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,17,1,1403,592,0.001546,USD,0,4.0,4.6,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:21:00,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,18,1,1403,1159,0.002962,USD,0,8.0,7.8,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:21:13,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,19,1,1403,2015,0.005102,USD,0,13.0,12.6,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:21:19,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,20,1,1403,949,0.002438,USD,0,6.0,6.1,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:21:27,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,21,1,1403,1179,0.003012,USD,0,8.0,8.2,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:21:34,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,22,1,1403,1035,0.002652,USD,0,7.0,7.0,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:21:44,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,23,1,1403,1444,0.004030,USD,0,10.0,9.4,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:21:59,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,24,2,2895,2411,0.006540,USD,0,14.0,14.7,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:22:03,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,25,1,1403,685,0.001778,USD,0,4.0,4.8,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:22:08,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,26,1,1403,525,0.001378,USD,0,4.0,4.5,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:22:15,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,27,1,1403,1010,0.002590,USD,0,6.0,6.6,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:22:21,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,28,1,1403,780,0.002016,USD,0,5.0,5.7,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:22:30,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,29,1,1403,1370,0.003490,USD,0,8.0,9.1,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:22:37,interpreter,E13,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,30,1,1403,978,0.002510,USD,0,6.0,6.8,0,期待通り,HTTP 200; unclear=0 業務状態変更なし

@@ -1,0 +1,31 @@
+﻿実行日時,系統,ケース,構成,要求モデル,解決モデル,試行,LLM呼出数,入力tok,出力tok,確定額,通貨,費用欠測,所要秒(API),所要秒(実測),fallback,結果,備考
+2026-09-22T08:40:01,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,1,2,2893,1809,0.005036,USD,0,10.0,11.3,0,失敗,HTTP 409
+2026-09-22T08:40:22,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,2,2,2931,3962,0.010428,USD,0,21.0,21.2,0,期待通り,unclear=1
+2026-09-22T08:40:32,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,3,1,1402,1581,0.004018,USD,0,9.0,9.6,0,期待通り,unclear=0
+2026-09-22T08:40:44,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,4,2,2909,1954,0.005048,USD,0,12.0,12.6,0,失敗,HTTP 409
+2026-09-22T08:40:55,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,5,2,2922,1660,0.004316,USD,0,9.0,10.5,0,期待通り,unclear=1
+2026-09-22T08:41:13,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,6,1,1402,3234,0.008150,USD,0,18.0,18.2,0,期待通り,unclear=0
+2026-09-22T08:41:27,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,7,2,2919,2103,0.005422,USD,0,12.0,13.3,0,期待通り,unclear=1
+2026-09-22T08:41:47,interpreter,E09,flash,google/gemini-2.5-flash,不明,8,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T08:42:07,interpreter,E09,flash,google/gemini-2.5-flash,不明,9,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T08:42:13,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,10,1,1402,826,0.002130,USD,0,5.0,5.7,0,期待通り,unclear=1
+2026-09-22T08:42:19,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,11,1,1402,1041,0.002668,USD,0,6.0,6.3,0,期待通り,unclear=0
+2026-09-22T08:42:34,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,12,2,2893,2743,0.007016,USD,0,15.0,15.4,0,失敗,HTTP 409
+2026-09-22T08:42:51,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,13,2,2893,2870,0.007336,USD,0,17.0,16.5,0,失敗,HTTP 409
+2026-09-22T08:43:02,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,14,1,1402,1925,0.004878,USD,0,11.0,11.4,0,期待通り,unclear=0
+2026-09-22T08:43:29,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,15,2,2899,5063,0.012820,USD,0,26.0,26.1,0,失敗,HTTP 409
+2026-09-22T08:43:42,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,16,2,2912,2224,0.005724,USD,0,12.0,13.4,0,期待通り,unclear=1
+2026-09-22T08:43:50,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,17,1,1402,1207,0.003082,USD,0,8.0,8.0,0,期待通り,unclear=0
+2026-09-22T08:44:26,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,18,2,1402,2905,不明,USD,1,16.0,35.9,0,失敗,HTTP 503
+2026-09-22T08:45:03,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,19,2,1402,3138,不明,USD,1,17.0,37.2,0,失敗,HTTP 503
+2026-09-22T08:45:21,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,20,2,2917,2901,0.007416,USD,0,18.0,18.0,0,期待通り,unclear=1
+2026-09-22T08:45:50,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,21,2,2893,5974,0.015446,USD,0,27.0,28.1,0,失敗,HTTP 409
+2026-09-22T08:46:03,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,22,1,1402,1980,0.005016,USD,0,13.0,13.8,0,期待通り,unclear=0
+2026-09-22T08:46:24,interpreter,E09,flash,google/gemini-2.5-flash,不明,23,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T08:46:44,interpreter,E09,flash,google/gemini-2.5-flash,不明,24,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T08:46:58,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,25,2,2899,2318,0.005956,USD,0,12.0,14.1,0,失敗,HTTP 409
+2026-09-22T08:47:27,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,26,2,1402,1595,不明,USD,1,9.0,29.7,0,失敗,HTTP 503
+2026-09-22T08:47:48,interpreter,E09,flash,google/gemini-2.5-flash,不明,27,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T08:48:15,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,28,2,1402,1069,不明,USD,1,7.0,27.2,0,失敗,HTTP 503
+2026-09-22T08:48:36,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,29,2,2893,3423,0.008716,USD,0,20.0,20.9,0,失敗,HTTP 409
+2026-09-22T08:48:50,interpreter,E09,flash,google/gemini-2.5-flash,google/gemini-2.5-flash,30,2,2919,2239,0.006118,USD,0,14.0,14.4,0,期待通り,unclear=1

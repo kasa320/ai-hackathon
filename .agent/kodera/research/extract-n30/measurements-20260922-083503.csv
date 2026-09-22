@@ -1,0 +1,31 @@
+﻿実行日時,系統,ケース,構成,要求モデル,解決モデル,試行,LLM呼出数,入力tok,出力tok,確定額,通貨,費用欠測,所要秒(API),所要秒(実測),fallback,結果,備考
+2026-09-22T08:35:24,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,1,1,1403,3213,0.008454,USD,0,19.0,19.3,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:35:36,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,2,1,1403,1751,0.004442,USD,0,11.0,11.3,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:35:41,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,3,1,1403,819,0.002112,USD,0,5.0,5.5,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:35:52,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,4,2,2901,1590,0.004136,USD,0,11.0,10.9,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:36:04,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,5,1,1403,2013,0.005454,USD,0,11.0,11.2,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:36:10,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,6,1,1403,932,0.002396,USD,0,5.0,5.9,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:36:20,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,7,1,1403,1643,0.004172,USD,0,10.0,10.1,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:36:27,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,8,1,1403,1155,0.002952,USD,0,7.0,7.2,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:36:47,interpreter,E13,marunage-extract,orcarouter/marunage-extract,不明,9,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T08:37:00,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,10,1,1403,2306,0.005830,USD,0,13.0,12.9,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:37:05,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,11,1,1403,758,0.001960,USD,0,5.0,5.0,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:37:10,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,12,1,1403,626,0.001630,USD,0,5.0,4.7,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:37:15,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,13,1,1403,654,0.001700,USD,0,4.0,4.6,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:37:35,interpreter,E13,marunage-extract,orcarouter/marunage-extract,不明,14,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T08:37:58,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,15,2,2917,4328,0.010986,USD,0,23.0,23.5,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:38:16,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,16,2,2895,3181,0.008112,USD,0,18.0,17.8,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:38:24,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,17,1,1403,1386,0.003530,USD,0,8.0,7.7,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:38:28,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,18,1,1403,515,0.001352,USD,0,3.0,3.7,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:38:33,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,19,1,1403,836,0.002156,USD,0,4.0,5.0,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:38:37,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,20,1,1403,712,0.001846,USD,0,4.0,4.5,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:38:42,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,21,1,1403,768,0.001986,USD,0,5.0,5.0,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:38:50,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,22,1,1403,1308,0.003336,USD,0,8.0,7.7,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:38:58,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,23,1,1403,1142,0.002920,USD,0,8.0,8.2,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:39:12,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,24,1,1403,2330,0.005890,USD,0,12.0,13.1,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:39:17,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,25,1,1403,759,0.001962,USD,0,5.0,5.2,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:39:23,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,26,1,1403,935,0.002402,USD,0,5.0,5.6,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:39:31,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,27,1,1403,1260,0.003216,USD,0,7.0,7.8,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:39:35,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,28,1,1403,661,0.001718,USD,0,4.0,4.7,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T08:39:40,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,29,1,1403,636,0.001656,USD,0,5.0,4.5,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:39:44,interpreter,E13,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,30,1,1403,606,0.001580,USD,0,4.0,4.5,0,期待通り,HTTP 200; unclear=0 業務状態変更なし

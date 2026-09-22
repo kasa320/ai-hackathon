@@ -1,0 +1,31 @@
+﻿実行日時,系統,ケース,構成,要求モデル,解決モデル,試行,LLM呼出数,入力tok,出力tok,確定額,通貨,費用欠測,所要秒(API),所要秒(実測),fallback,結果,備考
+2026-09-22T07:07:04,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,1,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:07:24,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,2,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:07:44,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,3,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:08:04,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,4,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:08:24,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,5,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:08:44,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,6,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:09:04,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,7,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:09:27,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,google/gemini-2.5-flash-lite,8,2,1403,226,不明,USD,1,2.0,22.1,0,失敗,HTTP 503
+2026-09-22T07:09:47,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,9,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:10:07,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,10,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:10:27,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,11,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:10:47,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,12,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:11:07,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,13,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:11:27,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,14,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:11:47,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,15,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:12:07,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,16,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:12:27,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,17,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:12:47,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,18,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:13:07,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,19,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:13:27,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,20,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:13:47,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,21,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:14:08,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,22,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:14:28,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,23,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:14:32,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,google/gemini-2.5-flash-lite,24,2,2819,344,0.000420,USD,0,4.0,4.7,0,期待通り,HTTP 200; unclear=0 業務状態変更なし
+2026-09-22T07:14:53,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,25,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:15:13,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,26,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:15:33,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,27,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:15:53,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,28,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:16:13,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,29,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T07:16:33,interpreter,E13,flash-lite,google/gemini-2.5-flash-lite,不明,30,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503

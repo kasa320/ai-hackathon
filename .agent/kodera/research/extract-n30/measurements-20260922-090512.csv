@@ -1,0 +1,31 @@
+﻿実行日時,系統,ケース,構成,要求モデル,解決モデル,試行,LLM呼出数,入力tok,出力tok,確定額,通貨,費用欠測,所要秒(API),所要秒(実測),fallback,結果,備考
+2026-09-22T09:05:46,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,1,2,2899,4437,0.011610,USD,0,29.0,31.0,0,失敗,HTTP 409
+2026-09-22T09:06:06,interpreter,E09,marunage-extract,orcarouter/marunage-extract,不明,2,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T09:06:26,interpreter,E09,marunage-extract,orcarouter/marunage-extract,不明,3,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T09:06:49,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,4,2,2931,3829,0.009740,USD,0,23.0,23.1,0,期待通り,unclear=1
+2026-09-22T09:07:07,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,5,2,2920,3135,0.008002,USD,0,17.0,18.3,0,期待通り,unclear=1
+2026-09-22T09:07:38,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,6,2,2921,5306,0.013430,USD,0,31.0,31.0,0,失敗,HTTP 409
+2026-09-22T09:08:03,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,7,2,2920,4087,0.010382,USD,0,23.0,24.0,0,失敗,HTTP 409
+2026-09-22T09:08:28,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,8,2,2893,4594,0.011646,USD,0,25.0,25.5,0,失敗,HTTP 409
+2026-09-22T09:08:39,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,9,2,2893,1331,0.003488,USD,0,10.0,10.5,0,失敗,HTTP 409
+2026-09-22T09:09:07,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,10,2,2899,5218,0.013206,USD,0,28.0,28.5,0,失敗,HTTP 409
+2026-09-22T09:09:32,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,11,2,1402,682,不明,USD,1,5.0,24.6,0,失敗,HTTP 503
+2026-09-22T09:09:38,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,12,1,1402,802,0.002070,USD,0,6.0,5.9,0,期待通り,unclear=1
+2026-09-22T09:09:46,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,13,1,1402,1258,0.003210,USD,0,8.0,8.3,0,期待通り,unclear=1
+2026-09-22T09:09:56,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,14,1,1402,1490,0.003790,USD,0,9.0,9.3,0,期待通り,unclear=0
+2026-09-22T09:10:11,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,15,2,2925,2479,0.006720,USD,0,14.0,15.2,0,期待通り,unclear=1
+2026-09-22T09:10:29,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,16,2,2918,3277,0.008358,USD,0,17.0,17.7,0,期待通り,unclear=1
+2026-09-22T09:10:56,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,17,2,2941,4259,0.011174,USD,0,27.0,27.1,0,失敗,HTTP 409
+2026-09-22T09:11:06,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,18,1,1402,1496,0.003806,USD,0,10.0,10.3,0,期待通り,unclear=0
+2026-09-22T09:11:21,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,19,1,1402,2373,0.005998,USD,0,14.0,14.4,0,期待通り,unclear=1
+2026-09-22T09:11:28,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,20,1,1402,1026,0.002630,USD,0,7.0,7.5,0,期待通り,unclear=1
+2026-09-22T09:11:48,interpreter,E09,marunage-extract,orcarouter/marunage-extract,不明,21,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T09:12:04,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,22,2,2916,2000,0.005522,USD,0,15.0,15.2,0,期待通り,unclear=1
+2026-09-22T09:12:12,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,23,1,1402,1097,0.002808,USD,0,8.0,8.3,0,期待通り,unclear=1
+2026-09-22T09:12:28,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,24,1,1402,2769,0.006988,USD,0,16.0,16.4,0,期待通り,unclear=0
+2026-09-22T09:12:42,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,25,1,1402,2122,0.005726,USD,0,13.0,13.1,0,期待通り,unclear=0
+2026-09-22T09:13:00,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,26,1,1402,2628,0.006636,USD,0,17.0,17.9,0,期待通り,unclear=1
+2026-09-22T09:13:11,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,27,2,2914,1522,0.003970,USD,0,11.0,11.8,0,失敗,HTTP 409
+2026-09-22T09:13:31,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,28,1,1402,3132,0.008250,USD,0,20.0,19.4,0,期待通り,unclear=0
+2026-09-22T09:13:41,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,29,2,2917,1297,0.003406,USD,0,9.0,9.7,0,期待通り,unclear=1
+2026-09-22T09:13:59,interpreter,E09,marunage-extract,orcarouter/marunage-extract,google/gemini-2.5-flash,30,2,2893,3039,0.008110,USD,0,17.0,18.6,0,失敗,HTTP 409

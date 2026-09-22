@@ -1,0 +1,9 @@
+﻿実行日時,系統,ケース,構成,要求モデル,解決モデル,試行,LLM呼出数,入力tok,出力tok,確定額,通貨,費用欠測,所要秒(API),所要秒(実測),fallback,結果,備考
+2026-09-22T08:08:57,planner,E01,marunage-plan,orcarouter/marunage-plan,google/gemini-2.5-flash,1,1,1976,3339,0.008940,USD,0,20.0,21.0,0,期待通り,
+2026-09-22T08:09:21,planner,E01,marunage-plan,orcarouter/marunage-plan,google/gemini-2.5-flash,2,1,1955,3976,0.010526,USD,0,23.0,24.0,0,期待通り,
+2026-09-22T08:09:33,planner,E01,marunage-plan,orcarouter/marunage-plan,google/gemini-2.5-flash,3,1,1969,1884,0.005300,USD,0,11.0,12.0,0,期待通り,
+2026-09-22T08:09:51,planner,E01,marunage-plan,orcarouter/marunage-plan,google/gemini-2.5-flash,4,1,1968,2959,0.007988,USD,0,16.0,18.0,0,期待通り,
+2026-09-22T08:10:09,planner,E01,marunage-plan,orcarouter/marunage-plan,google/gemini-2.5-flash,5,1,1973,3100,0.008342,USD,0,15.0,18.0,0,期待通り,
+2026-09-22T08:10:42,planner,E01,marunage-plan,orcarouter/marunage-plan,anthropic/claude-sonnet-5/google/gemini-2.5-flash,6,2,6067,3417,0.034552,USD,0,31.0,33.0,0,期待通り,
+2026-09-22T08:11:10,planner,E01,marunage-plan,orcarouter/marunage-plan,google/gemini-2.5-flash,7,1,1968,2732,0.007420,USD,0,24.0,27.0,0,期待通り,
+2026-09-22T08:11:49,planner,E01,marunage-plan,orcarouter/marunage-plan,anthropic/claude-sonnet-5/google/gemini-2.5-flash,8,2,6051,4176,0.034128,USD,0,38.0,39.0,0,期待通り,

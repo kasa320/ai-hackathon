@@ -1,0 +1,31 @@
+﻿実行日時,系統,ケース,構成,要求モデル,解決モデル,試行,LLM呼出数,入力tok,出力tok,確定額,通貨,費用欠測,所要秒(API),所要秒(実測),fallback,結果,備考
+2026-09-22T08:49:23,interpreter,E13,auto,orcarouter/auto,不明,1,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T08:49:28,interpreter,E13,auto,orcarouter/auto,deepseek/deepseek-v4-flash-vision-exp,2,1,2179,812,0.000580,USD,0,4.0,4.4,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:49:48,interpreter,E13,auto,orcarouter/auto,不明,3,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T08:50:02,interpreter,E13,auto,orcarouter/auto,anthropic/claude-opus-5,4,1,3142,362,0.040460,USD,0,14.0,14.4,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:50:08,interpreter,E13,auto,orcarouter/auto,deepseek/deepseek-v4-flash-vision-exp,5,1,2179,983,0.000692,USD,0,5.0,5.6,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:50:13,interpreter,E13,auto,orcarouter/auto,openai/gpt-5.6-terra,6,1,1786,170,0.006444,USD,0,5.0,5.3,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:50:20,interpreter,E13,auto,orcarouter/auto,anthropic/claude-opus-5,7,2,7281,8,0.036606,USD,0,6.0,6.4,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:50:25,interpreter,E13,auto,orcarouter/auto,deepseek/deepseek-v4-flash-vision-exp,8,1,2179,1075,0.000754,USD,0,5.0,5.8,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:50:46,interpreter,E13,auto,orcarouter/auto,不明,9,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T08:51:06,interpreter,E13,auto,orcarouter/auto,不明,10,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T08:51:17,interpreter,E13,auto,orcarouter/auto,deepseek/deepseek-v4-flash-vision-exp,11,1,2179,2334,0.001584,USD,0,11.0,11.4,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:51:24,interpreter,E13,auto,orcarouter/auto,anthropic/claude-opus-5,12,2,7281,8,0.036606,USD,0,6.0,7.0,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:51:31,interpreter,E13,auto,orcarouter/auto,deepseek/deepseek-v4-flash-vision-exp,13,1,2179,1247,0.000866,USD,0,7.0,6.5,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:51:38,interpreter,E13,auto,orcarouter/auto,deepseek/deepseek-v4-flash-vision-exp,14,1,2179,1424,0.000984,USD,0,7.0,7.3,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:51:58,interpreter,E13,auto,orcarouter/auto,不明,15,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T08:52:18,interpreter,E13,auto,orcarouter/auto,不明,16,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T08:52:25,interpreter,E13,auto,orcarouter/auto,deepseek/deepseek-v4-flash-vision-exp,17,1,2179,1274,0.000884,USD,0,7.0,6.5,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:52:45,interpreter,E13,auto,orcarouter/auto,不明,18,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T08:53:05,interpreter,E13,auto,orcarouter/auto,不明,19,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T08:53:12,interpreter,E13,auto,orcarouter/auto,deepseek/deepseek-v4-flash-vision-exp,20,1,2179,1142,0.000798,USD,0,7.0,6.9,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:53:32,interpreter,E13,auto,orcarouter/auto,不明,21,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T08:53:37,interpreter,E13,auto,orcarouter/auto,deepseek/deepseek-v4-flash-vision-exp,22,1,2179,881,0.000626,USD,0,5.0,5.0,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:53:42,interpreter,E13,auto,orcarouter/auto,deepseek/deepseek-v4-flash-vision-exp,23,1,2179,982,0.000692,USD,0,5.0,4.9,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:54:02,interpreter,E13,auto,orcarouter/auto,不明,24,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T08:54:11,interpreter,E13,auto,orcarouter/auto,deepseek/deepseek-v4-flash-vision-exp,25,1,2179,1663,0.001142,USD,0,8.0,8.3,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:54:16,interpreter,E13,auto,orcarouter/auto,deepseek/deepseek-v4-flash-vision-exp,26,1,2179,968,0.000682,USD,0,5.0,5.2,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:54:36,interpreter,E13,auto,orcarouter/auto,不明,27,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T08:54:56,interpreter,E13,auto,orcarouter/auto,不明,28,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
+2026-09-22T08:55:02,interpreter,E13,auto,orcarouter/auto,deepseek/deepseek-v4-flash-vision-exp,29,1,2179,1032,0.000724,USD,0,6.0,5.9,0,期待通り,HTTP 409; 範囲外として拒否・業務状態変更なし
+2026-09-22T08:55:22,interpreter,E13,auto,orcarouter/auto,不明,30,1,0,0,不明,unknown,1,不明,20.0,0,失敗,HTTP 503
