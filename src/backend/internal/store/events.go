@@ -89,6 +89,11 @@ func (t *Tx) CancelPendingEvents(ctx context.Context, caseID, kind string) error
 	return t.exec(ctx, "UPDATE events SET status = 'cancelled' WHERE case_id = ? AND kind = ? AND status = 'pending'", caseID, kind)
 }
 
+// CancelPendingEventsByRef は指定した対象（タスクなど）を参照する未処理イベントを取り消す。
+func (t *Tx) CancelPendingEventsByRef(ctx context.Context, refID string) error {
+	return t.exec(ctx, "UPDATE events SET status = 'cancelled' WHERE ref_id = ? AND status = 'pending'", refID)
+}
+
 // 通知の状態。
 const (
 	NotifyPending   = "pending"

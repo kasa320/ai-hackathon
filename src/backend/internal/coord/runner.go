@@ -39,6 +39,12 @@ func (c *Coordinator) ProcessDue(ctx context.Context) (int, error) {
 	if err != nil {
 		return n, fmt.Errorf("ブックの自動進行: %w", err)
 	}
+	// ブック側で本人承認済みなのに重複して残った担当引き受けタスクの解消。既存DB分もここで解消する。
+	rn, err := c.reconcileBookAssignmentTasks(ctx)
+	n += rn
+	if err != nil {
+		return n, fmt.Errorf("担当引き受けタスクの整合性解消: %w", err)
+	}
 	for {
 		var due []store.Event
 		if err := c.st.Tx(ctx, func(tx *store.Tx) error {
