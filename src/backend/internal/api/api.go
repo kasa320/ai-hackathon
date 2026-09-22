@@ -58,6 +58,7 @@ func (s *Server) Handler(frontendDir string, mount ...func(mux *http.ServeMux)) 
 	mux.HandleFunc("POST /api/auth/logout", s.authed(s.logout))
 	mux.HandleFunc("GET /api/me/weekly-availability", s.authed(s.getWeeklyAvailability))
 	mux.HandleFunc("PUT /api/me/weekly-availability", s.authed(s.putWeeklyAvailability))
+	mux.HandleFunc("POST /api/me/weekly-availability/interpretations", s.authed(s.interpretWeeklyAvailability))
 
 	mux.HandleFunc("GET /api/groups", s.authed(s.listGroups))
 	mux.HandleFunc("POST /api/groups", s.authed(s.createGroup))
@@ -301,6 +302,22 @@ func (s *Server) putWeeklyAvailability(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 	out, err := s.Coord.PutWeeklyAvailability(r.Context(), sess.User.ID, in)
+	if err != nil {
+		httpx.WriteError(w, r, s.Log, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+// interpretWeeklyAvailability は本人の自由文から普段の空き時間の下書きを作って返す。何も保存しないため
+// Idempotency-Key は要求しない（再送しても状態は変わらない）。保存は putWeeklyAvailability で行う。
+func (s *Server) interpretWeeklyAvailability(w http.ResponseWriter, r *http.Request, sess auth.Session) {
+	var in apitypes.WeeklyAvailabilityInterpretationInput
+	if _, err := httpx.ReadJSON(w, r, &in); err != nil {
+		httpx.WriteError(w, r, s.Log, err)
+		return
+	}
+	out, err := s.Coord.InterpretWeeklyAvailability(r.Context(), sess.User.ID, in)
 	if err != nil {
 		httpx.WriteError(w, r, s.Log, err)
 		return

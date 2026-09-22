@@ -51,6 +51,8 @@ type Options struct {
 	RunLock *sync.Mutex
 	// Interpreter は自由文から参加条件を取り出す処理。nil なら自由文の解釈を提供しない。
 	Interpreter Interpreter
+	// WeeklyInterpreter は自由文から普段の空き時間の下書きを取り出す処理。nil なら規則だけで抽出する（DraftOnlyWeeklyInterpreter）。
+	WeeklyInterpreter WeeklyInterpreter
 	// BookAgent はブックの全体計画と担当変更の候補を作る処理。nil なら規則だけで作る（DraftBookAgent）。
 	BookAgent BookAgent
 }
@@ -58,15 +60,16 @@ type Options struct {
 // Coordinator は用途共通の調整処理。状態遷移・本人と版の検証・同意管理・イベント処理を担う。
 // 用途固有の判断は Playbook に委ね、playbook_id による分岐を持たない。
 type Coordinator struct {
-	reg         *Service
-	st          *store.Store
-	clock       clock.Clock
-	planner     Planner
-	interpreter Interpreter
-	bookAgent   BookAgent
-	opts        Options
-	log         *slog.Logger
-	wake        chan struct{}
+	reg               *Service
+	st                *store.Store
+	clock             clock.Clock
+	planner           Planner
+	interpreter       Interpreter
+	weeklyInterpreter WeeklyInterpreter
+	bookAgent         BookAgent
+	opts              Options
+	log               *slog.Logger
+	wake              chan struct{}
 }
 
 func NewCoordinator(reg *Service, st *store.Store, clk clock.Clock, planner Planner, opts Options) *Coordinator {
@@ -81,7 +84,11 @@ func NewCoordinator(reg *Service, st *store.Store, clk clock.Clock, planner Plan
 	if agent == nil {
 		agent = DraftBookAgent{}
 	}
-	return &Coordinator{reg: reg, st: st, clock: clk, planner: planner, interpreter: opts.Interpreter, bookAgent: agent, opts: opts, log: log, wake: make(chan struct{}, 1)}
+	wi := opts.WeeklyInterpreter
+	if wi == nil {
+		wi = DraftOnlyWeeklyInterpreter{}
+	}
+	return &Coordinator{reg: reg, st: st, clock: clk, planner: planner, interpreter: opts.Interpreter, weeklyInterpreter: wi, bookAgent: agent, opts: opts, log: log, wake: make(chan struct{}, 1)}
 }
 
 // Playbooks は登録済み用途の一覧。

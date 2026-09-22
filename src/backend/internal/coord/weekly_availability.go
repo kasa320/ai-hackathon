@@ -50,10 +50,31 @@ func validateWeeklyAvailability(in apitypes.PutWeeklyAvailabilityInput) (string,
 		fields = append(fields, apperr.Field{Path: "windows", Message: "必須です（空にする場合は空の配列を指定してください）"})
 		return zone, nil, apperr.Validation(fields...)
 	}
-	windows := append([]apitypes.WeeklyWindow{}, *in.Windows...)
+	windows, err := validateWeeklyWindows(*in.Windows)
+	if err != nil {
+		var ae *apperr.Error
+		if errors.As(err, &ae) {
+			if fs, ok := ae.Details["fields"].([]apperr.Field); ok {
+				fields = append(fields, fs...)
+			}
+		} else {
+			return zone, nil, err
+		}
+	}
+	if len(fields) > 0 {
+		return zone, nil, apperr.Validation(fields...)
+	}
+	return zone, windows, nil
+}
+
+// validateWeeklyWindows は区間の形式・重複だけを検証し、曜日・開始時刻順に整えて返す。
+// タイムゾーンを持たない呼び出し元（自由文解釈など）とも共用する。
+func validateWeeklyWindows(in []apitypes.WeeklyWindow) ([]apitypes.WeeklyWindow, error) {
+	var fields []apperr.Field
+	windows := append([]apitypes.WeeklyWindow{}, in...)
 	if len(windows) > maxWeeklyWindows {
 		fields = append(fields, apperr.Field{Path: "windows", Message: fmt.Sprintf("区間は%d件までです", maxWeeklyWindows)})
-		return zone, nil, apperr.Validation(fields...)
+		return nil, apperr.Validation(fields...)
 	}
 	type span struct{ start, end, index int }
 	byDay := map[int][]span{}
@@ -87,7 +108,7 @@ func validateWeeklyAvailability(in apitypes.PutWeeklyAvailabilityInput) (string,
 		}
 	}
 	if len(fields) > 0 {
-		return zone, nil, apperr.Validation(fields...)
+		return nil, apperr.Validation(fields...)
 	}
 	sort.SliceStable(windows, func(i, j int) bool {
 		if windows[i].Weekday != windows[j].Weekday {
@@ -95,7 +116,7 @@ func validateWeeklyAvailability(in apitypes.PutWeeklyAvailabilityInput) (string,
 		}
 		return windows[i].Start < windows[j].Start
 	})
-	return zone, windows, nil
+	return windows, nil
 }
 
 func weeklyView(a store.WeeklyAvailability) (apitypes.WeeklyAvailability, error) {
