@@ -272,6 +272,64 @@ func TestStandingAvailabilityConvertsTimezoneAndYieldsToSessionAnswers(t *testin
 	}
 }
 
+// schedule省略、またはstatus=unknownと明示的に答えただけ（参加は明示済み）の人は、
+// 未回答扱いにせず、本人が登録した普段の空き時間を候補計算に使う。
+func TestUnknownOrOmittedScheduleStillUsesStandingAvailabilityWhenAttending(t *testing.T) {
+	standing := &coord.StandingAvailability{Timezone: "Asia/Tokyo", Windows: []coord.StandingWindow{{Weekday: 3, StartMinute: 20 * 60, EndMinute: 22 * 60}}}
+	base := func() coord.Snapshot {
+		s := baseSnapshot()
+		s.Now = time.Date(2026, 9, 19, 9, 0, 0, 0, time.UTC)
+		s.ScheduleStatus, s.PeriodStart, s.PeriodEnd = coord.ScheduleProposed, "2026-09-20", "2026-09-30"
+		for i := range s.Members {
+			s.Members[i].Standing = standing
+		}
+		return s
+	}
+	pb := reading.New()
+
+	// schedule を一切送っていない（省略）。
+	s := base()
+	draft, err := pb.DraftPlan(context.Background(), s)
+	if err != nil || draft.Kind != coord.DraftProposal {
+		t.Fatalf("schedule省略で普段の空き時間から案が作れない: %+v, %v", draft, err)
+	}
+	var plan reading.PlanData
+	_ = json.Unmarshal(draft.Plan, &plan)
+	if plan.StartsAt != "2026-09-23T20:00:00+09:00" {
+		t.Fatalf("schedule省略の候補日時 = %s", plan.StartsAt)
+	}
+
+	// status=unknown を明示的に送った場合も同じ扱い。
+	s = base()
+	changeAvailability(t, &s, "mem_d", func(d *reading.PreparationData) {
+		d.Schedule = &reading.ScheduleAvailability{Status: "unknown", WeeklyWindows: []reading.WeeklyWindow{}, DateWindows: []reading.DateWindow{}}
+	})
+	draft, err = pb.DraftPlan(context.Background(), s)
+	if err != nil || draft.Kind != coord.DraftProposal {
+		t.Fatalf("status=unknown明示で普段の空き時間から案が作れない: %+v, %v", draft, err)
+	}
+	_ = json.Unmarshal(draft.Plan, &plan)
+	if plan.StartsAt != "2026-09-23T20:00:00+09:00" {
+		t.Fatalf("status=unknown明示の候補日時 = %s", plan.StartsAt)
+	}
+
+	// 今回だけ参加できない日は、普段の空き時間より優先する。
+	s = base()
+	changeAvailability(t, &s, "mem_d", func(d *reading.PreparationData) {
+		d.UnavailableDates = []string{"2026-09-23", "2026-09-30"}
+	})
+	if draft, _ := pb.DraftPlan(context.Background(), s); draft.Kind == coord.DraftProposal {
+		t.Fatalf("今回だけ参加できない日を無視して普段の空き時間で案が作られた: %+v", draft)
+	}
+
+	// 未回答（欠席扱いになる）は参加可能扱いにしない。
+	s = base()
+	setPrep(&s, "mem_d", nil)
+	if draft, _ := pb.DraftPlan(context.Background(), s); draft.Kind == coord.DraftProposal {
+		t.Fatalf("未回答者を普段の空き時間で参加可能扱いした: %+v", draft)
+	}
+}
+
 func TestOverlapWithConfirmedBusyIntervalIsRejected(t *testing.T) {
 	s := scheduledSnapshot(t)
 	pb := reading.New()

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/kasa320/ai-hackathon/src/backend/internal/apitypes"
 )
 
 // ErrNotImplemented は業務処理が未実装であることを示す。
@@ -117,6 +119,20 @@ type PlanDescriber interface {
 // PreparationRequestDescriber provides a deterministic, purpose-specific request.
 type PreparationRequestDescriber interface {
 	PreparationRequest(s Snapshot, memberID string) string
+}
+
+// WeeklyAvailabilityExtractor is implemented by playbooks whose validated Preparation.Data
+// can also carry an explicit weekly-schedule statement (weekday + time of day, not a
+// this-time-only date exception). When the user opted in via update_weekly_availability,
+// the common layer uses this to read the explicit weekly windows and replace the user's
+// account-wide weekly availability in the same transaction as the preparation save.
+type WeeklyAvailabilityExtractor interface {
+	// ExtractWeeklyAvailability reads explicit weekly windows out of validated Data.
+	// ok=false means the data contains no explicit weekly-schedule statement (e.g. the
+	// person only touched this-session exceptions or left the weekly schedule untouched).
+	// Weekdays are 1=Mon..7=Sun (the weekly-availability contract), converted from the
+	// playbook's own session-day numbering at this boundary.
+	ExtractWeeklyAvailability(data json.RawMessage) (windows []apitypes.WeeklyWindow, ok bool, err error)
 }
 
 // plannedStart は用途が日時を決めるならその値を返す。決めない用途では ok=false。

@@ -280,6 +280,13 @@ export const api = {
       windows: windows.map(({ weekday, start, end }) => ({ weekday, start, end })),
     }),
 
+  /**
+   * 自由文から普段の空き時間の下書きを作る。保存はされない（saved は常に false）。
+   * 本人が確認・修正してから saveWeeklyAvailability で送る。Idempotency-Key は不要。
+   * バックエンドはDiscord担当の実装（契約は固定・このブランチでは変更しない）。
+   */
+  interpretWeeklyAvailability: (text) => request("POST", "/me/weekly-availability/interpretations", { body: { text } }),
+
   // ---- 開発・デモ用（DEV_MODE=1 のときだけ存在する） ----
   dev: {
     status: () => request("GET", "/dev/status"),

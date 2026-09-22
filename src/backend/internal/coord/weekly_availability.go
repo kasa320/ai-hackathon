@@ -170,6 +170,41 @@ func (c *Coordinator) PutWeeklyAvailability(ctx context.Context, userID string, 
 	return weeklyView(a)
 }
 
+// replaceWeeklyAvailabilityFromPreparation は、参加条件の保存と同じトランザクションで、本人が
+// 明示的に入力した週間の時間帯（validated Data 内）を使って普段の空き時間を全置換する。
+// 用途が WeeklyAvailabilityExtractor を実装しない、または明示的な週間変更が含まれない場合は 422。
+func (c *Coordinator) replaceWeeklyAvailabilityFromPreparation(ctx context.Context, tx *store.Tx, pb Playbook, userID string, data []byte, path string, now time.Time) error {
+	ext, ok := pb.(WeeklyAvailabilityExtractor)
+	if !ok {
+		return apperr.Validation(apperr.Field{Path: path + ".update_weekly_availability", Message: "この用途では週間の空き時間を更新できません"})
+	}
+	windows, ok, err := ext.ExtractWeeklyAvailability(data)
+	if err != nil {
+		return err
+	}
+	if !ok || len(windows) == 0 {
+		return apperr.Validation(apperr.Field{Path: path + ".update_weekly_availability", Message: "更新には有効な週間の時間帯が必要です"})
+	}
+	ws := append([]apitypes.WeeklyWindow{}, windows...)
+	zone, validated, err := validateWeeklyAvailability(apitypes.PutWeeklyAvailabilityInput{
+		Timezone: DefaultAvailabilityZone,
+		Windows:  &ws,
+	})
+	if verr, ok := err.(*apperr.Error); ok {
+		return apperr.Validation(apperr.Field{Path: path + ".update_weekly_availability", Message: verr.Message})
+	} else if err != nil {
+		return err
+	}
+	raw, err := json.Marshal(validated)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.User(ctx, userID); err != nil {
+		return err
+	}
+	return tx.PutWeeklyAvailability(ctx, store.WeeklyAvailability{UserID: userID, Timezone: zone, Windows: raw, UpdatedAt: now})
+}
+
 // standingAvailability は本人の普段の空き時間を、日時候補の計算に使う形で返す。未登録なら nil。
 func (c *Coordinator) standingAvailability(ctx context.Context, tx *store.Tx, userID string) (*StandingAvailability, error) {
 	a, err := tx.WeeklyAvailability(ctx, userID)

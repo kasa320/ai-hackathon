@@ -108,6 +108,12 @@ func (c *Coordinator) submitPreparation(ctx context.Context, tx *store.Tx, sess 
 		return store.Response{}, err
 	}
 
+	if in.UpdateWeeklyAvailability {
+		if err := c.replaceWeeklyAvailabilityFromPreparation(ctx, tx, pb, m.UserID, data, path, now); err != nil {
+			return store.Response{}, err
+		}
+	}
+
 	preps, err := tx.Preparations(ctx, sess.ID)
 	if err != nil {
 		return store.Response{}, err

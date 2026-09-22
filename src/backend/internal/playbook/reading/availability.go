@@ -121,8 +121,9 @@ func availableWindows(d PreparationData, standing *coord.StandingAvailability, d
 	}
 	var ws []minuteWindow
 	switch {
-	case a == nil && standing != nil:
-		// この回で時間帯を答えていない人は、本人が登録した普段の空き時間を使う。未登録なら候補にならない。
+	case (a == nil || a.Status == "unknown") && standing != nil:
+		// schedule省略、またはunknownと答えただけ（参加は明示している）の人は、
+		// 本人が登録した普段の空き時間を使う。未登録なら候補にならない（未回答を参加可能扱いにしない）。
 		ws = standingWindows(standing, day)
 	case a == nil || a.Status != "provided" || (a.MaxDurationMinutes > 0 && a.MaxDurationMinutes < duration):
 		return nil

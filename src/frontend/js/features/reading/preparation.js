@@ -8,7 +8,7 @@
 
 import { el } from "../../dom.js";
 import { DATE_MAX } from "../../ui.js";
-import { createAvailabilityForm, describeSchedule } from "./availability.js";
+import { createAvailabilityForm, describeSchedule, renderStandingAvailability } from "./availability.js";
 
 /** 参加できる時間帯の形を確かめる。 */
 export function validate(preparation) {
@@ -36,12 +36,14 @@ const EMPTY = {
 /**
  * 参加条件のフォーム。read() が契約どおりの Preparation を返す。
  * fill() は自由文の解釈結果を流し込むために使う（本人が直せる状態にする）。
+ * standingInfo は { standing, failed }（api.weeklyAvailability() の結果と取得失敗の有無）。
  */
-export function createPreparationForm(sessionData, current, durationMinutes, session = {}) {
+export function createPreparationForm(sessionData, current, durationMinutes, session = {}, standingInfo = {}) {
   const value = current ?? EMPTY;
   // 日時がまだ決まっていない回だけ、参加できる時間帯と出られない日を聞く。
   const askDates = session.schedule_status === "proposed";
   const availability = createAvailabilityForm(value.data.schedule, session);
+  const standingBlock = askDates ? renderStandingAvailability(standingInfo.standing, standingInfo.failed) : null;
   // 担当の辞退は「担当を辞退する」から付く。フォームでは変えず、保存済みの値を引き継ぐ
   let declined = value.data.declined_presentation === true;
 
@@ -66,7 +68,7 @@ export function createPreparationForm(sessionData, current, durationMinutes, ses
           min: session.period_start || null,
           max: session.period_end || DATE_MAX,
           "data-date": String(i),
-          "aria-label": "出られない日",
+          "aria-label": "今回だけ参加できない日",
           onInput: (e) => { dateValues[i] = e.target.value; },
         }),
         el("button", {
@@ -90,7 +92,7 @@ export function createPreparationForm(sessionData, current, durationMinutes, ses
             renderDates();
             dates.querySelector(`[data-date="${dateValues.length - 1}"]`)?.focus();
           },
-        }, "＋ 出られない日を足す"),
+        }, "＋ 参加できない日を足す"),
       ),
     );
   };
@@ -99,10 +101,11 @@ export function createPreparationForm(sessionData, current, durationMinutes, ses
   const datesField = el(
     "fieldset",
     { class: "fieldset", style: "font-size:.82rem;color:var(--ink-2)" },
-    el("legend", { style: "border:0;padding:0;font-size:.82rem;font-weight:400" }, "出られない日（任意）"),
+    el("legend", { style: "border:0;padding:0;font-size:.82rem;font-weight:400" }, "今回だけ参加できない日（任意・終日）"),
+    el("p", { class: "help" }, "普段の空き時間とは別に、この回だけ参加できない日を終日の例外として登録します。"),
     dates,
   );
-  const scheduleFields = el("div", { class: "prep-form" }, availability.node, datesField);
+  const scheduleFields = el("div", { class: "prep-form" }, standingBlock, availability.node, datesField);
   function sync() {
     // 欠席なら時間帯は聞かない
     scheduleFields.hidden = !askDates || attendance.value !== "attending";
@@ -124,6 +127,9 @@ export function createPreparationForm(sessionData, current, durationMinutes, ses
     node,
     read() {
       const attending = attendance.value === "attending";
+      // 普段の空き時間の全置換は、本人がこの回で曜日・時間帯を明示的に入力・変更した場合だけ送る。
+      // 表示しただけ、今回だけの例外を変えただけ、unknownを選んだだけでは送らない。
+      const updateWeeklyAvailability = askDates && attending && availability.weeklyTouched();
       return {
         attendance: attendance.value,
         data: {
@@ -131,11 +137,12 @@ export function createPreparationForm(sessionData, current, durationMinutes, ses
           unavailable_dates: attending && askDates ? [...new Set(dateValues.filter(Boolean))].sort() : [],
           ...(askDates && attending ? { schedule: availability.read() } : value.data.schedule ? { schedule: value.data.schedule } : {}),
         },
+        update_weekly_availability: updateWeeklyAvailability,
       };
     },
     /** 解釈結果を入力欄へ入れる。保存はしない。本人がこのあと直して送る。 */
     fill(preparation) {
-      if (Object.hasOwn(preparation.data, "schedule")) availability.fill(preparation.data.schedule);
+      if (Object.hasOwn(preparation.data, "schedule")) availability.fill(preparation.data.schedule, { fromDraft: true });
       attendance.value = preparation.attendance;
       if (typeof preparation.data.declined_presentation === "boolean") declined = preparation.data.declined_presentation;
       if (Array.isArray(preparation.data.unavailable_dates)) {
