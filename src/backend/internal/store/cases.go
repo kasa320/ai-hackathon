@@ -157,6 +157,12 @@ func (t *Tx) SetProposalStatus(ctx context.Context, id, status string, confirmed
 	return t.exec(ctx, "UPDATE proposals SET status = ?, confirmed_at = COALESCE(?, confirmed_at) WHERE id = ?", status, nullTS(confirmedAt), id)
 }
 
+// SetProposalRequirements は保留中の案の承認条件を書き換える。ブック側で先に本人承認済みの担当分を
+// 取り除き、重複した引き受け待ちを解消するときに使う。
+func (t *Tx) SetProposalRequirements(ctx context.Context, id string, requirements json.RawMessage) error {
+	return t.exec(ctx, "UPDATE proposals SET requirements = ? WHERE id = ?", string(requirements), id)
+}
+
 // ConfirmedProposals は開催回で確定した案を確定順に返す。
 func (t *Tx) ConfirmedProposals(ctx context.Context, sessionID string) ([]Proposal, error) {
 	rows, err := t.query(ctx, "SELECT "+proposalCols+" FROM proposals WHERE session_id = ? AND confirmed_at IS NOT NULL ORDER BY confirmed_at, version", sessionID)
@@ -306,6 +312,11 @@ func (t *Tx) tasks(ctx context.Context, where string, args ...any) ([]Task, erro
 // TasksByCase は案件のタスクを作成順に返す。
 func (t *Tx) TasksByCase(ctx context.Context, caseID string) ([]Task, error) {
 	return t.tasks(ctx, "case_id = ?", caseID)
+}
+
+// OpenTasksByKind は指定した種類の開いているタスクを全件返す（案件・開催回をまたぐ整合性チェック用）。
+func (t *Tx) OpenTasksByKind(ctx context.Context, kind string) ([]Task, error) {
+	return t.tasks(ctx, "kind = ? AND status = 'open'", kind)
 }
 
 // TasksByProposal は案に対するタスクを返す。

@@ -196,6 +196,10 @@ a.row:hover { background: var(--panel); }
 .group-books { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; color: var(--ink-3); font-size: .76rem; }
 .group-books .link { font-size: .76rem; }
 
+/* ホーム：全所属グループの未完了book slotの状態別一覧。 */
+.book-slot-buckets { display: grid; gap: var(--s5); margin-top: var(--s3); }
+.book-slot-bucket h3 { display: flex; align-items: center; gap: var(--s3); font-size: .88rem; font-weight: 700; margin-bottom: var(--s2); }
+
 /* ブックの進捗と各セッション枠。開始前の枠は通知済み・調整中の見た目にしない。 */
 .book-progress { padding: var(--s4) var(--s5); border-radius: var(--r-card); background: var(--panel); }
 .book-progress .section__head { padding-bottom: var(--s2); }

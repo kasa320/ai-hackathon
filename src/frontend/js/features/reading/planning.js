@@ -41,7 +41,7 @@ const ASSIGNMENT_HINT = {
   [ASSIGNMENT_KIND.confirmed]: "担当者が引き受けています。",
 };
 
-const SCHEDULING_KIND = Object.freeze({
+export const SCHEDULING_KIND = Object.freeze({
   notStarted: "not_started",
   collecting: "collecting",
   proposing: "proposing",

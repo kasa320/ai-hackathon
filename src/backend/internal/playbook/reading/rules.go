@@ -412,11 +412,21 @@ func consecutiveSubstituteCount(s coord.Snapshot, memberID string) int {
 
 // ApprovalRequirements は案に必要な条件を返す（docs/data-structure.md）。
 func (Playbook) ApprovalRequirements(_ context.Context, s coord.Snapshot, prop coord.Proposal) (coord.ApprovalRequirements, error) {
+	sd, err := sessionData(s)
+	if err != nil {
+		return coord.ApprovalRequirements{}, err
+	}
 	p, err := decodePlan(prop.Data)
 	if err != nil {
 		return coord.ApprovalRequirements{}, err
 	}
-	req := coord.ApprovalRequirements{RequiredAcceptorIDs: nonNil(p.presenters()), Approvals: []coord.ApprovalRequirement{}}
+	req := coord.ApprovalRequirements{Approvals: []coord.ApprovalRequirement{}}
+	if sd.AssigneeMemberID == "" {
+		// 旧方式・手動セッション（担当が固定されていない）だけ、本人の引き受けタスクを作る。
+		req.RequiredAcceptorIDs = nonNil(p.presenters())
+	}
+	// AssigneeMemberID がある場合、ValidatePlan が担当者をその人に固定するので、
+	// ここでは重複して担当引き受けを求めない（reading_book_slots.assignment_status が唯一の担当承認）。
 	switch prop.ChangeKind {
 	case coord.ChangeInitial:
 		req.Approvals = append(req.Approvals, coord.ApprovalRequirement{

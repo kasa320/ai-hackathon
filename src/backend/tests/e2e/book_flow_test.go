@@ -312,7 +312,10 @@ func TestBookDemoFlowWithRestartsAndDemoClock(t *testing.T) {
 		t.Fatalf("今回だけ参加不可の日が候補になった: %s", det.CurrentProposal.Data)
 	}
 	// 同時進行中の別ブックがある。同じ日時の重複を提案しない（両方の案の日時が異なる）。
-	p[assignee].respond(sid, "assignment", "accept").mustStatus(t, 202)
+	// ブック側で担当を承認済みなので、開催回側では重複して担当引き受けを求めない。
+	if tk := p[assignee].openTask(sid, "assignment"); tk != nil {
+		t.Fatalf("担当固定セッションで重複した担当引き受けタスクができている: %+v", tk)
+	}
 	for _, n := range names {
 		p[n].respond(sid, "approval", "approve").mustStatus(t, 202)
 	}

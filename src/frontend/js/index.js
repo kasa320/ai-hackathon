@@ -4,11 +4,15 @@
 // 何がどう変わるのかを、詳細画面へ進む前に同じ面で読めるようにします。
 // 返事をする会がなければ、待っていてよいことを先に伝えます。
 
-import { el, mount, formatDateTime } from "./dom.js";
+import { el, mount, formatDateTime, memberName } from "./dom.js";
 import { api, ApiError } from "./api.js";
 import { featureFor } from "./features/index.js";
 import { createDialog, renderTopbar, renderPlanBar, renderDevBar, pluginTag, playbookName, placeholder, tally, whenLabel } from "./ui.js";
 import { availabilityStatus } from "./weeklyAvailability.js";
+import {
+  ASSIGNMENT_KIND, SCHEDULING_KIND, assignmentState, schedulingState,
+  slotAwaitsMyConfirmation, slotStatusLabel, formatPeriod,
+} from "./features/reading/planning.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -91,25 +95,29 @@ async function renderMember() {
 
   // すべてのグループの開催回を集め、日付の近い順に並べる。
   const sessions = [];
-  for (const group of groups.items) {
+  await mapLimited(groups.items, FETCH_CONCURRENCY, async (group) => {
     try {
       const list = await api.sessions(group.id);
       for (const s of list.items) sessions.push({ ...s, group });
     } catch (err) {
       console.error(err);
     }
-  }
+  });
   sessions.sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
 
-  // 詳細は最大8件まで取る（MVPの件数なら全部に届く）。
+  // 詳細は全件取る（黙って一部だけに絞らない）。同時fetchは絞る。
   const details = new Map();
-  for (const s of sessions.slice(0, 8)) {
+  await mapLimited(sessions, FETCH_CONCURRENCY, async (s) => {
     try {
       details.set(s.id, await api.session(s.id));
     } catch (err) {
       console.error(err);
     }
-  }
+  });
+
+  // 全所属グループの未完了book slot（実セッション作成前を含む）を状態別に集める。
+  // メンバーIDはグループごとに別なので、グループごとの current_member_id を使う。
+  const bookSlots = await loadIncompleteBookSlots(groups.items);
 
   // 一番上に置くのは「あなたが返事をする1件」。
   // 依頼が無ければ直近の会を出す。確定済みでも、何がどうなったかを帯で読めるようにする。
@@ -133,9 +141,169 @@ async function renderMember() {
     $("member"),
     availabilityNotice(),
     headline ? renderHeadline(headline) : nothingToDo(),
-    renderList(sessions, details, headline?.session.id),
+    renderIncompleteBookSlots(bookSlots),
+    renderList(sessions, details, headline?.session.id, bookSlots.coveredSessionIds),
     headline ? renderAgentPanels(headline.detail) : null,
     renderGroups(groups.items, sessions),
+  );
+}
+
+const FETCH_CONCURRENCY = 4;
+
+/** 同時fetchの数を絞りつつ、件数を黙って切り詰めない。 */
+async function mapLimited(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const idx = next++;
+      results[idx] = await fn(items[idx], idx);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+/** 全所属グループの、完了していないbook slotを集める。取得できなかった箇所は空一覧に見せず記録する。 */
+async function loadIncompleteBookSlots(groups) {
+  const rows = [];
+  const failedGroups = [];
+  const failedBooks = [];
+  const coveredSessionIds = new Set();
+
+  await mapLimited(groups, FETCH_CONCURRENCY, async (group) => {
+    let books, groupDetail;
+    try {
+      [books, groupDetail] = await Promise.all([
+        api.books(group.id).then((r) => r.items),
+        api.group(group.id).catch(() => null),
+      ]);
+    } catch (err) {
+      console.error(err);
+      failedGroups.push(group);
+      return;
+    }
+    const members = groupDetail?.members ?? [];
+    await mapLimited(books, FETCH_CONCURRENCY, async (book) => {
+      let bookDetail;
+      try {
+        bookDetail = await api.book(group.id, book.id);
+      } catch (err) {
+        console.error(err);
+        failedBooks.push({ group, book });
+        return;
+      }
+      const sections = new Map(bookDetail.book.sections.map((s) => [s.id, s.title]));
+      for (const slot of bookDetail.sessions) {
+        if (slot.session) coveredSessionIds.add(slot.session.id);
+        if (slot.status === "completed") continue;
+        rows.push({ group, members, book: bookDetail.book, sections, slot, bucket: slotBucket(slot, group.current_member_id) });
+      }
+    });
+  });
+
+  return { rows, failedGroups, failedBooks, coveredSessionIds };
+}
+
+const BUCKET_ORDER = ["mine", "attention", "scheduling", "confirmed", "waiting"];
+const BUCKET_LABEL = {
+  mine: "自分の回答待ち",
+  attention: "要確認・管理者判断待ち",
+  scheduling: "日程調整中",
+  confirmed: "日時確定・実施待ち",
+  waiting: "調整開始待ち",
+};
+
+/** 固定の優先順で1つのバケツに分ける（重複表示しない）。 */
+function slotBucket(slot, me) {
+  const assignment = assignmentState(slot);
+  const scheduling = schedulingState(slot);
+  const myTurn = (!!me && slot.assignee_member_id === me && assignment.kind === ASSIGNMENT_KIND.unanswered)
+    || (!!me && slot.proposed_assignee_member_id === me && slot.assignment_status === "change_proposed")
+    || slotAwaitsMyConfirmation(slot, me);
+  if (myTurn) return "mine";
+  if (assignment.kind === ASSIGNMENT_KIND.unknown
+    || assignment.kind === ASSIGNMENT_KIND.changeRequested
+    || assignment.kind === ASSIGNMENT_KIND.replacementPending
+    || scheduling.kind === SCHEDULING_KIND.unknown
+    || scheduling.kind === SCHEDULING_KIND.needsAttention
+    || slot.assignee_confirmation_status === "needs_owner") {
+    return "attention";
+  }
+  if (scheduling.kind === SCHEDULING_KIND.collecting || scheduling.kind === SCHEDULING_KIND.proposing) return "scheduling";
+  if (scheduling.kind === SCHEDULING_KIND.confirmed) return "confirmed";
+  return "waiting";
+}
+
+/** ホーム最上部の1件の下に、全グループの未完了book slotを状態別に一覧する。 */
+function renderIncompleteBookSlots({ rows, failedGroups, failedBooks }) {
+  const buckets = new Map(BUCKET_ORDER.map((k) => [k, []]));
+  for (const row of rows) buckets.get(row.bucket).push(row);
+  for (const list of buckets.values()) {
+    list.sort((a, b) => (a.slot.period_start ?? "").localeCompare(b.slot.period_start ?? ""));
+  }
+  const hasRows = rows.length > 0;
+  const hasFailures = failedGroups.length > 0 || failedBooks.length > 0;
+  if (!hasRows && !hasFailures) return null;
+
+  const failureNames = [
+    ...failedGroups.map((g) => `${g.name}のブック一覧`),
+    ...failedBooks.map(({ group, book }) => `${group.name}の${book.title}`),
+  ];
+
+  return el(
+    "section",
+    { class: "section" },
+    el("div", { class: "section__head" }, el("h2", {}, "未完了のブック枠")),
+    hasFailures
+      ? el(
+          "div",
+          { class: "notice", "data-tone": "warn", role: "status" },
+          el("span", { class: "notice__mark", "aria-hidden": "true" }, "!"),
+          el("span", {}, el("strong", {}, "一部を取得できませんでした"), el("small", {}, `${failureNames.join("、")}は表示できていません。`)),
+        )
+      : null,
+    hasRows
+      ? el("div", { class: "book-slot-buckets" }, BUCKET_ORDER.filter((k) => buckets.get(k).length).map((k) => renderBookSlotBucket(k, buckets.get(k))))
+      : (hasFailures ? null : placeholder("未完了のブック枠はありません", "ブックを登録すると、ここに並びます。")),
+  );
+}
+
+function renderBookSlotBucket(key, rows) {
+  return el(
+    "div",
+    { class: "book-slot-bucket" },
+    el("h3", {}, BUCKET_LABEL[key], el("span", { class: "stamp" }, String(rows.length))),
+    el("div", { class: "rows" }, rows.map((row) => renderBookSlotRow(row))),
+  );
+}
+
+function renderBookSlotRow({ group, members, book, sections, slot }) {
+  const assignment = assignmentState(slot);
+  const scheduling = schedulingState(slot);
+  const href = slot.session
+    ? `/session.html?id=${encodeURIComponent(slot.session.id)}`
+    : `/book.html?group_id=${encodeURIComponent(group.id)}&id=${encodeURIComponent(book.id)}`;
+  const when = slot.session?.schedule_status === "confirmed" && slot.session.starts_at
+    ? formatDateTime(slot.session.starts_at)
+    : formatPeriod(slot.period_start, slot.period_end);
+  const assignee = slot.assignee_member_id
+    ? `${memberName(members, slot.assignee_member_id)}${slot.assignee_member_id === group.current_member_id ? "（あなた）" : ""}`
+    : "未定";
+  const targets = (slot.target_section_ids ?? slot.covered_section_ids ?? []).map((id) => sections.get(id) ?? id).join("、") || "未定";
+  const warn = assignment.kind === ASSIGNMENT_KIND.unknown || scheduling.kind === SCHEDULING_KIND.unknown;
+
+  return el(
+    "a",
+    { class: "row", href },
+    el("span", { class: "row__date" }, when),
+    el(
+      "span",
+      { class: "row__main" },
+      el("span", { class: "row__title" }, `${group.name}・${book.title}・第${slot.sequence_number}回`),
+      el("span", { class: "row__meta" }, `対象章：${targets}／担当：${assignee}／${slotStatusLabel(slot.status)}`),
+    ),
+    el("span", { class: "row__state", "data-tone": warn ? "warn" : null }, `${assignment.label}／${scheduling.label}`),
   );
 }
 
@@ -385,8 +553,9 @@ function nothingToDo() {
   );
 }
 
-function renderList(sessions, details, excludeId) {
-  const rows = sessions.filter((s) => s.id !== excludeId);
+function renderList(sessions, details, excludeId, coveredSessionIds) {
+  // ブック由来のセッションは、上の「未完了のブック枠」ですでに出しているので、ここでは重複させない。
+  const rows = sessions.filter((s) => s.id !== excludeId && !coveredSessionIds?.has(s.id));
   return el(
     "section",
     { class: "section" },

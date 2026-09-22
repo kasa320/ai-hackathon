@@ -205,7 +205,10 @@ func TestSessionDateAndAssigneeConfirmationTimeline(t *testing.T) {
 			t.Fatalf("担当以外が発表者になっている: %+v", plan)
 		}
 	}
-	h.mustRespond(assignee, "assignment", "accept")
+	// ブック側で担当を承認済みなので、開催回側で重複して担当引き受けを求めない。
+	if tk := h.openTask(assignee, "assignment"); tk != nil {
+		t.Fatalf("担当固定セッションで重複した担当引き受けタスクができている: %+v", tk)
+	}
 	for _, name := range []string{"A", "B", "C", "D"} {
 		h.mustRespond(name, "approval", "approve")
 	}
@@ -291,7 +294,9 @@ func TestAssigneeChangeAtFinalCheckNeedsCandidateApproval(t *testing.T) {
 		h.mustPrep(name, "attending", weeklyAll())
 	}
 	h.process()
-	h.mustRespond(assignee, "assignment", "accept")
+	if tk := h.openTask(assignee, "assignment"); tk != nil {
+		t.Fatalf("担当固定セッションで重複した担当引き受けタスクができている: %+v", tk)
+	}
 	for _, name := range []string{"A", "B", "C", "D"} {
 		h.mustRespond(name, "approval", "approve")
 	}

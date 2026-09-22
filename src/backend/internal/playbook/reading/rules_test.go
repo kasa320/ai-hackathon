@@ -276,6 +276,42 @@ func TestApprovalRequirements(t *testing.T) {
 		}
 	})
 
+	t.Run("担当が固定されたブック由来セッションでは担当引き受けを重複して求めない", func(t *testing.T) {
+		fixed := strings.Replace(sessionJSON, `"target_section_ids": ["sec_2", "sec_3"]`, `"target_section_ids": ["sec_2", "sec_3"], "assignee_member_id": "mem_b"`, 1)
+		s := baseSnapshot()
+		s.SessionData = json.RawMessage(fixed)
+		req, err := pb.ApprovalRequirements(ctx, s, coord.Proposal{ChangeKind: coord.ChangeInitial, Data: json.RawMessage(initialPlanJSON)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(req.RequiredAcceptorIDs) != 0 {
+			t.Fatalf("担当固定セッションで重複して引き受けを求めている: %+v", req.RequiredAcceptorIDs)
+		}
+		if len(req.Approvals) != 1 || req.Approvals[0].Kind != coord.ApprovalAll {
+			t.Fatalf("同意の要件は変わらないはず: %+v", req.Approvals)
+		}
+
+		s = withConfirmed(s, initialPlanJSON)
+		req, err = pb.ApprovalRequirements(ctx, s, coord.Proposal{ChangeKind: coord.ChangeReplan, Data: json.RawMessage(initialPlanJSON)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(req.RequiredAcceptorIDs) != 0 || len(req.Approvals) != 0 {
+			t.Fatalf("担当固定・内容据え置きの再計画は無条件で成立するはず: %+v", req)
+		}
+	})
+
+	t.Run("担当が固定されていない旧方式・手動セッションでは従来どおり担当引き受けを求める", func(t *testing.T) {
+		s := baseSnapshot() // sessionJSON に assignee_member_id は無い
+		req, err := pb.ApprovalRequirements(ctx, s, coord.Proposal{ChangeKind: coord.ChangeInitial, Data: json.RawMessage(initialPlanJSON)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(req.RequiredAcceptorIDs, []string{"mem_b"}) {
+			t.Fatalf("旧方式では担当引き受けを維持すべき: %+v", req.RequiredAcceptorIDs)
+		}
+	})
+
 	t.Run("時間配分の変更は参加予定者全員の同意", func(t *testing.T) {
 		s := withConfirmed(baseSnapshot(), initialPlanJSON)
 		changed := strings.Replace(strings.Replace(initialPlanJSON, `"minutes": 30`, `"minutes": 25`, 1), `"minutes": 15}
