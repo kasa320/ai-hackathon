@@ -1,4 +1,4 @@
-.agent/kasa/refs/
+.agent/
 # ローカル環境
 .env
 bin/
