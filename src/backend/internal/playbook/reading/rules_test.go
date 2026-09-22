@@ -280,6 +280,7 @@ func TestApprovalRequirements(t *testing.T) {
 		fixed := strings.Replace(sessionJSON, `"target_section_ids": ["sec_2", "sec_3"]`, `"target_section_ids": ["sec_2", "sec_3"], "assignee_member_id": "mem_b"`, 1)
 		s := baseSnapshot()
 		s.SessionData = json.RawMessage(fixed)
+		s.PreapprovedAssigneeMemberID = "mem_b"
 		req, err := pb.ApprovalRequirements(ctx, s, coord.Proposal{ChangeKind: coord.ChangeInitial, Data: json.RawMessage(initialPlanJSON)})
 		if err != nil {
 			t.Fatal(err)
@@ -298,6 +299,19 @@ func TestApprovalRequirements(t *testing.T) {
 		}
 		if len(req.RequiredAcceptorIDs) != 0 || len(req.Approvals) != 0 {
 			t.Fatalf("担当固定・内容据え置きの再計画は無条件で成立するはず: %+v", req)
+		}
+	})
+
+	t.Run("手動で担当IDを入れても本人の引き受けを省略しない", func(t *testing.T) {
+		fixed := strings.Replace(sessionJSON, `"target_section_ids": ["sec_2", "sec_3"]`, `"target_section_ids": ["sec_2", "sec_3"], "assignee_member_id": "mem_b"`, 1)
+		s := baseSnapshot()
+		s.SessionData = json.RawMessage(fixed)
+		req, err := pb.ApprovalRequirements(ctx, s, coord.Proposal{ChangeKind: coord.ChangeInitial, Data: json.RawMessage(initialPlanJSON)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(req.RequiredAcceptorIDs, []string{"mem_b"}) {
+			t.Fatalf("ブック枠で承認を確認できない担当を省略した: %+v", req.RequiredAcceptorIDs)
 		}
 	})
 

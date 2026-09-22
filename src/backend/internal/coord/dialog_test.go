@@ -116,6 +116,20 @@ func TestDialogKeepsUntouchedValues(t *testing.T) {
 	_ = d
 }
 
+func TestRestartDialogAsksFromAttendanceWithSavedValues(t *testing.T) {
+	h := newHarness(t, nil)
+	h.createSession()
+	h.mustPrep("B", "attending", prepData(true))
+
+	res, err := h.c.RestartDialog(ctx, h.users["B"], h.sess)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Ready || res.State.Pending != coord.SlotAttendance {
+		t.Fatalf("保存済みでも最初の質問からやり直すべき: %+v", res.State)
+	}
+}
+
 // 表示した下書きより保存済みの状態が新しければ、古い値で保存しない。
 func TestDialogRejectsStaleRevision(t *testing.T) {
 	h := newHarness(t, nil)
@@ -171,6 +185,74 @@ func (s stubInterpreter) Interpret(c context.Context, req coord.InterpretRequest
 		return coord.Interpretation{}, coord.Usage{}, coord.ErrInvalidOutput
 	}
 	return s.out, coord.Usage{}, nil
+}
+
+type panicInterpreter struct{}
+
+func (panicInterpreter) Interpret(context.Context, coord.InterpretRequest) (coord.Interpretation, coord.Usage, error) {
+	panic("選択式の参加可否で解釈器を呼んだ")
+}
+
+func TestSetDialogAttendanceDoesNotCallInterpreter(t *testing.T) {
+	h := newHarnessWith(t, nil, panicInterpreter{})
+	h.createPeriodSession()
+	res, err := h.c.StartDialog(ctx, h.users["B"], h.sess)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err = h.c.SetDialogAttendance(ctx, h.users["B"], res.State, coord.AttendanceAttending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Ready || res.State.Pending != "schedule" {
+		t.Fatalf("参加後は日時条件を聞くべき: %+v", res.State)
+	}
+
+	res, err = h.c.SetDialogAttendance(ctx, h.users["B"], res.State, coord.AttendanceAbsent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Ready || res.State.Attendance != coord.AttendanceAbsent {
+		t.Fatalf("欠席後は確認へ進むべき: %+v", res.State)
+	}
+}
+
+func TestDialogWeeklyScheduleUpdatesStandingAvailabilityAfterConfirmation(t *testing.T) {
+	out := coord.Interpretation{
+		Attendance: "attending",
+		Data:       scheduleData("provided", 3, "19:00", "22:00"),
+		Unclear:    []string{},
+	}
+	h := newHarnessWith(t, nil, stubInterpreter{out: out})
+	h.createPeriodSession()
+	res, err := h.c.StartDialog(ctx, h.users["B"], h.sess)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err = h.c.SetDialogAttendance(ctx, h.users["B"], res.State, coord.AttendanceAttending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err = h.c.ContinueDialog(ctx, h.users["B"], res.State, "毎週水曜の19時から22時")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Ready || !res.State.UpdateWeeklyAvailability {
+		t.Fatalf("明示した週間予定が更新対象になっていない: %+v", res.State)
+	}
+	if got, _ := h.c.WeeklyAvailability(ctx, h.users["B"]); len(got.Windows) != 0 {
+		t.Fatalf("確認前に普段の空き時間を保存した: %+v", got)
+	}
+	if _, err := h.c.SaveDialogPreparation(ctx, h.users["B"], res.State, nil); err != nil {
+		t.Fatal(err)
+	}
+	got, err := h.c.WeeklyAvailability(ctx, h.users["B"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Windows) != 1 || got.Windows[0].Weekday != 3 || got.Windows[0].Start != "19:00" || got.Windows[0].End != "22:00" {
+		t.Fatalf("普段の空き時間 = %+v", got.Windows)
+	}
 }
 
 // AI の出力は形と項目をサーバーが検証する。矛盾した候補から確認へ進めない。

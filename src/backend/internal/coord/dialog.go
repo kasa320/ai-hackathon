@@ -40,6 +40,9 @@ type DialogState struct {
 	Unclear []string
 	// Pending はいま聞いている項目名。
 	Pending string
+	// UpdateWeeklyAvailability は、この対話で本人が毎週の曜日・時間帯を明示したこと。
+	// 保存時に参加条件と同じトランザクションで普段の空き時間も全置換する。
+	UpdateWeeklyAvailability bool
 }
 
 // DialogResult は1ターンの結果。Bot の発話はこの値からプログラムが組み立てる。
@@ -99,6 +102,15 @@ func (c *Coordinator) PreparationTargets(ctx context.Context, userID string) ([]
 // StartDialog は保存済みの参加条件と版を同じスナップショットから読み、会話の初期状態を作る。
 // 保存済みの値があればそれを初期値とし、未登録なら全項目を未確定にする。
 func (c *Coordinator) StartDialog(ctx context.Context, userID, sessionID string) (DialogResult, error) {
+	return c.startDialog(ctx, userID, sessionID, false)
+}
+
+// RestartDialog は未保存の途中経過を捨て、保存済みの値を初期値にしつつ最初の質問から聞き直す。
+func (c *Coordinator) RestartDialog(ctx context.Context, userID, sessionID string) (DialogResult, error) {
+	return c.startDialog(ctx, userID, sessionID, true)
+}
+
+func (c *Coordinator) startDialog(ctx context.Context, userID, sessionID string, restart bool) (DialogResult, error) {
 	var out DialogResult
 	err := c.st.Tx(ctx, func(tx *store.Tx) error {
 		sess, m, err := c.access(ctx, tx, userID, sessionID)
@@ -122,8 +134,12 @@ func (c *Coordinator) StartDialog(ctx context.Context, userID, sessionID string)
 		}
 		st := DialogState{SessionID: sess.ID, Revision: sess.Revision}
 		if p, ok := preps[m.ID]; ok {
-			// 保存済みの値はすべて確定扱い。触れなかった項目はそのまま残る。
+			// 通常開始では保存済みの値を確定扱いにする。明示的なやり直しでは値を
+			// 初期値として残しつつ、必須項目を最初から聞き直す。
 			st.Attendance, st.Data, st.Unclear = p.Attendance, p.Data, []string{}
+			if restart {
+				st.Unclear = allSlots(pi)
+			}
 			st.Data, st.Unclear, err = pi.ValidatePartialPreparation(ctx, snap, st.Attendance, st.Data, st.Unclear)
 			if err != nil {
 				return err
@@ -202,8 +218,23 @@ func (c *Coordinator) ContinueDialog(ctx context.Context, userID string, st Dial
 		return out, apperr.New(apperr.TemporarilyUnavailable, "発言から項目を取り出せませんでした。もう一度、短く書いてください。")
 	}
 
-	next := DialogState{SessionID: st.SessionID, Revision: st.Revision, Attendance: res.Attendance, Data: data, Unclear: unclear}
-	progressed := next.Attendance != st.Attendance || !jsonEqual(next.Data, st.Data) || !sameStrings(next.Unclear, st.Unclear)
+	updateWeekly := st.UpdateWeeklyAvailability
+	if res.Attendance == AttendanceAbsent {
+		updateWeekly = false
+	} else if st.Pending != "" && st.Pending != SlotAttendance {
+		if ext, ok := pi.(WeeklyAvailabilityExtractor); ok {
+			_, updateWeekly, err = ext.ExtractWeeklyAvailability(data)
+			if err != nil {
+				return out, err
+			}
+		}
+	}
+	next := DialogState{
+		SessionID: st.SessionID, Revision: st.Revision, Attendance: res.Attendance, Data: data, Unclear: unclear,
+		UpdateWeeklyAvailability: updateWeekly,
+	}
+	progressed := next.Attendance != st.Attendance || !jsonEqual(next.Data, st.Data) || !sameStrings(next.Unclear, st.Unclear) ||
+		next.UpdateWeeklyAvailability != st.UpdateWeeklyAvailability
 	out, err = c.dialogResult(ctx, pi, snap, next, progressed)
 	// AI が書いた聞き直しの文があれば、整えてから既定の文の代わりに使う
 	if err == nil && out.Question != "" {
@@ -212,6 +243,50 @@ func (c *Coordinator) ContinueDialog(ctx context.Context, userID string, st Dial
 		}
 	}
 	return out, err
+}
+
+// SetDialogAttendance は選択ボタンで参加可否だけを更新する。選択式回答ではLLMを呼ばない。
+func (c *Coordinator) SetDialogAttendance(ctx context.Context, userID string, st DialogState, attendance string) (DialogResult, error) {
+	if attendance != AttendanceAttending && attendance != AttendanceAbsent {
+		return DialogResult{}, apperr.Validation(apperr.Field{Path: "attendance", Message: "attending または absent を指定してください"})
+	}
+	var (
+		snap Snapshot
+		pi   PreparationInterpreter
+	)
+	if err := c.st.Tx(ctx, func(tx *store.Tx) error {
+		sess, _, err := c.access(ctx, tx, userID, st.SessionID)
+		if err != nil {
+			return err
+		}
+		if err := checkNotStarted(sess, c.now()); err != nil {
+			return err
+		}
+		pi, err = c.preparationInterpreter(sess.PlaybookID)
+		if err != nil {
+			return err
+		}
+		snap, err = c.snapshot(ctx, tx, sess, nil)
+		return err
+	}); err != nil {
+		return DialogResult{}, err
+	}
+	unclear := make([]string, 0, len(st.Unclear))
+	for _, slot := range st.Unclear {
+		if slot == SlotAttendance {
+			continue
+		}
+		unclear = append(unclear, slot)
+	}
+	data, unclear, err := pi.ValidatePartialPreparation(ctx, snap, attendance, st.Data, unclear)
+	if err != nil {
+		return DialogResult{}, err
+	}
+	next := DialogState{
+		SessionID: st.SessionID, Revision: st.Revision, Attendance: attendance, Data: data, Unclear: unclear,
+		UpdateWeeklyAvailability: st.UpdateWeeklyAvailability && attendance == AttendanceAttending,
+	}
+	return c.dialogResult(ctx, pi, snap, next, true)
 }
 
 // dialogResult は状態から次の質問または確認表示を決める。質問は用途の既定の文で、
@@ -226,6 +301,9 @@ func (c *Coordinator) dialogResult(ctx context.Context, pi PreparationInterprete
 			out.State.Data, out.State.Pending = data, ""
 			out.Ready = true
 			out.Confirm = preparationDiff(pi, snap, nil, Preparation{Attendance: st.Attendance, Data: data})
+			if st.UpdateWeeklyAvailability {
+				out.Confirm = append(out.Confirm, "普段の空き時間：今回入力した毎週の曜日・時間帯で全置換")
+			}
 			return out, nil
 		}
 		var v *ValidationError
@@ -251,7 +329,10 @@ func (c *Coordinator) SaveDialogPreparation(ctx context.Context, userID string, 
 	rev := st.Revision
 	in := apitypes.PutPreparationInput{
 		ExpectedRevision: &rev,
-		Preparation:      &apitypes.Preparation{Attendance: st.Attendance, Data: st.Data},
+		Preparation: &apitypes.Preparation{
+			Attendance: st.Attendance, Data: st.Data,
+			UpdateWeeklyAvailability: st.UpdateWeeklyAvailability,
+		},
 	}
 	return c.putPreparation(ctx, userID, st.SessionID, in, idem, EntryDiscord)
 }

@@ -221,6 +221,12 @@ func (t *Tx) ReadingBookSlots(ctx context.Context, bookID string) ([]ReadingBook
 	return scanSlots(rows)
 }
 
+// ReadingBookSlotBySession returns the trusted book slot linked to a real session.
+// Session JSON alone is not proof that its assignee was approved in the book flow.
+func (t *Tx) ReadingBookSlotBySession(ctx context.Context, sessionID string) (ReadingBookSlot, error) {
+	return scanSlot(t.row(ctx, "SELECT "+slotCols+" FROM reading_book_slots WHERE session_id = ?", sessionID))
+}
+
 func scanSlots(rows *sql.Rows) ([]ReadingBookSlot, error) {
 	var out []ReadingBookSlot
 	for rows.Next() {

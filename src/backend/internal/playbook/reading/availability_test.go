@@ -123,6 +123,63 @@ func TestDateOverrideAndRejectedDate(t *testing.T) {
 	}
 }
 
+func TestDateOnlyExceptionOverridesThatDateAndKeepsStandingOnOtherDates(t *testing.T) {
+	s := baseSnapshot()
+	s.Now = time.Date(2026, 9, 19, 9, 0, 0, 0, time.UTC)
+	s.ScheduleStatus, s.PeriodStart, s.PeriodEnd = coord.ScheduleProposed, "2026-09-20", "2026-09-30"
+	for i := range s.Members {
+		s.Members[i].Standing = &coord.StandingAvailability{
+			Timezone: "Asia/Tokyo",
+			Windows:  []coord.StandingWindow{{Weekday: 3, StartMinute: 20 * 60, EndMinute: 22 * 60}},
+		}
+	}
+	// D は 9/23（水）だけ 10:00〜11:00 に置換する。週間枠は明示していないため、
+	// それ以外の水曜は登録済みの普段枠 20:00〜22:00 を引き続き使う。
+	changeAvailability(t, &s, "mem_d", func(d *reading.PreparationData) {
+		d.Schedule = &reading.ScheduleAvailability{
+			Status:        "provided",
+			WeeklyWindows: []reading.WeeklyWindow{},
+			DateWindows:   []reading.DateWindow{{Date: "2026-09-23", Start: "10:00", End: "11:00"}},
+		}
+	})
+
+	draft, err := reading.New().DraftPlan(context.Background(), s)
+	if err != nil || draft.Kind != coord.DraftProposal {
+		t.Fatalf("日付例外のない日は普段枠を使って提案できるべき: %+v %v", draft, err)
+	}
+	var plan reading.PlanData
+	if err := json.Unmarshal(draft.Plan, &plan); err != nil {
+		t.Fatal(err)
+	}
+	if plan.StartsAt != "2026-09-30T20:00:00+09:00" {
+		t.Fatalf("日付例外が他の日の普段枠まで消している: %s", plan.StartsAt)
+	}
+}
+
+func TestExplicitSessionWeeklyWindowsReplaceStandingAvailability(t *testing.T) {
+	s := baseSnapshot()
+	s.Now = time.Date(2026, 9, 19, 9, 0, 0, 0, time.UTC)
+	s.ScheduleStatus, s.PeriodStart, s.PeriodEnd = coord.ScheduleProposed, "2026-09-20", "2026-09-30"
+	for i := range s.Members {
+		s.Members[i].Standing = &coord.StandingAvailability{
+			Timezone: "Asia/Tokyo",
+			Windows:  []coord.StandingWindow{{Weekday: 3, StartMinute: 20 * 60, EndMinute: 22 * 60}},
+		}
+	}
+	// D がこの回で木曜を明示した場合、D の普段の水曜枠をマージしてはいけない。
+	changeAvailability(t, &s, "mem_d", func(d *reading.PreparationData) {
+		d.Schedule = &reading.ScheduleAvailability{
+			Status:        "provided",
+			WeeklyWindows: []reading.WeeklyWindow{{Weekday: 4, Start: "20:00", End: "22:00"}},
+			DateWindows:   []reading.DateWindow{},
+		}
+	})
+
+	if draft, err := reading.New().DraftPlan(context.Background(), s); err != nil || draft.Kind == coord.DraftProposal {
+		t.Fatalf("明示週間枠とstandingを誤ってマージした: %+v %v", draft, err)
+	}
+}
+
 func TestAvailabilityRejectsUntrustedShapes(t *testing.T) {
 	pb := reading.New()
 	s := scheduledSnapshot(t)

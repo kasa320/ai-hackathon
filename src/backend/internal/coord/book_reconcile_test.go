@@ -62,11 +62,18 @@ func TestExistingDuplicateAssignmentTaskIsReconciled(t *testing.T) {
 			return err
 		}
 		taskID = store.NewID("task")
-		return tx.CreateTask(ctx, store.Task{
+		if err := tx.CreateTask(ctx, store.Task{
 			ID: taskID, SessionID: h.sess, CaseID: p.CaseID, MemberID: assigneeID,
 			Kind: store.TaskAssignment, Status: store.TaskOpen, Title: "担当を引き受けられるか回答してください。",
 			DueAt: cs.UpdatedAt.Add(24 * time.Hour), ProposalID: p.ID, ProposalVersion: p.Version,
 			RequestedBy: "system", CreatedAt: cs.UpdatedAt,
+		}); err != nil {
+			return err
+		}
+		return tx.EnqueueNotification(ctx, store.Notification{
+			ID: store.NewID("ntf"), SessionID: h.sess, CaseID: p.CaseID,
+			Kind: "task_requested", DedupeKey: "task:" + taskID, Content: "担当を引き受けられますか。",
+			CreatedAt: cs.UpdatedAt,
 		})
 	}); err != nil {
 		t.Fatal(err)
@@ -99,10 +106,43 @@ func TestExistingDuplicateAssignmentTaskIsReconciled(t *testing.T) {
 	if got.AssignmentStatus != "accepted" {
 		t.Fatalf("担当を勝手に承認扱いにせず、ブック側の状態を保つべき: %s", got.AssignmentStatus)
 	}
+	for _, n := range h.notifications() {
+		if n.DedupeKey == "task:"+taskID && n.Status != store.NotifyCancelled {
+			t.Fatalf("無効化したタスクの未送信通知が残っている: %+v", n)
+		}
+	}
 
 	// 古いタスク（無効化済み・案は既に確定済み）への回答は拒否される。
 	in := apitypes.TaskResponseInput{Decision: "accept", ProposalID: &propID, ProposalVersion: &det.CurrentProposal.Version}
 	if _, err := h.c.RespondTask(ctx, h.users[assignee], taskID, in, nil); code(err) != apperr.ProposalSuperseded {
 		t.Fatalf("無効化済みタスクへの回答 = %v", err)
+	}
+}
+
+func TestManualSessionCannotForgePreapprovedAssignee(t *testing.T) {
+	h := newHarness(t, nil)
+	var data map[string]any
+	if err := json.Unmarshal([]byte(sessionData), &data); err != nil {
+		t.Fatal(err)
+	}
+	data["assignee_member_id"] = h.groupMemberID("B")
+	raw, err := json.Marshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := h.c.CreateSession(ctx, h.users["A"], h.group, apitypes.CreateSessionInput{
+		PlaybookID: "reading", Title: "手動開催回", StartsAt: t0.Add(50 * time.Hour).Format(time.RFC3339),
+		DurationMinutes: 60, Data: raw,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var created apitypes.SessionCreated
+	decode(t, res.Body, &created)
+	h.sess = created.Session.ID
+	h.allPrepared()
+	h.process()
+	if tk := h.openTask("B", store.TaskAssignment); tk == nil {
+		t.Fatal("ブック枠と紐付かない手動開催回が、本人の担当承認を省略した")
 	}
 }

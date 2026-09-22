@@ -242,6 +242,13 @@ func (c *Coordinator) snapshot(ctx context.Context, tx *store.Tx, sess store.Ses
 		SessionData:     sess.Data,
 		Case:            CaseContext{DeclinedMemberIDs: []string{}, WithdrawnMemberIDs: []string{}, AskedMemberIDs: []string{}},
 	}
+	if slot, err := tx.ReadingBookSlotBySession(ctx, sess.ID); err == nil {
+		if slot.AssignmentStatus == store.AssignAccepted {
+			s.PreapprovedAssigneeMemberID = slot.AssigneeMemberID
+		}
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return s, err
+	}
 	members, err := tx.SessionMembers(ctx, sess.ID)
 	if err != nil {
 		return s, err

@@ -114,3 +114,22 @@ func TestNotifyActionConsumeAfterExpiryFails(t *testing.T) {
 		t.Fatal("期限切れのアクションが消費できてしまった")
 	}
 }
+
+func TestResetDeletesNotifyActionsBeforeUsers(t *testing.T) {
+	st := openTest(t)
+	now := time.Date(2026, 9, 22, 0, 0, 0, 0, time.UTC)
+	var user store.User
+	if err := st.Tx(ctx, func(tx *store.Tx) error {
+		var err error
+		user, err = tx.UpsertUser(ctx, "123456789012345678", "A", now)
+		if err != nil {
+			return err
+		}
+		return tx.InsertNotifyAction(ctx, store.NotifyAction{ID: "nact_reset", UserID: user.ID, Kind: "weekly_prompt", Ref: json.RawMessage(`{}`), Decisions: json.RawMessage(`["start"]`), ExpiresAt: now.Add(time.Hour), CreatedAt: now})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Tx(ctx, func(tx *store.Tx) error { return tx.Reset(ctx) }); err != nil {
+		t.Fatalf("Reset: %v", err)
+	}
+}

@@ -421,12 +421,12 @@ func (Playbook) ApprovalRequirements(_ context.Context, s coord.Snapshot, prop c
 		return coord.ApprovalRequirements{}, err
 	}
 	req := coord.ApprovalRequirements{Approvals: []coord.ApprovalRequirement{}}
-	if sd.AssigneeMemberID == "" {
-		// 旧方式・手動セッション（担当が固定されていない）だけ、本人の引き受けタスクを作る。
+	if sd.AssigneeMemberID == "" || s.PreapprovedAssigneeMemberID != sd.AssigneeMemberID {
+		// DB上のブック枠で本人承認済みと確認できない場合は、手動で
+		// assignee_member_id を入れた開催回も含め、本人の引き受けを必須にする。
 		req.RequiredAcceptorIDs = nonNil(p.presenters())
 	}
-	// AssigneeMemberID がある場合、ValidatePlan が担当者をその人に固定するので、
-	// ここでは重複して担当引き受けを求めない（reading_book_slots.assignment_status が唯一の担当承認）。
+	// DBで本人承認済みのブック由来開催回だけ、重複した引き受けを求めない。
 	switch prop.ChangeKind {
 	case coord.ChangeInitial:
 		req.Approvals = append(req.Approvals, coord.ApprovalRequirement{

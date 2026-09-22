@@ -115,17 +115,20 @@ type Snapshot struct {
 	StartsAt time.Time `json:"starts_at"`
 	// ScheduleStatus が proposed の間、StartsAt は仮の候補で、案が日時を決める。
 	// PeriodStart / PeriodEnd（YYYY-MM-DD）はその日時を選べる範囲。
-	ScheduleStatus  string              `json:"schedule_status"`
-	PeriodStart     string              `json:"period_start"`
-	PeriodEnd       string              `json:"period_end"`
-	DurationMinutes int                 `json:"duration_minutes"`
-	OwnerMemberID   string              `json:"owner_member_id"`
-	Members         []SnapshotMember    `json:"members"`
-	SessionData     json.RawMessage     `json:"session_data"`
-	Preparations    []MemberPreparation `json:"preparations"`
-	ConfirmedPlans  []PlanRecord        `json:"confirmed_plans"`
-	History         []PastSession       `json:"history"`
-	Case            CaseContext         `json:"case"`
+	ScheduleStatus  string           `json:"schedule_status"`
+	PeriodStart     string           `json:"period_start"`
+	PeriodEnd       string           `json:"period_end"`
+	DurationMinutes int              `json:"duration_minutes"`
+	OwnerMemberID   string           `json:"owner_member_id"`
+	Members         []SnapshotMember `json:"members"`
+	SessionData     json.RawMessage  `json:"session_data"`
+	// PreapprovedAssigneeMemberID は、reading_book_slots との関連と accepted 状態を
+	// 共通側がDBから確認した担当者。利用者入力の SessionData だけからは設定しない。
+	PreapprovedAssigneeMemberID string              `json:"-"`
+	Preparations                []MemberPreparation `json:"preparations"`
+	ConfirmedPlans              []PlanRecord        `json:"confirmed_plans"`
+	History                     []PastSession       `json:"history"`
+	Case                        CaseContext         `json:"case"`
 	// BusyIntervals は開催回のメンバーの別の確定済み予定。日時を決める案はこれと重ならない。
 	BusyIntervals []BusyInterval `json:"-"`
 }

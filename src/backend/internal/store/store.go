@@ -234,7 +234,7 @@ func (t *Tx) nextSeq(ctx context.Context, table string) (int64, error) {
 // Reset はすべての業務データを削除する（開発用の初期データ投入で使う）。
 func (t *Tx) Reset(ctx context.Context) error {
 	for _, table := range []string{
-		"idempotency", "llm_calls", "activity", "group_notifications", "notifications", "events", "tasks", "proposals", "cases",
+		"idempotency", "llm_calls", "activity", "group_notifications", "notifications", "notify_actions", "events", "tasks", "proposals", "cases",
 		"preparations", "session_members", "reading_slot_confirmations", "reading_book_log", "reading_book_slots", "reading_books", "sessions",
 		"reading_toc_lookups", "members", "groups", "user_weekly_availability",
 		"auth_sessions", "oauth_states", "users",

@@ -14,7 +14,7 @@ import (
 // 解釈は下書きだけを返し、保存は既存の PutWeeklyAvailability を呼ぶ。
 
 const (
-	msgWeeklyAsk      = "普段の空き時間を教えてください（例：「毎週水曜と金曜の19時から22時」）。この内容は今後の全ての回の候補づくりに使われます。"
+	msgWeeklyAsk      = "普段の空き時間をすべて教えてください（例：「毎週水曜と金曜の19時から22時」）。保存すると、現在の登録内容をこの内容ですべて置き換えます。"
 	msgWeeklyUnclear  = "うまく読み取れませんでした。曜日と時間帯をもう少しはっきり書いてください（例：「毎週水曜と金曜の19時から22時」）。"
 	msgWeeklySaved    = "普段の空き時間を保存しました。"
 	msgWeeklyNoDraft  = "この確認は古くなっています。もう一度、空き時間を送ってください。"
@@ -42,7 +42,7 @@ func (b *Bot) continueWeekly(ctx context.Context, channelID, userID string, us *
 	us.misses = 0
 	lines := weeklyLines(out.Availability.Windows)
 	draftID := newToken()
-	content := "普段の空き時間の下書きです。\n" + escapeLines(lines) + "\n\n合っていれば保存してください。違う内容にしたい場合は、もう一度送信し直してください。"
+	content := "普段の空き時間の下書きです。\n" + escapeLines(lines) + "\n\n保存すると現在の登録内容をすべて置き換えます。合っていれば保存してください。違う内容にしたい場合は、全体をもう一度送信してください。"
 	msg, err := b.sendComplex(ctx, channelID, content, weeklyButtons(draftID))
 	if err != nil {
 		b.log.Warn("週間空き時間の確認の送信に失敗")

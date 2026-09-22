@@ -49,13 +49,19 @@ func newHarnessWith(t *testing.T, planner coord.Planner, interpreter coord.Inter
 
 // newHarnessFull はブックの全体計画を作る処理も差し替えた一式を作る（nil なら規則だけの既定）。
 func newHarnessFull(t *testing.T, planner coord.Planner, interpreter coord.Interpreter, bookAgent coord.BookAgent) *harness {
+	return newHarnessFullWithPlaybook(t, planner, interpreter, bookAgent, readingPlaybook())
+}
+
+// newHarnessFullWithPlaybook は、失敗時の原子性など用途境界をまたぐテストでだけ
+// Playbook を差し替える。通常のテストは newHarnessFull を使う。
+func newHarnessFullWithPlaybook(t *testing.T, planner coord.Planner, interpreter coord.Interpreter, bookAgent coord.BookAgent, playbook coord.Playbook) *harness {
 	t.Helper()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
-	reg, err := coord.NewService(readingPlaybook())
+	reg, err := coord.NewService(playbook)
 	if err != nil {
 		t.Fatal(err)
 	}

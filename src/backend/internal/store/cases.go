@@ -315,8 +315,13 @@ func (t *Tx) TasksByCase(ctx context.Context, caseID string) ([]Task, error) {
 }
 
 // OpenTasksByKind は指定した種類の開いているタスクを全件返す（案件・開催回をまたぐ整合性チェック用）。
-func (t *Tx) OpenTasksByKind(ctx context.Context, kind string) ([]Task, error) {
-	return t.tasks(ctx, "kind = ? AND status = 'open'", kind)
+func (t *Tx) OpenAcceptedBookAssignmentTasks(ctx context.Context) ([]Task, error) {
+	return t.tasks(ctx, `kind = 'assignment' AND status = 'open' AND EXISTS (
+		SELECT 1 FROM reading_book_slots s
+		WHERE s.session_id = tasks.session_id
+		  AND s.assignment_status = 'accepted'
+		  AND s.assignee_member_id = tasks.member_id
+	)`)
 }
 
 // TasksByProposal は案に対するタスクを返す。

@@ -109,6 +109,12 @@ func (c *Coordinator) submitPreparation(ctx context.Context, tx *store.Tx, sess 
 	}
 
 	if in.UpdateWeeklyAvailability {
+		if in.Attendance != AttendanceAttending {
+			return store.Response{}, apperr.Validation(apperr.Field{
+				Path:    path + ".update_weekly_availability",
+				Message: "普段の空き時間は参加する場合だけ更新できます",
+			})
+		}
 		if err := c.replaceWeeklyAvailabilityFromPreparation(ctx, tx, pb, m.UserID, data, path, now); err != nil {
 			return store.Response{}, err
 		}

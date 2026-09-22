@@ -135,3 +135,15 @@ func TestResolveNotifyAction_PreparationStartChecksSessionAccess(t *testing.T) {
 	// 対象外の人は所属チェックで弾かれる（Dは対象の開催回のメンバーだが、他人のアクションIDは
 	// そもそも解決できない。ここでは対象を持たないEを想定する代わりに、別のアクションIDで確認する）。
 }
+
+func TestResolveNotifyAction_PreparationStartRejectsAnsweredTask(t *testing.T) {
+	h := newHarness(t, nil)
+	h.createSession()
+	caseID := h.detail("B").ActiveCase.ID
+	tk := h.openTask("B", "preparation")
+	actionID := notifyAction(t, h, caseID, "task:"+tk.ID, "start")
+	h.mustPrep("B", "attending", prepData(false))
+	if _, err := h.c.ResolveNotifyAction(ctx, h.users["B"], actionID, "start", nil); code(err) != apperr.InvalidState {
+		t.Fatalf("回答済みの参加条件依頼は拒否する: %v", err)
+	}
+}

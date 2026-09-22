@@ -106,11 +106,14 @@ func (b *Bot) handleMessage(ctx context.Context, m *discordgo.MessageCreate) {
 	case isCommand(text, "回答", "日程確認", "提案"):
 		b.replyTasks(ctx, m.ChannelID, user.ID, us)
 		return
-	case isCommand(text, "取消", "取り消し", "キャンセル", "やめる"):
+	case isCommand(text, "取消", "取り消し", "キャンセル", "やめる", "中断", "あとで"):
 		b.clearDraft(ctx, us)
 		b.clearWeeklyDraft(ctx, us)
-		us.weekly = nil
-		b.send(ctx, m.ChannelID, msgCanceled, nil)
+		us.conv, us.weekly = nil, nil
+		b.send(ctx, m.ChannelID, msgPaused, nil)
+		return
+	case isCommand(text, "分からない", "わからない", "最初から", "やり直し"):
+		b.restartDialog(ctx, m.ChannelID, user.ID, us)
 		return
 	case isCommand(text, "予定", "いまの予定", "今の予定", "確認"):
 		b.replyCurrent(ctx, m.ChannelID, user.ID, us)
@@ -148,6 +151,11 @@ func (b *Bot) handleMessage(ctx context.Context, m *discordgo.MessageCreate) {
 			return
 		}
 	}
+	if us.conv.state.Pending == coord.SlotAttendance {
+		// 参加可否は常にボタンで受け取り、自由文解釈器には渡さない。
+		b.reply(ctx, m.ChannelID, us, coord.DialogResult{State: us.conv.state})
+		return
+	}
 	// 訂正を受け取った時点で、表示済みの確認は無効にする。
 	b.clearDraft(ctx, us)
 	if now.Before(us.cooldownUntil) {
@@ -178,6 +186,10 @@ func (b *Bot) handleMessage(ctx context.Context, m *discordgo.MessageCreate) {
 func (b *Bot) reply(ctx context.Context, channelID string, us *userSession, res coord.DialogResult) {
 	conv := us.conv
 	conv.draftID = newToken()
+	if res.State.Pending == coord.SlotAttendance {
+		b.send(ctx, channelID, conversationHeader(conv)+"\n"+msgAttendance, attendanceButtons(conv.draftID))
+		return
+	}
 	if !res.Ready {
 		b.send(ctx, channelID, conversationHeader(conv)+"\n"+res.Question, nil)
 		return
@@ -195,6 +207,30 @@ func (b *Bot) reply(ctx context.Context, channelID string, us *userSession, res 
 	}
 	// 保存するのはこの不変スナップショットで、その後に変わる下書きではない。
 	conv.confirm = &confirmation{draftID: conv.draftID, state: res.State, lines: res.Confirm, channelID: channelID, messageID: msg.ID}
+}
+
+func (b *Bot) restartDialog(ctx context.Context, channelID, userID string, us *userSession) {
+	b.clearDraft(ctx, us)
+	b.clearWeeklyDraft(ctx, us)
+	if us.weekly != nil {
+		us.conv, us.weekly = nil, nil
+		b.beginWeeklyDialog(ctx, channelID, us)
+		return
+	}
+	if us.conv != nil && us.conv.sessionID != "" {
+		res, err := b.co.RestartDialog(ctx, userID, us.conv.sessionID)
+		if err != nil {
+			us.conv = nil
+			b.replyError(ctx, channelID, userID, us, err)
+			return
+		}
+		us.conv.state = res.State
+		us.conv.confirm = nil
+		b.reply(ctx, channelID, us, res)
+		return
+	}
+	us.conv, us.weekly = nil, nil
+	b.askTarget(ctx, channelID, userID, us)
 }
 
 // countMiss は進捗のない入力を数え、続くようなら休止する。

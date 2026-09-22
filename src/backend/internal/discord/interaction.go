@@ -70,7 +70,27 @@ func (b *Bot) onInteraction(_ *discordgo.Session, i *discordgo.InteractionCreate
 		// 通知のボタン。token はアクションID、arg は decision。対象・期限・操作者は
 		// ResolveNotifyAction が再検証する。custom_id の値は認可根拠にしない。
 		b.onNotifyActionButton(ctx, i, appUser.ID, us, token, arg)
+	case "attend":
+		b.onAttendanceButton(ctx, i, appUser.ID, us, token, arg)
 	}
+}
+
+func (b *Bot) onAttendanceButton(ctx context.Context, i *discordgo.InteractionCreate, userID string, us *userSession, token, attendance string) {
+	conv := us.conv
+	if conv == nil || conv.sessionID == "" || conv.draftID != token ||
+		(attendance != coord.AttendanceAttending && attendance != coord.AttendanceAbsent) {
+		b.editInteraction(ctx, i, msgNoDraft)
+		return
+	}
+	res, err := b.co.SetDialogAttendance(ctx, userID, conv.state, attendance)
+	if err != nil {
+		b.replyError(ctx, i.ChannelID, userID, us, err)
+		return
+	}
+	conv.state = res.State
+	conv.draftID = newToken()
+	b.editInteraction(ctx, i, conversationHeader(conv)+"\n参加可否を受け付けました。")
+	b.reply(ctx, i.ChannelID, us, res)
 }
 
 // onTargetButton は対象の開催回を確定する。候補集合と本人に束縛し、所属を確かめ直す。

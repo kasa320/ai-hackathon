@@ -3,6 +3,7 @@ package coord
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/kasa320/ai-hackathon/src/backend/internal/store"
 )
@@ -22,7 +23,7 @@ func (c *Coordinator) reconcileBookAssignmentTasks(ctx context.Context) (int, er
 		var tasks []store.Task
 		if err := c.st.Tx(ctx, func(tx *store.Tx) error {
 			var err error
-			tasks, err = tx.OpenTasksByKind(ctx, store.TaskAssignment)
+			tasks, err = tx.OpenAcceptedBookAssignmentTasks(ctx)
 			return err
 		}); err != nil {
 			return n, err
@@ -64,9 +65,18 @@ func (c *Coordinator) reconcileOneAssignmentTask(ctx context.Context, taskID str
 		if sess.PlaybookID != "reading" {
 			return nil
 		}
+		slot, err := tx.ReadingBookSlotBySession(ctx, sess.ID)
+		if errors.Is(err, store.ErrNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
 		var d readingSessionAssignee
-		if err := json.Unmarshal(sess.Data, &d); err != nil || d.AssigneeMemberID == "" || d.AssigneeMemberID != tk.MemberID {
-			// 担当が固定されていない（旧方式・手動セッション）か、このタスクの対象者ではない。
+		if err := json.Unmarshal(sess.Data, &d); err != nil ||
+			slot.AssignmentStatus != store.AssignAccepted || slot.AssigneeMemberID != tk.MemberID ||
+			d.AssigneeMemberID == "" || d.AssigneeMemberID != tk.MemberID {
+			// ブック枠と開催回の両方から、本人承認済みと確認できない。
 			return nil
 		}
 		p, err := tx.Proposal(ctx, tk.ProposalID)
@@ -101,6 +111,9 @@ func (c *Coordinator) reconcileOneAssignmentTask(ctx context.Context, taskID str
 			return err
 		}
 		if err := tx.CancelPendingEventsByRef(ctx, tk.ID); err != nil {
+			return err
+		}
+		if err := tx.CancelPendingNotificationByDedupeKey(ctx, "task:"+tk.ID, now); err != nil {
 			return err
 		}
 		cs, err := tx.Case(ctx, tk.CaseID)

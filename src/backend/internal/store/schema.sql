@@ -150,6 +150,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 );
 CREATE INDEX IF NOT EXISTS tasks_case ON tasks(case_id, seq);
 CREATE INDEX IF NOT EXISTS tasks_proposal ON tasks(proposal_id);
+CREATE INDEX IF NOT EXISTS tasks_kind_status ON tasks(kind, status);
 
 -- 処理イベント（AIの計画、期限、催促）。run_at 以降に処理し、再起動後も残る。
 CREATE TABLE IF NOT EXISTS events (

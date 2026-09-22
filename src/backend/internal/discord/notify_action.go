@@ -20,7 +20,9 @@ func (b *Bot) onNotifyActionButton(ctx context.Context, i *discordgo.Interaction
 		ActionID string `json:"action_id"`
 		Decision string `json:"decision"`
 	}{actionID, decision})
-	idem := &store.IdemKey{UserID: userID, Key: actionID + ":" + decision, Method: "POST", Path: "/discord/notify-actions/" + actionID + "/responses", BodyHash: httpx.BodyHash(body)}
+	// decision をキーに含めない。同じ通知で相反するボタンが競合しても、最初に成功した
+	// decision と異なる本文ハッシュとして拒否される。
+	idem := &store.IdemKey{UserID: userID, Key: actionID, Method: "POST", Path: "/discord/notify-actions/" + actionID + "/responses", BodyHash: httpx.BodyHash(body)}
 	outcome, err := b.co.ResolveNotifyAction(ctx, userID, actionID, decision, idem)
 	if err != nil {
 		b.editInteraction(ctx, i, actionOutcomeText(i, notifyActionErrorText(err)))

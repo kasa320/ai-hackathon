@@ -94,7 +94,6 @@ func TestResolveNotifyAction_BookConfirmationMatchesRespondAssigneeConfirmation(
 		h.mustPrep(name, "attending", weeklyAll())
 	}
 	h.process()
-	h.mustRespond(assignee, "assignment", "accept")
 	for _, name := range []string{"A", "B", "C", "D"} {
 		h.mustRespond(name, "approval", "approve")
 	}
@@ -117,5 +116,26 @@ func TestResolveNotifyAction_BookConfirmationMatchesRespondAssigneeConfirmation(
 	}
 	if s := h.book("A", b.ID).Sessions[0]; s.AssigneeConfirmationStatus == nil || *s.AssigneeConfirmationStatus != "confirmed" {
 		t.Fatalf("直前確認が反映されていない: %+v", s)
+	}
+}
+
+func TestResolveNotifyAction_OldBookPlanCannotAffectNewPlanVersion(t *testing.T) {
+	h := newHarness(t, nil)
+	b := h.createBook(bookInput("設計の本", 6, 3))
+	h.process()
+	actionID, ntf := groupNotifyAction(t, h.groupNotifs(), "book_plan_proposed", "accept")
+	name := userForDiscordID(ntf.RecipientDiscordUserID)
+	if err := h.st.Tx(ctx, func(tx *store.Tx) error {
+		cur, err := tx.ReadingBook(ctx, b.ID)
+		if err != nil {
+			return err
+		}
+		cur.PlanVersion++
+		return tx.UpdateReadingBook(ctx, cur)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.c.ResolveNotifyAction(ctx, h.users[name], actionID, "accept", nil); code(err) != apperr.InvalidState {
+		t.Fatalf("古い計画の通知は拒否する: %v", err)
 	}
 }

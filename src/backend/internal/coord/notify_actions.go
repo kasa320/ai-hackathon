@@ -35,9 +35,10 @@ type taskResponseRef struct {
 }
 
 type bookAssignmentRef struct {
-	GroupID string `json:"group_id"`
-	BookID  string `json:"book_id"`
-	SlotID  string `json:"slot_id,omitempty"`
+	GroupID     string   `json:"group_id"`
+	BookID      string   `json:"book_id"`
+	PlanVersion int      `json:"plan_version"`
+	SlotIDs     []string `json:"slot_ids"`
 }
 
 type bookConfirmationRef struct {
@@ -48,6 +49,7 @@ type bookConfirmationRef struct {
 
 type preparationStartRef struct {
 	SessionID string `json:"session_id"`
+	TaskID    string `json:"task_id"`
 }
 
 // ActionButton は通知に添えるボタン1個。Decision は押下時にサーバーへそのまま渡す値、
@@ -86,7 +88,7 @@ func (c *Coordinator) taskNotifyButtons(ctx context.Context, tx *store.Tx, userI
 		return nil, nil
 	}
 	if kind == store.TaskPreparation {
-		id, err := createNotifyAction(ctx, tx, userID, NotifyActionPreparationStart, preparationStartRef{SessionID: sessionID}, []string{"start"}, expiresAt, now)
+		id, err := createNotifyAction(ctx, tx, userID, NotifyActionPreparationStart, preparationStartRef{SessionID: sessionID, TaskID: taskID}, []string{"start"}, expiresAt, now)
 		if err != nil {
 			return nil, err
 		}
@@ -140,7 +142,32 @@ func (c *Coordinator) bookAssignmentButtons(ctx context.Context, tx *store.Tx, u
 	if userID == "" {
 		return nil, nil
 	}
-	ref := bookAssignmentRef{GroupID: groupID, BookID: bookID, SlotID: slotID}
+	b, err := tx.ReadingBook(ctx, bookID)
+	if err != nil {
+		return nil, err
+	}
+	var slotIDs []string
+	if slotID != "" {
+		slotIDs = []string{slotID}
+	} else {
+		me, err := tx.MemberByUser(ctx, groupID, userID)
+		if err != nil {
+			return nil, err
+		}
+		slots, err := tx.ReadingBookSlots(ctx, bookID)
+		if err != nil {
+			return nil, err
+		}
+		for _, s := range slots {
+			if s.AssigneeMemberID == me.ID && s.AssignmentStatus == store.AssignPending && s.Status == "planned" {
+				slotIDs = append(slotIDs, s.ID)
+			}
+		}
+	}
+	if len(slotIDs) == 0 {
+		return nil, apperr.InvalidStateErr("回答対象の担当がありません。")
+	}
+	ref := bookAssignmentRef{GroupID: groupID, BookID: bookID, PlanVersion: b.PlanVersion, SlotIDs: slotIDs}
 	id, err := createNotifyAction(ctx, tx, userID, NotifyActionBookAssignment, ref, []string{DecisionAccept, DecisionRequestChange}, now.Add(notifyActionTTL), now)
 	if err != nil {
 		return nil, err
@@ -228,7 +255,7 @@ func (c *Coordinator) ResolveNotifyAction(ctx context.Context, userID, actionID,
 			return NotifyActionOutcome{}, err
 		}
 		sessionID = ref.SessionID
-		dispatchErr = c.CheckSessionAccess(ctx, userID, ref.SessionID)
+		dispatchErr = c.validatePreparationStart(ctx, userID, ref)
 	case NotifyActionTaskResponse:
 		var ref taskResponseRef
 		if err := json.Unmarshal(a.Ref, &ref); err != nil {
@@ -242,8 +269,7 @@ func (c *Coordinator) ResolveNotifyAction(ctx context.Context, userID, actionID,
 		if err := json.Unmarshal(a.Ref, &ref); err != nil {
 			return NotifyActionOutcome{}, err
 		}
-		_, dispatchErr = c.RespondBookAssignment(ctx, userID, ref.GroupID, ref.BookID,
-			apitypes.BookAssignmentInput{Decision: decision, SlotID: ref.SlotID}, idem)
+		dispatchErr = c.resolveBookAssignmentAction(ctx, userID, ref, decision, idem)
 	case NotifyActionBookConfirmation:
 		var ref bookConfirmationRef
 		if err := json.Unmarshal(a.Ref, &ref); err != nil {
@@ -259,10 +285,87 @@ func (c *Coordinator) ResolveNotifyAction(ctx context.Context, userID, actionID,
 	if dispatchErr != nil {
 		return NotifyActionOutcome{}, dispatchErr
 	}
-	// 消費の記録はベストエフォート。正しさは下流操作の冪等キーが担保する。
-	_ = c.st.Tx(ctx, func(tx *store.Tx) error {
-		_, err := tx.ConsumeNotifyAction(ctx, actionID, c.now())
+	// 下流操作の成功後に消費済みへする。DBエラーや競合を成功扱いにすると、同じボタンを
+	// 再利用できるように見えるため、記録できなかった場合は呼び出し側へ明示する。
+	var consumed bool
+	if err := c.st.Tx(ctx, func(tx *store.Tx) error {
+		var err error
+		consumed, err = tx.ConsumeNotifyAction(ctx, actionID, c.now())
 		return err
-	})
+	}); err != nil {
+		return NotifyActionOutcome{}, err
+	}
+	if !consumed {
+		return NotifyActionOutcome{}, apperr.InvalidStateErr("この回答はすでに処理済みです。")
+	}
 	return NotifyActionOutcome{Kind: a.Kind, SessionID: sessionID}, nil
+}
+
+func (c *Coordinator) validatePreparationStart(ctx context.Context, userID string, ref preparationStartRef) error {
+	return c.st.Tx(ctx, func(tx *store.Tx) error {
+		tk, err := tx.Task(ctx, ref.TaskID)
+		if errors.Is(err, store.ErrNotFound) {
+			return apperr.NotFoundErr()
+		}
+		if err != nil {
+			return err
+		}
+		_, me, err := c.access(ctx, tx, userID, ref.SessionID)
+		if err != nil {
+			return err
+		}
+		if tk.SessionID != ref.SessionID || tk.MemberID != me.ID || tk.Kind != store.TaskPreparation || tk.Status != store.TaskOpen || !c.now().Before(tk.DueAt) {
+			return apperr.InvalidStateErr("この回答依頼はすでに終了しています。Webから最新の内容を確認してください。")
+		}
+		return nil
+	})
+}
+
+func (c *Coordinator) resolveBookAssignmentAction(ctx context.Context, userID string, ref bookAssignmentRef, decision string, idem *store.IdemKey) error {
+	if len(ref.SlotIDs) == 0 {
+		return apperr.InvalidStateErr("この担当依頼には回答対象がありません。")
+	}
+	if err := c.st.Tx(ctx, func(tx *store.Tx) error {
+		b, err := tx.ReadingBook(ctx, ref.BookID)
+		if errors.Is(err, store.ErrNotFound) || err == nil && b.GroupID != ref.GroupID {
+			return apperr.NotFoundErr()
+		}
+		if err != nil {
+			return err
+		}
+		if b.PlanVersion != ref.PlanVersion {
+			return apperr.InvalidStateErr("担当計画が更新されています。Webから最新の内容を確認してください。")
+		}
+		me, err := tx.MemberByUser(ctx, ref.GroupID, userID)
+		if err != nil {
+			return err
+		}
+		for _, id := range ref.SlotIDs {
+			s, err := bookSlotOf(ctx, tx, b, id)
+			if err != nil {
+				return err
+			}
+			initial := s.AssigneeMemberID == me.ID && s.AssignmentStatus == store.AssignPending && s.Status == "planned"
+			candidate := s.ProposedAssigneeID == me.ID && s.AssignmentStatus == store.AssignChangeProposed && s.Status != "completed"
+			if !initial && !candidate {
+				return apperr.InvalidStateErr("担当依頼の状態が更新されています。Webから最新の内容を確認してください。")
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	for _, slotID := range ref.SlotIDs {
+		var key *store.IdemKey
+		if idem != nil {
+			copy := *idem
+			copy.Key += ":" + slotID
+			key = &copy
+		}
+		if _, err := c.RespondBookAssignment(ctx, userID, ref.GroupID, ref.BookID,
+			apitypes.BookAssignmentInput{Decision: decision, SlotID: slotID}, key); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -95,25 +95,28 @@ async function renderMember() {
 
   // すべてのグループの開催回を集め、日付の近い順に並べる。
   const sessions = [];
-  await mapLimited(groups.items, FETCH_CONCURRENCY, async (group) => {
+  const loadFailures = { sessionGroups: [], sessionDetails: [] };
+  await Promise.all(groups.items.map(async (group) => {
     try {
-      const list = await api.sessions(group.id);
+      const list = await limitedFetch(() => api.sessions(group.id));
       for (const s of list.items) sessions.push({ ...s, group });
     } catch (err) {
       console.error(err);
+      loadFailures.sessionGroups.push(group);
     }
-  });
+  }));
   sessions.sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
 
   // 詳細は全件取る（黙って一部だけに絞らない）。同時fetchは絞る。
   const details = new Map();
-  await mapLimited(sessions, FETCH_CONCURRENCY, async (s) => {
+  await Promise.all(sessions.map(async (s) => {
     try {
-      details.set(s.id, await api.session(s.id));
+      details.set(s.id, await limitedFetch(() => api.session(s.id)));
     } catch (err) {
       console.error(err);
+      loadFailures.sessionDetails.push(s);
     }
-  });
+  }));
 
   // 全所属グループの未完了book slot（実セッション作成前を含む）を状態別に集める。
   // メンバーIDはグループごとに別なので、グループごとの current_member_id を使う。
@@ -140,6 +143,7 @@ async function renderMember() {
   mount(
     $("member"),
     availabilityNotice(),
+    renderLoadFailures(loadFailures, bookSlots),
     headline ? renderHeadline(headline) : nothingToDo(),
     renderIncompleteBookSlots(bookSlots),
     renderList(sessions, details, headline?.session.id, bookSlots.coveredSessionIds),
@@ -150,44 +154,59 @@ async function renderMember() {
 
 const FETCH_CONCURRENCY = 4;
 
-/** 同時fetchの数を絞りつつ、件数を黙って切り詰めない。 */
-async function mapLimited(items, limit, fn) {
-  const results = new Array(items.length);
-  let next = 0;
-  async function worker() {
-    while (next < items.length) {
-      const idx = next++;
-      results[idx] = await fn(items[idx], idx);
+/** ホーム全体で共有するfetchキュー。ネストした集約でも同時数を超えない。 */
+function createLimiter(limit) {
+  let active = 0;
+  const waiting = [];
+  const runNext = () => {
+    while (active < limit && waiting.length) {
+      const { fn, resolve, reject } = waiting.shift();
+      active++;
+      Promise.resolve().then(fn).then(resolve, reject).finally(() => {
+        active--;
+        runNext();
+      });
     }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
+  };
+  return (fn) => new Promise((resolve, reject) => {
+    waiting.push({ fn, resolve, reject });
+    runNext();
+  });
 }
+
+const limitedFetch = createLimiter(FETCH_CONCURRENCY);
 
 /** 全所属グループの、完了していないbook slotを集める。取得できなかった箇所は空一覧に見せず記録する。 */
 async function loadIncompleteBookSlots(groups) {
   const rows = [];
   const failedGroups = [];
+  const failedGroupDetails = [];
   const failedBooks = [];
   const coveredSessionIds = new Set();
 
-  await mapLimited(groups, FETCH_CONCURRENCY, async (group) => {
-    let books, groupDetail;
-    try {
-      [books, groupDetail] = await Promise.all([
-        api.books(group.id).then((r) => r.items),
-        api.group(group.id).catch(() => null),
-      ]);
-    } catch (err) {
-      console.error(err);
+  await Promise.all(groups.map(async (group) => {
+    const [booksResult, groupResult] = await Promise.allSettled([
+      limitedFetch(() => api.books(group.id)),
+      limitedFetch(() => api.group(group.id)),
+    ]);
+    if (booksResult.status === "rejected") {
+      console.error(booksResult.reason);
       failedGroups.push(group);
       return;
     }
+    const books = booksResult.value.items;
+    let groupDetail = null;
+    if (groupResult.status === "fulfilled") {
+      groupDetail = groupResult.value;
+    } else {
+      console.error(groupResult.reason);
+      failedGroupDetails.push(group);
+    }
     const members = groupDetail?.members ?? [];
-    await mapLimited(books, FETCH_CONCURRENCY, async (book) => {
+    await Promise.all(books.map(async (book) => {
       let bookDetail;
       try {
-        bookDetail = await api.book(group.id, book.id);
+        bookDetail = await limitedFetch(() => api.book(group.id, book.id));
       } catch (err) {
         console.error(err);
         failedBooks.push({ group, book });
@@ -195,14 +214,31 @@ async function loadIncompleteBookSlots(groups) {
       }
       const sections = new Map(bookDetail.book.sections.map((s) => [s.id, s.title]));
       for (const slot of bookDetail.sessions) {
-        if (slot.session) coveredSessionIds.add(slot.session.id);
         if (slot.status === "completed") continue;
+        if (slot.session) coveredSessionIds.add(slot.session.id);
         rows.push({ group, members, book: bookDetail.book, sections, slot, bucket: slotBucket(slot, group.current_member_id) });
       }
-    });
-  });
+    }));
+  }));
 
-  return { rows, failedGroups, failedBooks, coveredSessionIds };
+  return { rows, failedGroups, failedGroupDetails, failedBooks, coveredSessionIds };
+}
+
+function renderLoadFailures(loadFailures, bookSlots) {
+  const names = [
+    ...loadFailures.sessionGroups.map((g) => `${g.name}のセッション一覧`),
+    ...loadFailures.sessionDetails.map((s) => `${s.group.name}の${s.title}の詳細`),
+    ...bookSlots.failedGroups.map((g) => `${g.name}のブック一覧`),
+    ...bookSlots.failedGroupDetails.map((g) => `${g.name}のメンバー情報`),
+    ...bookSlots.failedBooks.map(({ group, book }) => `${group.name}の${book.title}`),
+  ];
+  if (!names.length) return null;
+  return el(
+    "div",
+    { class: "notice", "data-tone": "warn", role: "status" },
+    el("span", { class: "notice__mark", "aria-hidden": "true" }, "!"),
+    el("span", {}, el("strong", {}, "一部を取得できませんでした"), el("small", {}, `${names.join("、")}は表示できていません。`)),
+  );
 }
 
 const BUCKET_ORDER = ["mine", "attention", "scheduling", "confirmed", "waiting"];
@@ -236,36 +272,20 @@ function slotBucket(slot, me) {
 }
 
 /** ホーム最上部の1件の下に、全グループの未完了book slotを状態別に一覧する。 */
-function renderIncompleteBookSlots({ rows, failedGroups, failedBooks }) {
+function renderIncompleteBookSlots({ rows }) {
   const buckets = new Map(BUCKET_ORDER.map((k) => [k, []]));
   for (const row of rows) buckets.get(row.bucket).push(row);
   for (const list of buckets.values()) {
     list.sort((a, b) => (a.slot.period_start ?? "").localeCompare(b.slot.period_start ?? ""));
   }
   const hasRows = rows.length > 0;
-  const hasFailures = failedGroups.length > 0 || failedBooks.length > 0;
-  if (!hasRows && !hasFailures) return null;
-
-  const failureNames = [
-    ...failedGroups.map((g) => `${g.name}のブック一覧`),
-    ...failedBooks.map(({ group, book }) => `${group.name}の${book.title}`),
-  ];
+  if (!hasRows) return null;
 
   return el(
     "section",
     { class: "section" },
     el("div", { class: "section__head" }, el("h2", {}, "未完了のブック枠")),
-    hasFailures
-      ? el(
-          "div",
-          { class: "notice", "data-tone": "warn", role: "status" },
-          el("span", { class: "notice__mark", "aria-hidden": "true" }, "!"),
-          el("span", {}, el("strong", {}, "一部を取得できませんでした"), el("small", {}, `${failureNames.join("、")}は表示できていません。`)),
-        )
-      : null,
-    hasRows
-      ? el("div", { class: "book-slot-buckets" }, BUCKET_ORDER.filter((k) => buckets.get(k).length).map((k) => renderBookSlotBucket(k, buckets.get(k))))
-      : (hasFailures ? null : placeholder("未完了のブック枠はありません", "ブックを登録すると、ここに並びます。")),
+    el("div", { class: "book-slot-buckets" }, BUCKET_ORDER.filter((k) => buckets.get(k).length).map((k) => renderBookSlotBucket(k, buckets.get(k)))),
   );
 }
 

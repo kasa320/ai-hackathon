@@ -135,17 +135,33 @@ func availableWindows(d PreparationData, standing *coord.StandingAvailability, d
 				ws = append(ws, minuteWindow{x, y})
 			}
 		}
-		for _, w := range a.DateWindows {
-			if w.Date == date {
-				add(w.Start, w.End)
-			}
-		}
-		if len(ws) == 0 {
+		// 明示された週間枠がなければ、登録済みの普段の空き時間を基底にする。
+		// 週間枠が1件でもあれば、それがこの回で使う週間予定の全体なので standing は使わない。
+		if len(a.WeeklyWindows) == 0 && standing != nil {
+			ws = standingWindows(standing, day)
+		} else {
 			for _, w := range a.WeeklyWindows {
 				if w.Weekday == int(day.Weekday()) {
 					add(w.Start, w.End)
 				}
 			}
+		}
+
+		// 今回だけの日時が対象日にあれば、その日の基底予定を丸ごと置換する。
+		dateOverride := false
+		var dateWindows []minuteWindow
+		for _, w := range a.DateWindows {
+			if w.Date == date {
+				dateOverride = true
+				x, okX := clockMinute(w.Start, false)
+				y, okY := clockMinute(w.End, true)
+				if okX && okY && x < y {
+					dateWindows = append(dateWindows, minuteWindow{x, y})
+				}
+			}
+		}
+		if dateOverride {
+			ws = dateWindows
 		}
 	}
 	sort.Slice(ws, func(i, j int) bool { return ws[i].start < ws[j].start })

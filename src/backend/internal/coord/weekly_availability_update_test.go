@@ -1,11 +1,14 @@
 package coord_test
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
 	"github.com/kasa320/ai-hackathon/src/backend/internal/apitypes"
+	"github.com/kasa320/ai-hackathon/src/backend/internal/apperr"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/coord"
+	"github.com/kasa320/ai-hackathon/src/backend/internal/playbook/reading"
 )
 
 // scheduleData builds validated reading.PreparationData JSON for participation-save tests.
@@ -192,5 +195,116 @@ func TestSessionExceptionOnlyDoesNotTouchStandingAvailability(t *testing.T) {
 	}
 	if after.UpdatedAt == nil || before.UpdatedAt == nil || !after.UpdatedAt.Equal(*before.UpdatedAt) {
 		t.Fatalf("今回だけの例外変更だけで普段の空き時間が更新された: before=%+v after=%+v", before, after)
+	}
+}
+
+func putInitialWeekly(t *testing.T, h *harness, name string) apitypes.WeeklyAvailability {
+	t.Helper()
+	windows := []apitypes.WeeklyWindow{{Weekday: 2, Start: "18:00", End: "20:00"}}
+	got, err := h.c.PutWeeklyAvailability(ctx, h.users[name], apitypes.PutWeeklyAvailabilityInput{
+		Timezone: coord.DefaultAvailabilityZone,
+		Windows:  &windows,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+func assertWeeklyUnchanged(t *testing.T, h *harness, name string, before apitypes.WeeklyAvailability) {
+	t.Helper()
+	after, err := h.c.WeeklyAvailability(ctx, h.users[name])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after.Windows) != 1 || after.Windows[0] != before.Windows[0] || after.UpdatedAt == nil || before.UpdatedAt == nil || !after.UpdatedAt.Equal(*before.UpdatedAt) {
+		t.Fatalf("普段の空き時間が原子的に保たれていない: before=%+v after=%+v", before, after)
+	}
+}
+
+func TestAbsentCannotReplaceWeeklyAvailability(t *testing.T) {
+	h := newHarness(t, nil)
+	h.createSession()
+	before := putInitialWeekly(t, h, "B")
+	rev := h.detail("B").Session.Revision
+	_, err := h.c.PutPreparation(ctx, h.users["B"], h.sess, apitypes.PutPreparationInput{
+		ExpectedRevision: &rev,
+		Preparation: &apitypes.Preparation{
+			Attendance:               "absent",
+			Data:                     scheduleData("provided", 3, "20:00", "22:00"),
+			UpdateWeeklyAvailability: true,
+		},
+	}, nil)
+	if code(err) != apperr.ValidationFailed {
+		t.Fatalf("欠席時の週間更新 = %v, want validation_failed", err)
+	}
+	assertWeeklyUnchanged(t, h, "B", before)
+	for _, p := range h.detail("B").Preparations {
+		if p.MemberID == h.memberID("B") && p.Value != nil {
+			t.Fatalf("拒否された欠席回答が保存された: %+v", p.Value)
+		}
+	}
+}
+
+func TestRevisionConflictDoesNotReplaceWeeklyAvailability(t *testing.T) {
+	h := newHarness(t, nil)
+	h.createSession()
+	before := putInitialWeekly(t, h, "C")
+	stale := h.detail("C").Session.Revision - 1
+	_, err := h.c.PutPreparation(ctx, h.users["C"], h.sess, apitypes.PutPreparationInput{
+		ExpectedRevision: &stale,
+		Preparation: &apitypes.Preparation{
+			Attendance:               "attending",
+			Data:                     scheduleData("provided", 5, "19:00", "21:00"),
+			UpdateWeeklyAvailability: true,
+		},
+	}, nil)
+	if code(err) != apperr.RevisionConflict {
+		t.Fatalf("旧revisionでの週間更新 = %v, want revision_conflict", err)
+	}
+	assertWeeklyUnchanged(t, h, "C", before)
+}
+
+// cancelAfterDiffPlaybook は参加条件と週間枠を書いた後、活動記録の直前で context を失効させる。
+// 途中のDBエラーで両方がロールバックされることを、Coordinatorの実経路で確認するためのもの。
+type cancelAfterDiffPlaybook struct {
+	reading.Playbook
+	cancel context.CancelFunc
+}
+
+func (p cancelAfterDiffPlaybook) DiffPreparation(s coord.Snapshot, before *coord.Preparation, after coord.Preparation) []string {
+	lines := p.Playbook.DiffPreparation(s, before, after)
+	p.cancel()
+	return lines
+}
+
+func TestFailureAfterWeeklyWriteRollsBackPreparationAndWeeklyAvailability(t *testing.T) {
+	requestCtx, cancel := context.WithCancel(context.Background())
+	pb := cancelAfterDiffPlaybook{Playbook: reading.New(), cancel: cancel}
+	h := newHarnessFullWithPlaybook(t, nil, coord.DraftOnlyInterpreter{}, nil, pb)
+	h.createSession()
+	beforeWeekly := putInitialWeekly(t, h, "D")
+	beforeRevision := h.detail("D").Session.Revision
+
+	_, err := h.c.PutPreparation(requestCtx, h.users["D"], h.sess, apitypes.PutPreparationInput{
+		ExpectedRevision: &beforeRevision,
+		Preparation: &apitypes.Preparation{
+			Attendance:               "attending",
+			Data:                     scheduleData("provided", 4, "20:00", "22:00"),
+			UpdateWeeklyAvailability: true,
+		},
+	}, nil)
+	if err == nil {
+		t.Fatal("週間枠更新後のDB処理失敗が成功扱いになった")
+	}
+	assertWeeklyUnchanged(t, h, "D", beforeWeekly)
+	after := h.detail("D")
+	if after.Session.Revision != beforeRevision {
+		t.Fatalf("失敗した参加条件更新でrevisionが進んだ: before=%d after=%d", beforeRevision, after.Session.Revision)
+	}
+	for _, p := range after.Preparations {
+		if p.MemberID == h.memberID("D") && p.Value != nil {
+			t.Fatalf("失敗した参加条件が残った: %+v", p.Value)
+		}
 	}
 }

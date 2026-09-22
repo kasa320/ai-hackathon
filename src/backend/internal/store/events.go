@@ -174,6 +174,12 @@ func (t *Tx) SetNotificationStatus(ctx context.Context, id, status, errorCode st
 	return t.exec(ctx, "UPDATE notifications SET status = ?, error_code = ?, updated_at = ? WHERE id = ?", status, nullStr(errorCode), ts(now), id)
 }
 
+// CancelPendingNotificationByDedupeKey cancels a notification that has not been claimed.
+// Sending/sent notifications are intentionally left untouched because delivery may already have happened.
+func (t *Tx) CancelPendingNotificationByDedupeKey(ctx context.Context, key string, now time.Time) error {
+	return t.exec(ctx, "UPDATE notifications SET status = ?, updated_at = ? WHERE dedupe_key = ? AND status = ?", NotifyCancelled, ts(now), key, NotifyPending)
+}
+
 // MarkInterruptedNotificationsUnknown は送信途中で停止した通知を成否不明にする。再起動時に呼ぶ。
 func (t *Tx) MarkInterruptedNotificationsUnknown(ctx context.Context, now time.Time) ([]Notification, error) {
 	rows, err := t.query(ctx, "SELECT "+notificationCols+" FROM notifications WHERE status = 'sending'")

@@ -15,7 +15,9 @@ const (
 	msgNoTargets   = "いま変更できる開催回がありません。"
 	msgPickTarget  = "どの回の予定を変更しますか？"
 	msgReenter     = "対象を選びました。"
+	msgAttendance  = "この回に参加しますか？"
 	msgCanceled    = "下書きを取り消しました。"
+	msgPaused      = "入力を中断しました。次回は保存済みの内容から始めます。"
 	msgNoDraft     = "この確認は古くなっています。もう一度、変更したい内容を送ってください。"
 	msgSaved       = "保存しました。"
 	msgConflict    = "開催回の情報が更新されたため、最新の内容で確認し直します。変更したい内容をもう一度送ってください。"
@@ -91,6 +93,13 @@ func confirmButtons(draftID string) []discordgo.MessageComponent {
 	return []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{
 		discordgo.Button{Label: "参加条件を保存する", Style: discordgo.PrimaryButton, CustomID: "save:" + draftID},
 		discordgo.Button{Label: "取り消す", Style: discordgo.SecondaryButton, CustomID: "cancel:" + draftID},
+	}}}
+}
+
+func attendanceButtons(draftID string) []discordgo.MessageComponent {
+	return []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{
+		discordgo.Button{Label: "参加する", Style: discordgo.PrimaryButton, CustomID: "attend:" + draftID + ":attending"},
+		discordgo.Button{Label: "今回は参加しない", Style: discordgo.SecondaryButton, CustomID: "attend:" + draftID + ":absent"},
 	}}}
 }
 
