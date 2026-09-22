@@ -630,16 +630,26 @@ async function deleteSession() {
   }
 }
 
-/** 参加条件の入力。自由文で下書きを作れるが、保存は本人が確認してからになる。 */
-function openPreparation() {
+/**
+ * 参加条件の入力。自由文で下書きを作れるが、保存は本人が確認してからになる。
+ * 登録済みの普段の空き時間は先に取得しておく。取得失敗を「未登録」として表示しない。
+ */
+async function openPreparation() {
   if (busy || prepDialog?.dialog.isConnected) return;
   const snapshot = detail;
   const current = snapshot.preparations.find((p) => p.member_id === snapshot.current_member_id)?.value ?? null;
-  const form = feature.createPreparationForm(snapshot.data, current, snapshot.session.duration_minutes, snapshot.session);
+  let standing = null, standingFailed = false;
+  try {
+    standing = await api.weeklyAvailability();
+  } catch (err) {
+    standingFailed = true;
+  }
+  if (busy || prepDialog?.dialog.isConnected) return;
+  const form = feature.createPreparationForm(snapshot.data, current, snapshot.session.duration_minutes, snapshot.session, { standing, failed: standingFailed });
 
   const draftBox = el("div", {});
   const text = el("textarea", {
-    placeholder: "例：参加します。今回の前半は読んできました。15分なら説明できます。",
+    placeholder: "例：参加します。普段は水曜と金曜の19時〜22時が空いています。10月7日は参加できません。",
     maxlength: "2000",
   });
 
