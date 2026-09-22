@@ -16,6 +16,7 @@ let timezone = DEFAULT_TIMEZONE;
 let windows = []; // 編集中の { weekday, start, end }
 let saving = false;
 let dirty = false;
+let interpreting = false;
 
 boot();
 
@@ -83,6 +84,8 @@ function render() {
   const submit = el("button", { class: "btn", type: "button", id: "save" }, status.kind === "stale" ? "この内容で合っている（確認して保存）" : "この内容で保存する");
   submit.addEventListener("click", () => save(errors, paintDays, [submit]));
 
+  const draftSection = draftFromTextSection(paintDays, tzInput);
+
   mount(
     $("weekly"),
     el("div", { class: "page-head" },
@@ -96,6 +99,7 @@ function render() {
         el("strong", {}, "特定の回だけ参加できない日は、ここには入れません"),
         el("small", {}, "各セッションの参加条件で答えます。この画面は理由を聞かず、時間帯だけを登録します。")),
     ),
+    draftSection,
     el("div", { class: "form", style: "margin-top:32px" },
       el("fieldset", { class: "fieldset" },
         el("legend", {}, "タイムゾーン"),
@@ -111,6 +115,84 @@ function render() {
       el("div", { class: "submit" }, submit),
     ),
   );
+}
+
+/**
+ * 「文章から下書きを作る」。POST /api/me/weekly-availability/interpretations を呼ぶだけで、
+ * 結果は下の曜日フォームへ反映するだけ（保存しない）。保存は本人が「保存する」を押したときだけ。
+ * 原文はこの画面にもサーバーにも保存しない。
+ */
+function draftFromTextSection(paintDays, tzInput) {
+  const resultBox = el("div", {});
+  const text = el("textarea", {
+    placeholder: "例：毎週水曜と金曜の19時から22時が空いています。",
+    maxlength: "2000",
+    "aria-label": "普段の空き時間を文章で書く",
+  });
+  const button = el(
+    "button",
+    { type: "button", class: "btn btn--quiet" },
+    "この文章から下書きを作る",
+  );
+  button.addEventListener("click", async () => {
+    const value = text.value.trim();
+    if (!value || interpreting) return;
+    interpreting = true;
+    button.disabled = true;
+    const original = button.textContent;
+    button.textContent = "読み取っています…";
+    mount(resultBox, el("p", { class: "help", role: "status" }, "読み取っています。保存はされません。"));
+    try {
+      const result = await api.interpretWeeklyAvailability(value);
+      timezone = result.availability?.timezone || timezone;
+      tzInput.value = timezone;
+      windows = (result.availability?.windows ?? []).map(({ weekday, start, end }) => ({ weekday, start, end }));
+      dirty = true;
+      paintDays();
+      mount(resultBox, renderDraftResult(result));
+    } catch (err) {
+      mount(resultBox, el("p", { class: "field__error", role: "alert" }, describeDraftError(err)));
+    } finally {
+      interpreting = false;
+      button.disabled = false;
+      button.textContent = original;
+    }
+  });
+
+  return el(
+    "details",
+    { class: "form-details", style: "margin-top:16px" },
+    el("summary", {}, "文章から下書きを作る"),
+    el("div", { style: "margin-top:12px" },
+      el("label", { class: "field" }, el("span", {}, "いつ空いているか書いてください"), text),
+      el("p", { class: "help" }, "入力欄を埋めるために使います。下の「保存する」を押すまで登録されません。原文は保存しません。"),
+      el("p", { style: "margin-top:12px" }, button),
+      resultBox,
+    ),
+  );
+}
+
+function renderDraftResult(result) {
+  const a = result.availability;
+  const lines = (a?.windows ?? []).map((w) => `${WEEKDAYS.find(([d]) => d === w.weekday)?.[1] ?? w.weekday}　${w.start}〜${w.end}`);
+  return el(
+    "div",
+    { class: "draft" },
+    el("h4", {}, "このように読み取りました（まだ保存していません）"),
+    lines.length ? el("ul", {}, lines.map((l) => el("li", {}, l))) : el("p", { class: "help" }, "時間帯は読み取れませんでした。"),
+    result.unclear?.length
+      ? el("p", { class: "unclear" }, `確かめてほしい項目があります：${result.unclear.join("、")}。下のフォームで直してから保存してください。`)
+      : result.needs_followup
+        ? el("p", { class: "unclear" }, "読み取りに自信のない項目があります。下のフォームで確かめてから保存してください。")
+        : el("p", { class: "help" }, "下のフォームで内容を直せます。よければ「保存する」を押してください。"),
+  );
+}
+
+function describeDraftError(err) {
+  if (err instanceof ApiError && err.status === 422) {
+    return err.fieldErrors.map((f) => f.message).join(" ") || err.message;
+  }
+  return describeError(err);
 }
 
 function statusNotice(status) {
