@@ -52,12 +52,17 @@ func (c *Coordinator) bookURL(b store.ReadingBook) string {
 
 // enqueueBookDM は本人宛てのDMを1件ずつ登録する。同じ operationKey・受信者へは二重に登録しない。
 func (c *Coordinator) enqueueBookDM(ctx context.Context, tx *store.Tx, b store.ReadingBook, kind, operationKey, text string, to []store.Member, now time.Time) error {
+	return c.enqueueBookDMWithButtons(ctx, tx, b, kind, operationKey, text, to, nil, now)
+}
+
+// enqueueBookDMWithButtons は enqueueBookDM に、宛先が1人のときだけ有効なボタンを添える。
+func (c *Coordinator) enqueueBookDMWithButtons(ctx context.Context, tx *store.Tx, b store.ReadingBook, kind, operationKey, text string, to []store.Member, buttons []ActionButton, now time.Time) error {
 	g, err := tx.Group(ctx, b.GroupID)
 	if err != nil {
 		return err
 	}
 	content := fmt.Sprintf("【%s／%s】%s\n%s", g.Name, b.Title, text, c.bookURL(b))
-	_, err = enqueueGroupDM(ctx, tx, b.GroupID, kind, operationKey, content, to, now)
+	_, err = enqueueGroupDMWithButtons(ctx, tx, b.GroupID, kind, operationKey, content, to, buttons, now)
 	return err
 }
 
@@ -344,7 +349,11 @@ func (c *Coordinator) storeBookPlan(ctx context.Context, tx *store.Tx, b store.R
 		}
 		key := fmt.Sprintf("book_plan:%s:%d", b.ID, b.PlanVersion)
 		text := fmt.Sprintf("担当の割り当て案が届きました（第%s回）。内容を確認し、担当を引き受けられるか回答してください。回答があるまで確定しません。", joinInts(assigned[id]))
-		if err := c.enqueueBookDM(ctx, tx, b, NotifyBookPlanProposed, key, text, []store.Member{m}, now); err != nil {
+		buttons, err := c.bookAssignmentButtons(ctx, tx, m.UserID, b.GroupID, b.ID, "", now)
+		if err != nil {
+			return err
+		}
+		if err := c.enqueueBookDMWithButtons(ctx, tx, b, NotifyBookPlanProposed, key, text, []store.Member{m}, buttons, now); err != nil {
 			return err
 		}
 	}
@@ -458,7 +467,13 @@ func (c *Coordinator) requestAvailabilityUpdateTx(ctx context.Context, tx *store
 			}
 		}
 		key := fmt.Sprintf("availability:%s:%s", b.GroupID, day)
-		if err := c.enqueueBookDM(ctx, tx, b, NotifyAvailabilityRequest, key, text, []store.Member{member}, now); err != nil {
+		var buttons []ActionButton
+		if btn, err := c.weeklyPromptButton(ctx, tx, member.UserID, now); err != nil {
+			return out, err
+		} else if btn.ActionID != "" {
+			buttons = []ActionButton{btn}
+		}
+		if err := c.enqueueBookDMWithButtons(ctx, tx, b, NotifyAvailabilityRequest, key, text, []store.Member{member}, buttons, now); err != nil {
 			return out, err
 		}
 		out.RequestedCount++

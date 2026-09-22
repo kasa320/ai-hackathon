@@ -99,6 +99,9 @@ func addMissingColumns(ctx context.Context, db *sql.DB) error {
 		{"reading_book_slots", "change_attempts", "INTEGER NOT NULL DEFAULT 0"},
 		{"reading_book_slots", "change_next_at", "TEXT"},
 		{"reading_book_slots", "attention_reason", "TEXT NOT NULL DEFAULT ''"},
+		// 通知に添えるボタン（.agent/kasa/decisions/discord-availability-home-refresh.md）。
+		{"notifications", "components", "TEXT NOT NULL DEFAULT '[]'"},
+		{"group_notifications", "components", "TEXT NOT NULL DEFAULT '[]'"},
 	} {
 		has, err := hasColumn(ctx, db, c.table, c.name)
 		if err != nil {
@@ -142,6 +145,7 @@ func relaxGroupNotificationKinds(ctx context.Context, db *sql.DB) error {
 			recipient_discord_user_id TEXT NOT NULL,
 			dedupe_key TEXT NOT NULL UNIQUE,
 			content TEXT NOT NULL,
+			components TEXT NOT NULL DEFAULT '[]',
 			status TEXT NOT NULL CHECK (status IN ('pending', 'sending', 'sent', 'failed', 'unknown')),
 			error_code TEXT,
 			created_at TEXT NOT NULL,

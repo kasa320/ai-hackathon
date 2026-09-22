@@ -267,7 +267,11 @@ func (c *Coordinator) stepConfirmation(ctx context.Context, tx *store.Tx, b stor
 			return false, err
 		}
 		text := fmt.Sprintf("第%d回は %s に開催予定です。担当を予定どおり務められるか確認してください。難しい場合は変更を希望できます。", s.SequenceNumber, when)
-		return true, c.enqueueBookDM(ctx, tx, b, NotifyBookAssigneeConfirm, fmt.Sprintf("book_confirm:%s:%s", s.ID, assignee.ID), text, []store.Member{assignee}, now)
+		buttons, err := c.bookConfirmationButtons(ctx, tx, assignee.UserID, b.GroupID, b.ID, s.ID, sess.StartsAt, now)
+		if err != nil {
+			return false, err
+		}
+		return true, c.enqueueBookDMWithButtons(ctx, tx, b, NotifyBookAssigneeConfirm, fmt.Sprintf("book_confirm:%s:%s", s.ID, assignee.ID), text, []store.Member{assignee}, buttons, now)
 	}
 	if err != nil {
 		return false, err
@@ -288,7 +292,11 @@ func (c *Coordinator) stepConfirmation(ctx context.Context, tx *store.Tx, b stor
 			return false, err
 		}
 		text := fmt.Sprintf("第%d回（%s 開催予定）の担当の確認がまだです。ご回答をお願いします。", s.SequenceNumber, when)
-		return true, c.enqueueBookDM(ctx, tx, b, NotifyBookAssigneeRemind, fmt.Sprintf("book_remind:%s:%s", s.ID, assignee.ID), text, []store.Member{assignee}, now)
+		buttons, err := c.bookConfirmationButtons(ctx, tx, assignee.UserID, b.GroupID, b.ID, s.ID, sess.StartsAt, now)
+		if err != nil {
+			return false, err
+		}
+		return true, c.enqueueBookDMWithButtons(ctx, tx, b, NotifyBookAssigneeRemind, fmt.Sprintf("book_remind:%s:%s", s.ID, assignee.ID), text, []store.Member{assignee}, buttons, now)
 	case conf.EscalatedAt == nil:
 		if now.Before(stageAt(sess.StartsAt, escalationLead, *conf.RemindedAt)) {
 			return false, nil

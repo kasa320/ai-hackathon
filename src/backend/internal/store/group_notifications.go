@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"time"
 )
@@ -15,24 +16,27 @@ type GroupNotification struct {
 	RecipientDiscordUserID string
 	DedupeKey              string
 	Content                string
-	Status                 string
-	ErrorCode              string
-	CreatedAt              time.Time
-	UpdatedAt              time.Time
+	// Components は通知に添えるボタン。
+	Components []NotifyButton
+	Status     string
+	ErrorCode  string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
-const groupNotificationCols = "id, group_id, kind, recipient_discord_user_id, dedupe_key, content, status, error_code, created_at, updated_at"
+const groupNotificationCols = "id, group_id, kind, recipient_discord_user_id, dedupe_key, content, components, status, error_code, created_at, updated_at"
 
 func scanGroupNotification(row interface{ Scan(...any) error }) (GroupNotification, error) {
 	var n GroupNotification
 	var code sql.NullString
-	var created, updated string
-	if err := row.Scan(&n.ID, &n.GroupID, &n.Kind, &n.RecipientDiscordUserID, &n.DedupeKey, &n.Content, &n.Status, &code, &created, &updated); err != nil {
+	var components, created, updated string
+	if err := row.Scan(&n.ID, &n.GroupID, &n.Kind, &n.RecipientDiscordUserID, &n.DedupeKey, &n.Content, &components, &n.Status, &code, &created, &updated); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return n, ErrNotFound
 		}
 		return n, err
 	}
+	_ = json.Unmarshal([]byte(components), &n.Components)
 	n.ErrorCode = code.String
 	n.CreatedAt, n.UpdatedAt = parseTS(created), parseTS(updated)
 	return n, nil
@@ -44,10 +48,11 @@ func (t *Tx) EnqueueGroupNotification(ctx context.Context, n GroupNotification) 
 	if err != nil {
 		return err
 	}
+	components, _ := json.Marshal(nonNilButtons(n.Components))
 	return t.exec(ctx, `INSERT INTO group_notifications (`+groupNotificationCols+`, seq)
-		VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, ?, ?)
 		ON CONFLICT (dedupe_key) DO NOTHING`, n.ID, n.GroupID, n.Kind, n.RecipientDiscordUserID,
-		n.DedupeKey, n.Content, ts(n.CreatedAt), ts(n.CreatedAt), seq)
+		n.DedupeKey, n.Content, string(components), ts(n.CreatedAt), ts(n.CreatedAt), seq)
 }
 
 func (t *Tx) ClaimGroupNotification(ctx context.Context, now time.Time) (GroupNotification, error) {

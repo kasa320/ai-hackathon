@@ -395,6 +395,11 @@ func (c *Coordinator) activity(ctx context.Context, tx *store.Tx, sess store.Ses
 
 // notify は通知待ちを登録する。本文には共有可能な情報とWeb画面へのリンクだけを含める。
 func (c *Coordinator) notify(ctx context.Context, tx *store.Tx, sess store.Session, caseID, kind, dedupe, text string, mentions []store.Member, now time.Time) error {
+	return c.notifyWithButtons(ctx, tx, sess, caseID, kind, dedupe, text, mentions, nil, now)
+}
+
+// notifyWithButtons は notify に、宛先が1人のときだけ有効なボタンを添える。
+func (c *Coordinator) notifyWithButtons(ctx context.Context, tx *store.Tx, sess store.Session, caseID, kind, dedupe, text string, mentions []store.Member, buttons []ActionButton, now time.Time) error {
 	var ids []string
 	prefix := ""
 	for _, m := range mentions {
@@ -404,8 +409,21 @@ func (c *Coordinator) notify(ctx context.Context, tx *store.Tx, sess store.Sessi
 	content := fmt.Sprintf("%s【%s】%s\n%s", prefix, sess.Title, text, c.sessionURL(sess.ID))
 	return tx.EnqueueNotification(ctx, store.Notification{
 		ID: store.NewID("ntf"), SessionID: sess.ID, CaseID: caseID, Kind: kind, DedupeKey: dedupe,
-		Content: content, Mentions: ids, CreatedAt: now,
+		Content: content, Mentions: ids, Components: notifyButtons(buttons), CreatedAt: now,
 	})
+}
+
+// notifyButtons は ActionButton を保存用の store.NotifyButton へ直す。custom_id は
+// 「アクションID:decision」の形にし、値そのものは埋め込まない。
+func notifyButtons(buttons []ActionButton) []store.NotifyButton {
+	if len(buttons) == 0 {
+		return nil
+	}
+	out := make([]store.NotifyButton, len(buttons))
+	for i, b := range buttons {
+		out[i] = store.NotifyButton{Label: b.Label, CustomID: "act:" + b.ActionID + ":" + b.Decision, Primary: b.Primary}
+	}
+	return out
 }
 
 func encode(v any) []byte {
