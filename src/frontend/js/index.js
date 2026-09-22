@@ -394,7 +394,6 @@ function renderList(sessions, details, excludeId) {
       "div",
       { class: "section__head" },
       el("h2", {}, "ほかのセッション"),
-      el("a", { class: "link", href: "/setup.html" }, "グループを作る"),
     ),
     rows.length
       ? el("div", { class: "rows" }, rows.map((s) => renderRow(s, details.get(s.id))))
