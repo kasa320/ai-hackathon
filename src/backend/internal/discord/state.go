@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kasa320/ai-hackathon/src/backend/internal/apitypes"
 	"github.com/kasa320/ai-hackathon/src/backend/internal/coord"
 )
 
@@ -60,10 +61,26 @@ type taskCard struct {
 	messageID string
 }
 
+// weeklyState は普段の空き時間の対話。開催回を束縛せず、本人にだけ紐づく。
+type weeklyState struct {
+	confirm *weeklyConfirmation
+}
+
+// weeklyConfirmation は解釈結果の不変スナップショット。保存するのはこの値。
+type weeklyConfirmation struct {
+	draftID   string
+	timezone  string
+	windows   []apitypes.WeeklyWindow
+	lines     []string
+	channelID string
+	messageID string
+}
+
 // userSession は利用者ごとの状態。空振りの回数と休止は開催回の切替で戻さない。
 type userSession struct {
 	busy          bool
 	conv          *conversation
+	weekly        *weeklyState
 	expiresAt     time.Time
 	misses        int
 	cooldownUntil time.Time
@@ -96,9 +113,9 @@ func (m *memory) begin(userID string, now time.Time) (*userSession, bool) {
 	if us.busy {
 		return nil, false
 	}
-	if us.conv != nil && !now.Before(us.expiresAt) {
+	if (us.conv != nil || us.weekly != nil) && !now.Before(us.expiresAt) {
 		// 期限切れの会話は捨てる。未保存の下書きも確認も残さない。
-		us.conv = nil
+		us.conv, us.weekly = nil, nil
 	}
 	us.busy = true
 	return us, true
@@ -112,7 +129,7 @@ func (m *memory) end(userID string, now time.Time) {
 		return
 	}
 	us.busy = false
-	if us.conv != nil {
+	if us.conv != nil || us.weekly != nil {
 		us.expiresAt = now.Add(convTTL)
 	}
 }
@@ -120,7 +137,7 @@ func (m *memory) end(userID string, now time.Time) {
 // evict は期限の切れた利用者の状態を捨てる。件数の上限を超えたときに呼ぶ。
 func (m *memory) evict(now time.Time) {
 	for id, us := range m.users {
-		if !us.busy && us.conv == nil && now.After(us.cooldownUntil) {
+		if !us.busy && us.conv == nil && us.weekly == nil && now.After(us.cooldownUntil) {
 			delete(m.users, id)
 		}
 	}

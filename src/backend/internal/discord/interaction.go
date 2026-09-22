@@ -62,6 +62,14 @@ func (b *Bot) onInteraction(_ *discordgo.Session, i *discordgo.InteractionCreate
 		b.onSaveButton(ctx, i, appUser.ID, us, token)
 	case "cancel":
 		b.onCancelButton(ctx, i, us, token)
+	case "wsave":
+		b.onWeeklySaveButton(ctx, i, appUser.ID, us, token)
+	case "wcancel":
+		b.onWeeklyCancelButton(ctx, i, us, token)
+	case "act":
+		// 通知のボタン。token はアクションID、arg は decision。対象・期限・操作者は
+		// ResolveNotifyAction が再検証する。custom_id の値は認可根拠にしない。
+		b.onNotifyActionButton(ctx, i, appUser.ID, us, token, arg)
 	}
 }
 
