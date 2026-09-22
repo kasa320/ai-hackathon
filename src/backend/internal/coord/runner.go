@@ -328,6 +328,14 @@ func (c *Coordinator) handleReminder(ctx context.Context, e store.Event) error {
 		}
 		text := fmt.Sprintf("未回答の依頼があります：%s（回答期限：%s）", tk.Title, formatClock(tk.DueAt))
 		text += taskReplyInstructions(tk.Kind)
-		return c.notify(ctx, tx, sess, tk.CaseID, "reminder", "reminder:"+tk.ID, text, []store.Member{m}, now)
+		var p *store.Proposal
+		if tk.ProposalID != "" {
+			p = &store.Proposal{ID: tk.ProposalID, Version: tk.ProposalVersion}
+		}
+		buttons, err := c.taskNotifyButtons(ctx, tx, m.UserID, sess.ID, tk.ID, tk.Kind, p, tk.DueAt, now)
+		if err != nil {
+			return err
+		}
+		return c.notifyWithButtons(ctx, tx, sess, tk.CaseID, "reminder", "reminder:"+tk.ID, text, []store.Member{m}, buttons, now)
 	})
 }

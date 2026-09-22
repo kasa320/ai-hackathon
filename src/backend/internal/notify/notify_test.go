@@ -232,6 +232,68 @@ func TestDiscordSenderPrefersDM(t *testing.T) {
 	}
 }
 
+// ボタンは DM にだけ付き、宛先を限定できないチャンネルへの退避には付かない（他人が押せてしまうため）。
+func TestDiscordSenderAttachesButtonsToDMOnly(t *testing.T) {
+	type call struct {
+		path string
+		body map[string]any
+	}
+	var calls []call
+	dmStatus := http.StatusOK
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		calls = append(calls, call{path: r.URL.Path, body: body})
+		if r.URL.Path == "/users/@me/channels" {
+			if dmStatus != http.StatusOK {
+				w.WriteHeader(dmStatus)
+				return
+			}
+			_, _ = w.Write([]byte(`{"id":"dm_1"}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	s := notify.NewDiscordSender("bot-token", "chan")
+	s.BaseURL = srv.URL
+
+	msg := notify.Message{Kind: "task_requested", Content: "hi", DMUserIDs: []string{"1"}, Components: []notify.ActionRow{
+		{Buttons: []notify.Button{{Label: "引き受ける", CustomID: "act:x:accept", Primary: true}, {Label: "辞退する", CustomID: "act:x:decline"}}},
+	}}
+	if err := s.Send(ctx, msg); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 2 || calls[1].path != "/channels/dm_1/messages" {
+		t.Fatalf("DM へ送っていない: %+v", calls)
+	}
+	components, _ := calls[1].body["components"].([]any)
+	if len(components) != 1 {
+		t.Fatalf("DM の components = %v", calls[1].body["components"])
+	}
+	row, _ := components[0].(map[string]any)
+	buttons, _ := row["components"].([]any)
+	if len(buttons) != 2 {
+		t.Fatalf("ボタンの数 = %v", row["components"])
+	}
+	first, _ := buttons[0].(map[string]any)
+	if first["custom_id"] != "act:x:accept" || first["label"] != "引き受ける" || first["style"] != float64(1) {
+		t.Fatalf("1個目のボタン = %v", first)
+	}
+
+	// DM 拒否はチャンネルへ退避するが、ボタンは付けない。
+	calls, dmStatus = nil, http.StatusForbidden
+	if err := s.Send(ctx, msg); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 2 || calls[1].path != "/channels/chan/messages" {
+		t.Fatalf("チャンネルへ退避していない: %+v", calls)
+	}
+	if _, ok := calls[1].body["components"]; ok {
+		t.Fatalf("チャンネルへの退避にボタンを付けてしまった: %v", calls[1].body)
+	}
+}
+
 // チャンネルが未設定なら、本人宛ての DM だけで届ける。退避先がないので、DM の失敗は失敗のまま返す。
 func TestDiscordSenderWithoutChannelSendsDMOnly(t *testing.T) {
 	var paths []string

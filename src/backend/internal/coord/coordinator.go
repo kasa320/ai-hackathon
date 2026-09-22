@@ -51,6 +51,8 @@ type Options struct {
 	RunLock *sync.Mutex
 	// Interpreter は自由文から参加条件を取り出す処理。nil なら自由文の解釈を提供しない。
 	Interpreter Interpreter
+	// WeeklyInterpreter は自由文から普段の空き時間の下書きを取り出す処理。nil なら規則だけで抽出する（DraftOnlyWeeklyInterpreter）。
+	WeeklyInterpreter WeeklyInterpreter
 	// BookAgent はブックの全体計画と担当変更の候補を作る処理。nil なら規則だけで作る（DraftBookAgent）。
 	BookAgent BookAgent
 }
@@ -58,15 +60,16 @@ type Options struct {
 // Coordinator は用途共通の調整処理。状態遷移・本人と版の検証・同意管理・イベント処理を担う。
 // 用途固有の判断は Playbook に委ね、playbook_id による分岐を持たない。
 type Coordinator struct {
-	reg         *Service
-	st          *store.Store
-	clock       clock.Clock
-	planner     Planner
-	interpreter Interpreter
-	bookAgent   BookAgent
-	opts        Options
-	log         *slog.Logger
-	wake        chan struct{}
+	reg               *Service
+	st                *store.Store
+	clock             clock.Clock
+	planner           Planner
+	interpreter       Interpreter
+	weeklyInterpreter WeeklyInterpreter
+	bookAgent         BookAgent
+	opts              Options
+	log               *slog.Logger
+	wake              chan struct{}
 }
 
 func NewCoordinator(reg *Service, st *store.Store, clk clock.Clock, planner Planner, opts Options) *Coordinator {
@@ -81,7 +84,11 @@ func NewCoordinator(reg *Service, st *store.Store, clk clock.Clock, planner Plan
 	if agent == nil {
 		agent = DraftBookAgent{}
 	}
-	return &Coordinator{reg: reg, st: st, clock: clk, planner: planner, interpreter: opts.Interpreter, bookAgent: agent, opts: opts, log: log, wake: make(chan struct{}, 1)}
+	wi := opts.WeeklyInterpreter
+	if wi == nil {
+		wi = DraftOnlyWeeklyInterpreter{}
+	}
+	return &Coordinator{reg: reg, st: st, clock: clk, planner: planner, interpreter: opts.Interpreter, weeklyInterpreter: wi, bookAgent: agent, opts: opts, log: log, wake: make(chan struct{}, 1)}
 }
 
 // Playbooks は登録済み用途の一覧。
@@ -388,6 +395,11 @@ func (c *Coordinator) activity(ctx context.Context, tx *store.Tx, sess store.Ses
 
 // notify は通知待ちを登録する。本文には共有可能な情報とWeb画面へのリンクだけを含める。
 func (c *Coordinator) notify(ctx context.Context, tx *store.Tx, sess store.Session, caseID, kind, dedupe, text string, mentions []store.Member, now time.Time) error {
+	return c.notifyWithButtons(ctx, tx, sess, caseID, kind, dedupe, text, mentions, nil, now)
+}
+
+// notifyWithButtons は notify に、宛先が1人のときだけ有効なボタンを添える。
+func (c *Coordinator) notifyWithButtons(ctx context.Context, tx *store.Tx, sess store.Session, caseID, kind, dedupe, text string, mentions []store.Member, buttons []ActionButton, now time.Time) error {
 	var ids []string
 	prefix := ""
 	for _, m := range mentions {
@@ -397,8 +409,21 @@ func (c *Coordinator) notify(ctx context.Context, tx *store.Tx, sess store.Sessi
 	content := fmt.Sprintf("%s【%s】%s\n%s", prefix, sess.Title, text, c.sessionURL(sess.ID))
 	return tx.EnqueueNotification(ctx, store.Notification{
 		ID: store.NewID("ntf"), SessionID: sess.ID, CaseID: caseID, Kind: kind, DedupeKey: dedupe,
-		Content: content, Mentions: ids, CreatedAt: now,
+		Content: content, Mentions: ids, Components: notifyButtons(buttons), CreatedAt: now,
 	})
+}
+
+// notifyButtons は ActionButton を保存用の store.NotifyButton へ直す。custom_id は
+// 「アクションID:decision」の形にし、値そのものは埋め込まない。
+func notifyButtons(buttons []ActionButton) []store.NotifyButton {
+	if len(buttons) == 0 {
+		return nil
+	}
+	out := make([]store.NotifyButton, len(buttons))
+	for i, b := range buttons {
+		out[i] = store.NotifyButton{Label: b.Label, CustomID: "act:" + b.ActionID + ":" + b.Decision, Primary: b.Primary}
+	}
+	return out
 }
 
 func encode(v any) []byte {

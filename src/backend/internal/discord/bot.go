@@ -108,6 +108,8 @@ func (b *Bot) handleMessage(ctx context.Context, m *discordgo.MessageCreate) {
 		return
 	case isCommand(text, "取消", "取り消し", "キャンセル", "やめる"):
 		b.clearDraft(ctx, us)
+		b.clearWeeklyDraft(ctx, us)
+		us.weekly = nil
 		b.send(ctx, m.ChannelID, msgCanceled, nil)
 		return
 	case isCommand(text, "予定", "いまの予定", "今の予定", "確認"):
@@ -115,8 +117,14 @@ func (b *Bot) handleMessage(ctx context.Context, m *discordgo.MessageCreate) {
 		return
 	case isCommand(text, "変更", "切替", "切り替え", "別の回"):
 		b.clearDraft(ctx, us)
-		us.conv = nil
+		us.conv, us.weekly = nil, nil
 		b.askTarget(ctx, m.ChannelID, user.ID, us)
+		return
+	case isCommand(text, "空き時間", "普段の空き時間", "週間の空き時間"):
+		b.clearDraft(ctx, us)
+		b.clearWeeklyDraft(ctx, us)
+		us.conv = nil
+		b.beginWeeklyDialog(ctx, m.ChannelID, us)
 		return
 	case isCommand(text, "ヘルプ", "help", "使い方"):
 		b.send(ctx, m.ChannelID, msgHelp, nil)
@@ -124,6 +132,13 @@ func (b *Bot) handleMessage(ctx context.Context, m *discordgo.MessageCreate) {
 	case isCommand(text, "変更なし", "変更ありません", "このまま", "そのまま"):
 		// 変更しない確認も本人のボタンで行う。LLM は使わない。
 		b.confirmUnchanged(ctx, m.ChannelID, user.ID, us)
+		return
+	}
+
+	if us.weekly != nil {
+		// 訂正を受け取った時点で、表示済みの確認は無効にする。
+		b.clearWeeklyDraft(ctx, us)
+		b.continueWeekly(ctx, m.ChannelID, user.ID, us, text)
 		return
 	}
 

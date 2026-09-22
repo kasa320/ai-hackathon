@@ -441,3 +441,22 @@ type PutWeeklyAvailabilityInput struct {
 	Timezone string          `json:"timezone"`
 	Windows  *[]WeeklyWindow `json:"windows"`
 }
+
+// WeeklyAvailabilityInterpretationInput は自由文からの普段の空き時間の解釈依頼。対象者は常に
+// 呼び出した本人で、メンバーIDを入力で指定しない。原文は保存されない。
+// （.agent/kasa/decisions/discord-availability-home-refresh.md）
+type WeeklyAvailabilityInterpretationInput struct {
+	Text string `json:"text"`
+}
+
+// WeeklyAvailabilityInterpretation は自由文の解釈結果の下書き。保存はされない（saved は常に false）。
+// 本人が確認したうえで PUT /api/me/weekly-availability を送ると保存される。
+type WeeklyAvailabilityInterpretation struct {
+	Availability WeeklyAvailability `json:"availability"`
+	// Unclear は発言から読み取れなかった内容の短い説明。値は推測しない。
+	Unclear []string `json:"unclear"`
+	// NeedsFollowup は本人に確認すべき内容が残っていること。
+	NeedsFollowup bool `json:"needs_followup"`
+	// Saved は常に false。解釈だけでは何も保存されないことを示す。
+	Saved bool `json:"saved"`
+}

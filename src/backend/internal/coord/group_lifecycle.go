@@ -30,6 +30,16 @@ func ensureNoRunningSession(sessions []store.Session, now time.Time) error {
 }
 
 func enqueueGroupDM(ctx context.Context, tx *store.Tx, groupID, kind, operationKey, content string, recipients []store.Member, now time.Time) (int, error) {
+	return enqueueGroupDMWithButtons(ctx, tx, groupID, kind, operationKey, content, recipients, nil, now)
+}
+
+// enqueueGroupDMWithButtons は enqueueGroupDM に、宛先が1人のときだけ有効なボタンを添える。
+// 複数人へ同じ呼び出しで送る場合、ボタンは特定の1人に束縛されているため付けない。
+func enqueueGroupDMWithButtons(ctx context.Context, tx *store.Tx, groupID, kind, operationKey, content string, recipients []store.Member, buttons []ActionButton, now time.Time) (int, error) {
+	components := notifyButtons(buttons)
+	if len(recipients) != 1 {
+		components = nil
+	}
 	queued := 0
 	for _, m := range recipients {
 		if m.DiscordUserID == "" {
@@ -42,6 +52,7 @@ func enqueueGroupDM(ctx context.Context, tx *store.Tx, groupID, kind, operationK
 			RecipientDiscordUserID: m.DiscordUserID,
 			DedupeKey:              operationKey + ":" + m.DiscordUserID,
 			Content:                content,
+			Components:             components,
 			CreatedAt:              now,
 		}); err != nil {
 			return queued, err

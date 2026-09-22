@@ -107,25 +107,28 @@ type Notification struct {
 	DedupeKey string
 	Content   string
 	Mentions  []string // Discord のユーザーID
-	Status    string
-	ErrorCode string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	// Components は通知に添えるボタン。宛先が1人の本人宛て通知にだけ付ける。
+	Components []NotifyButton
+	Status     string
+	ErrorCode  string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
-const notificationCols = "id, session_id, case_id, kind, dedupe_key, content, mentions, status, error_code, created_at, updated_at"
+const notificationCols = "id, session_id, case_id, kind, dedupe_key, content, mentions, components, status, error_code, created_at, updated_at"
 
 func scanNotification(row interface{ Scan(...any) error }) (Notification, error) {
 	var n Notification
-	var mentions, created, updated string
+	var mentions, components, created, updated string
 	var code sql.NullString
-	if err := row.Scan(&n.ID, &n.SessionID, &n.CaseID, &n.Kind, &n.DedupeKey, &n.Content, &mentions, &n.Status, &code, &created, &updated); err != nil {
+	if err := row.Scan(&n.ID, &n.SessionID, &n.CaseID, &n.Kind, &n.DedupeKey, &n.Content, &mentions, &components, &n.Status, &code, &created, &updated); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return n, ErrNotFound
 		}
 		return n, err
 	}
 	_ = json.Unmarshal([]byte(mentions), &n.Mentions)
+	_ = json.Unmarshal([]byte(components), &n.Components)
 	n.ErrorCode, n.CreatedAt, n.UpdatedAt = code.String, parseTS(created), parseTS(updated)
 	return n, nil
 }
@@ -137,8 +140,16 @@ func (t *Tx) EnqueueNotification(ctx context.Context, n Notification) error {
 		return err
 	}
 	mentions, _ := json.Marshal(nonNilStrings(n.Mentions))
-	return t.exec(ctx, "INSERT INTO notifications ("+notificationCols+", seq) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, ?, ?) ON CONFLICT (dedupe_key) DO NOTHING",
-		n.ID, n.SessionID, n.CaseID, n.Kind, n.DedupeKey, n.Content, string(mentions), ts(n.CreatedAt), ts(n.CreatedAt), seq)
+	components, _ := json.Marshal(nonNilButtons(n.Components))
+	return t.exec(ctx, "INSERT INTO notifications ("+notificationCols+", seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, ?, ?) ON CONFLICT (dedupe_key) DO NOTHING",
+		n.ID, n.SessionID, n.CaseID, n.Kind, n.DedupeKey, n.Content, string(mentions), string(components), ts(n.CreatedAt), ts(n.CreatedAt), seq)
+}
+
+func nonNilButtons(b []NotifyButton) []NotifyButton {
+	if b == nil {
+		return []NotifyButton{}
+	}
+	return b
 }
 
 // ClaimNotification は最も古い pending の通知を sending にして返す。なければ ErrNotFound。

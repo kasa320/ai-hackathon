@@ -494,7 +494,11 @@ func (c *Coordinator) proposeReplacement(ctx context.Context, s store.ReadingBoo
 			return err
 		}
 		text := fmt.Sprintf("第%d回の担当の候補として提案されました。あなたが承認するまで担当は変わりません。引き受けられるか回答してください。", cur.SequenceNumber)
-		return c.enqueueBookDM(ctx, tx, b, NotifyBookAssigneeChange, fmt.Sprintf("book_candidate:%s:%s:%d", cur.ID, candidate, len(cur.ExcludedMemberIDs)), text, []store.Member{cm}, now)
+		buttons, err := c.bookAssignmentButtons(ctx, tx, cm.UserID, b.GroupID, b.ID, cur.ID, now)
+		if err != nil {
+			return err
+		}
+		return c.enqueueBookDMWithButtons(ctx, tx, b, NotifyBookAssigneeChange, fmt.Sprintf("book_candidate:%s:%s:%d", cur.ID, candidate, len(cur.ExcludedMemberIDs)), text, []store.Member{cm}, buttons, now)
 	})
 	return changed, err
 }

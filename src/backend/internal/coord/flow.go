@@ -152,7 +152,11 @@ func (c *Coordinator) createTask(ctx context.Context, tx *store.Tx, sess store.S
 	}
 	text := fmt.Sprintf("%s（回答期限：%s）", title, formatClock(due))
 	text += taskReplyInstructions(kind)
-	return c.notify(ctx, tx, sess, cs.ID, "task_requested", "task:"+tk.ID, text, []store.Member{m}, now)
+	buttons, err := c.taskNotifyButtons(ctx, tx, m.UserID, sess.ID, tk.ID, kind, p, due, now)
+	if err != nil {
+		return err
+	}
+	return c.notifyWithButtons(ctx, tx, sess, cs.ID, "task_requested", "task:"+tk.ID, text, []store.Member{m}, buttons, now)
 }
 
 func taskReplyInstructions(kind string) string {

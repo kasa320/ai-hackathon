@@ -166,6 +166,8 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS events_due ON events(status, run_at);
 
 -- 通知待ち。sending のまま再起動した通知は成否不明（unknown）にする。
+-- components は通知に添えるボタン（label・custom_id・primary の配列、JSON）。対象を束縛した
+-- notify_actions の参照だけを custom_id に持ち、宛先が1人の本人宛て通知にだけ付ける。
 CREATE TABLE IF NOT EXISTS notifications (
     id         TEXT PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -174,6 +176,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     dedupe_key TEXT NOT NULL UNIQUE,
     content    TEXT NOT NULL,
     mentions   TEXT NOT NULL DEFAULT '[]',
+    components TEXT NOT NULL DEFAULT '[]',
     status     TEXT NOT NULL CHECK (status IN ('pending', 'sending', 'sent', 'failed', 'unknown', 'cancelled')),
     error_code TEXT,
     created_at TEXT NOT NULL,
@@ -190,6 +193,7 @@ CREATE TABLE IF NOT EXISTS group_notifications (
     recipient_discord_user_id TEXT NOT NULL,
     dedupe_key                TEXT NOT NULL UNIQUE,
     content                   TEXT NOT NULL,
+    components                TEXT NOT NULL DEFAULT '[]',
     status                    TEXT NOT NULL CHECK (status IN ('pending', 'sending', 'sent', 'failed', 'unknown')),
     error_code                TEXT,
     created_at                TEXT NOT NULL,
@@ -335,6 +339,21 @@ CREATE TABLE IF NOT EXISTS reading_slot_confirmations (
     answered_at  TEXT,
     UNIQUE (slot_id, member_id)
 );
+
+-- 通知のボタンから直接始める操作の参照（.agent/kasa/decisions/discord-availability-home-refresh.md）。
+-- 表示した通知に束縛し、押下時に本人・期限・許可された decision をサーバー側で再検証する。
+-- ref は種別ごとの対象（task_id・group_id/book_id/slot_id 等）を持つ JSON で、共通側は中身を解釈しない。
+CREATE TABLE IF NOT EXISTS notify_actions (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind        TEXT NOT NULL,
+    ref         TEXT NOT NULL,
+    decisions   TEXT NOT NULL DEFAULT '[]',
+    consumed_at TEXT,
+    expires_at  TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS notify_actions_user ON notify_actions(user_id, expires_at);
 
 -- ブックの計画・担当承認・最終確認の履歴（追跡用）。私的な理由は記録しない。
 CREATE TABLE IF NOT EXISTS reading_book_log (

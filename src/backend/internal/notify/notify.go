@@ -37,6 +37,54 @@ type Message struct {
 	Kind string
 	// DMUserIDs は名指しした本人。DM を試すかどうかは送信先が Kind と設定から決める。
 	DMUserIDs []string
+	// Components は通知に添えるボタン。対象を束縛した opaque な参照だけを custom_id に持ち、
+	// 値は埋め込まない（.agent/kasa/decisions/discord-availability-home-refresh.md）。
+	Components []ActionRow
+}
+
+// ActionRow は Discord のボタン1行（最大5個）。
+type ActionRow struct {
+	Buttons []Button
+}
+
+// Button は通知に添える1個のボタン。CustomID はサーバー側で再検証できる opaque な文字列にする。
+type Button struct {
+	Label    string
+	CustomID string
+	// Primary が true なら強調表示（Discord の primary スタイル）にする。
+	Primary bool
+}
+
+// discordComponents は Discord のメッセージ作成 API が期待する components の形へ変換する。
+// 行が無ければ nil を返し、JSON に "components" を出さない。
+func discordComponents(rows []ActionRow) []map[string]any {
+	if len(rows) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		if len(row.Buttons) == 0 {
+			continue
+		}
+		components := make([]map[string]any, 0, len(row.Buttons))
+		for _, b := range row.Buttons {
+			style := 2 // secondary
+			if b.Primary {
+				style = 1 // primary
+			}
+			components = append(components, map[string]any{
+				"type": 2, "style": style, "label": b.Label, "custom_id": b.CustomID,
+			})
+		}
+		if len(components) == 0 {
+			continue
+		}
+		out = append(out, map[string]any{"type": 1, "components": components})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // DMKinds は本人宛てに DM を試す通知の種類。確定の連絡や管理者への差し戻しは全員が知るべき情報なので
@@ -82,11 +130,12 @@ func (d *DiscordSender) Send(ctx context.Context, m Message) error {
 	if users == nil {
 		users = []string{}
 	}
+	components := discordComponents(m.Components)
 	if len(m.DMUserIDs) == 1 && DMOnlyKinds[m.Kind] {
-		return d.sendDM(ctx, m.DMUserIDs[0], content, users)
+		return d.sendDM(ctx, m.DMUserIDs[0], content, users, components)
 	}
 	if len(m.DMUserIDs) == 1 && (DMKinds[m.Kind] || d.ChannelID == "") {
-		err := d.sendDM(ctx, m.DMUserIDs[0], content, users)
+		err := d.sendDM(ctx, m.DMUserIDs[0], content, users, components)
 		if err == nil || !errors.Is(err, ErrDeliveryFailed) || d.ChannelID == "" {
 			return err
 		}
@@ -95,11 +144,12 @@ func (d *DiscordSender) Send(ctx context.Context, m Message) error {
 	if d.ChannelID == "" {
 		return fmt.Errorf("%w: DM の宛先がなく、DISCORD_CHANNEL_ID も未設定です", ErrDeliveryFailed)
 	}
-	return d.sendChannel(ctx, d.ChannelID, content, users)
+	// チャンネルへの退避では、宛先を限定できないボタンは付けない（他人が押せてしまうため）。
+	return d.sendChannel(ctx, d.ChannelID, content, users, nil)
 }
 
 // sendDM は相手との DM チャンネルを開いて送る。開けなければその失敗をそのまま返す。
-func (d *DiscordSender) sendDM(ctx context.Context, userID, content string, mentions []string) error {
+func (d *DiscordSender) sendDM(ctx context.Context, userID, content string, mentions []string, components []map[string]any) error {
 	body, _ := json.Marshal(map[string]any{"recipient_id": userID})
 	res, err := d.post(ctx, "/users/@me/channels", body)
 	if err != nil {
@@ -111,14 +161,18 @@ func (d *DiscordSender) sendDM(ctx context.Context, userID, content string, ment
 	if err := json.Unmarshal(res, &ch); err != nil || ch.ID == "" {
 		return fmt.Errorf("%w: DM チャンネルを開けません", ErrDeliveryFailed)
 	}
-	return d.sendChannel(ctx, ch.ID, content, mentions)
+	return d.sendChannel(ctx, ch.ID, content, mentions, components)
 }
 
-func (d *DiscordSender) sendChannel(ctx context.Context, channelID, content string, mentions []string) error {
-	body, _ := json.Marshal(map[string]any{
+func (d *DiscordSender) sendChannel(ctx context.Context, channelID, content string, mentions []string, components []map[string]any) error {
+	payload := map[string]any{
 		"content":          content,
 		"allowed_mentions": map[string]any{"parse": []string{}, "users": mentions},
-	})
+	}
+	if components != nil {
+		payload["components"] = components
+	}
+	body, _ := json.Marshal(payload)
 	_, err := d.post(ctx, "/channels/"+channelID+"/messages", body)
 	return err
 }
@@ -239,7 +293,7 @@ func (d *Dispatcher) DispatchPending(ctx context.Context) (int, error) {
 			return n, err
 		}
 		// DM を試せる相手は通知が名指しした本人だけ。実際に DM を使うかは送信先が決める。
-		msg := Message{Content: ntf.Content, MentionUserIDs: ntf.Mentions, Kind: ntf.Kind, DMUserIDs: ntf.Mentions}
+		msg := Message{Content: ntf.Content, MentionUserIDs: ntf.Mentions, Kind: ntf.Kind, DMUserIDs: ntf.Mentions, Components: buttonRows(ntf.Components)}
 		sendErr := d.sender.Send(ctx, msg)
 		status, code, summary := store.NotifySent, "", "通知を送信しました（Discord の成功応答）。"
 		switch {
@@ -290,7 +344,7 @@ func (d *Dispatcher) dispatchGroupPending(ctx context.Context) (int, error) {
 		if err != nil {
 			return n, err
 		}
-		msg := Message{Content: ntf.Content, Kind: ntf.Kind, DMUserIDs: []string{ntf.RecipientDiscordUserID}}
+		msg := Message{Content: ntf.Content, Kind: ntf.Kind, DMUserIDs: []string{ntf.RecipientDiscordUserID}, Components: buttonRows(ntf.Components)}
 		sendErr := d.sender.Send(ctx, msg)
 		status, code := store.NotifySent, ""
 		switch {
@@ -314,6 +368,26 @@ func (d *Dispatcher) dispatchGroupPending(ctx context.Context) (int, error) {
 		}
 		n++
 	}
+}
+
+// buttonRows は保存済みのボタン定義を、1行に最大5個まとめた ActionRow へ直す。
+func buttonRows(buttons []store.NotifyButton) []ActionRow {
+	if len(buttons) == 0 {
+		return nil
+	}
+	var rows []ActionRow
+	var row ActionRow
+	for _, b := range buttons {
+		row.Buttons = append(row.Buttons, Button{Label: b.Label, CustomID: b.CustomID, Primary: b.Primary})
+		if len(row.Buttons) == 5 {
+			rows = append(rows, row)
+			row = ActionRow{}
+		}
+	}
+	if len(row.Buttons) > 0 {
+		rows = append(rows, row)
+	}
+	return rows
 }
 
 // Run は通知待ちを送り続ける。
