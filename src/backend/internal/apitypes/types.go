@@ -39,6 +39,11 @@ type GroupList struct {
 type Preparation struct {
 	Attendance string          `json:"attendance"`
 	Data       json.RawMessage `json:"data"`
+	// UpdateWeeklyAvailability は既定 false。true は、本人が今回この Data で週間の曜日・時間帯を
+	// 明示的に入力・変更し、確認画面にも更新を示した場合だけ送る。true のとき、保存は参加条件と
+	// 同じトランザクションで本人の普段の空き時間（Asia/Tokyo）を全置換する。有効な週間の時間帯が
+	// なければ 422。直接の PUT とタスクの decision=submit の両方で同じ意味になる。
+	UpdateWeeklyAvailability bool `json:"update_weekly_availability,omitempty"`
 }
 
 type SessionSummary struct {
